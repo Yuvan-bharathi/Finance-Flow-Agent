@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search } from 'lucide-react';
+import { CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play, RefreshCw, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
-import { getCases } from '../services/reconciliationService';
+import { getCases, analyzeCase } from '../services/reconciliationService';
+import { analyzeBulk, analyzeAllPending } from '../services/agentService';
 
 /**
  * Section 17 Payment Ingestion & Deposit Inspection Page
+ * Features Case # Column, Exact Date+Time Timestamps, Checkbox Selection, Bulk Execution, and Inline Single-Case AI Execution.
  * 
  * Called by:
- * - Dashboard.jsx
+ * - Dashboard.jsx / App.jsx
  */
 export const PaymentIngestion = () => {
   const [payments, setPayments] = useState([]);
@@ -19,6 +21,13 @@ export const PaymentIngestion = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedCase, setSelectedCase] = useState(null);
+
+  // Multi-select & Batch Execution state
+  const [selectedCaseIds, setSelectedCaseIds] = useState([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [processingCaseId, setProcessingCaseId] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmType, setConfirmType] = useState('selected'); // 'selected' | 'all_new'
 
   // Form fields
   const [transactionId, setTransactionId] = useState('');
@@ -48,32 +57,81 @@ export const PaymentIngestion = () => {
     fetchPaymentsAndCases();
   }, []);
 
-  // Handle deposit row click -> find matching reconciliation case and open ActionCenterDrawer!
-  const handleSelectDeposit = (payment) => {
-    // Find case matching payment.id
-    const targetCase = cases.find(c => c.payment_id === payment.id) || {
-      id: payment.id,
-      payment_id: payment.id,
-      transaction_id: payment.transaction_id,
-      amount: payment.amount,
-      payment_date: payment.payment_date,
-      sender_name: payment.sender_name,
-      sender_account: payment.sender_account,
-      reference: payment.reference,
-      status: payment.status,
-      latest_recommendation: null
-    };
+  // Filter pending NEW cases
+  const newCases = cases.filter(c => (c.status || '').toLowerCase() === 'new');
 
-    setSelectedCase(targetCase);
+  // Checkbox handlers
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allIds = cases.map(c => c.id);
+      setSelectedCaseIds(allIds);
+    } else {
+      setSelectedCaseIds([]);
+    }
   };
 
+  const handleSelectRow = (caseId, e) => {
+    e.stopPropagation();
+    if (selectedCaseIds.includes(caseId)) {
+      setSelectedCaseIds(prev => prev.filter(id => id !== caseId));
+    } else {
+      setSelectedCaseIds(prev => [...prev, caseId]);
+    }
+  };
+
+  // Single-Case Inline AI Trigger
+  const handleSingleAnalyze = async (caseId, e) => {
+    if (e) e.stopPropagation();
+    try {
+      setProcessingCaseId(caseId);
+      setErrorMsg('');
+      setSuccessMsg('');
+      await analyzeCase(caseId);
+      setSuccessMsg(`⚡ Agent 1 Payment Reconciliation completed for Case #${caseId}!`);
+      await fetchPaymentsAndCases();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.message || `Failed to analyze Case #${caseId}`);
+    } finally {
+      setProcessingCaseId(null);
+    }
+  };
+
+  // Bulk Execution Trigger
+  const handleExecuteBulk = async () => {
+    try {
+      setBulkProcessing(true);
+      setShowConfirmModal(false);
+      setErrorMsg('');
+      setSuccessMsg('');
+
+      if (confirmType === 'selected') {
+        const result = await analyzeBulk(selectedCaseIds);
+        setSuccessMsg(`⚡ Bulk AI Execution complete! Processed ${result.casesProcessed || selectedCaseIds.length} selected cases.`);
+        setSelectedCaseIds([]);
+      } else {
+        const result = await analyzeAllPending();
+        setSuccessMsg(`⚡ Bulk AI Execution complete! Processed ${result.casesProcessed || newCases.length} pending NEW cases.`);
+        setSelectedCaseIds([]);
+      }
+
+      await fetchPaymentsAndCases();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.message || 'Bulk AI analysis failed.');
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  // Form Submission
   const handleIngest = async (e) => {
     e.preventDefault();
-    setSuccessMsg('');
     setErrorMsg('');
+    setSuccessMsg('');
 
     if (!transactionId || !amount || !paymentDate) {
-      setErrorMsg('Transaction ID, Amount, and Payment Date are required.');
+      setErrorMsg('Transaction ID, Amount, and Date are required.');
       return;
     }
 
@@ -103,6 +161,56 @@ export const PaymentIngestion = () => {
     }
   };
 
+  // Mock Bank Simulator Trigger
+  const handleSimulateBankDeposit = async () => {
+    try {
+      setSubmitting(true);
+      setErrorMsg('');
+      setSuccessMsg('');
+      const res = await api.post('/payments/mock-bank-deposit', {
+        transactionId: transactionId || undefined,
+        amount: amount ? parseFloat(amount) : undefined,
+        paymentDate: paymentDate || undefined,
+        senderName: senderName || undefined,
+        senderAccount: senderAccount || undefined,
+        reference: reference || undefined
+      });
+      const data = res.data.data || {};
+      setSuccessMsg(`🏦 [Dummy Bank API] Payment deposit ingested successfully! Case #${data.case?.id} created in state NEW.`);
+      setTransactionId('');
+      setAmount('');
+      setSenderName('');
+      setSenderAccount('');
+      setReference('');
+      fetchPaymentsAndCases();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.response?.data?.message || 'Failed to simulate bank deposit.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Format exact date + time timestamp
+  const formatDateTime = (dateStr, createdAtStr) => {
+    if (createdAtStr) {
+      const d = new Date(createdAtStr);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+      }
+      return createdAtStr;
+    }
+    return dateStr || 'N/A';
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -112,7 +220,7 @@ export const PaymentIngestion = () => {
           Payment Manual Ingestion Engine (Section 17)
         </h1>
         <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
-          Simulate bank statement feed or ingest raw deposit transactions with automated duplicate checking. Click any row to inspect case details.
+          Simulate bank statement feeds or ingest raw deposit transactions. Trigger single-case AI investigation or batch analyze selected cases.
         </p>
       </div>
 
@@ -142,7 +250,7 @@ export const PaymentIngestion = () => {
             <input
               type="text"
               required
-              placeholder="e.g. TXN99001122"
+              placeholder="e.g. TXN-BANK-998877"
               value={transactionId}
               onChange={(e) => setTransactionId(e.target.value)}
               style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '10px 14px', borderRadius: '10px', marginTop: '4px', fontSize: '0.875rem' }}
@@ -150,12 +258,12 @@ export const PaymentIngestion = () => {
           </div>
 
           <div>
-            <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Deposit Amount (₹) *</label>
+            <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Deposit Amount (INR ₹) *</label>
             <input
               type="number"
-              required
               step="0.01"
-              placeholder="e.g. 100000"
+              required
+              placeholder="e.g. 100000.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '10px 14px', borderRadius: '10px', marginTop: '4px', fontSize: '0.875rem' }}
@@ -206,7 +314,16 @@ export const PaymentIngestion = () => {
             />
           </div>
 
-          <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+            <button
+              type="button"
+              onClick={handleSimulateBankDeposit}
+              disabled={submitting}
+              className="btn-secondary"
+              style={{ padding: '10px 18px', border: '1px solid #c7d2fe', color: '#4338ca', fontWeight: '700' }}
+            >
+              <span>🏦 Simulate Dummy Bank Webhook Deposit</span>
+            </button>
             <button type="submit" disabled={submitting} className="btn-primary">
               <Plus size={18} />
               <span>Ingest Payment & Open Case</span>
@@ -215,70 +332,239 @@ export const PaymentIngestion = () => {
         </form>
       </div>
 
-      {/* Payment Deposit History Table */}
+      {/* Payment Deposit History Table with Case #, Timestamps, Checkboxes & Bulk AI Controls */}
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '1rem' }}>Historical Ingested Deposits</span>
-          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>💡 Click any row to inspect details & run AI analysis</span>
+        
+        {/* Table Header Controls */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '1.05rem' }}>Historical Ingested Deposits</span>
+            <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#2563eb', padding: '2px 10px', borderRadius: '12px', fontWeight: '700' }}>
+              {payments.length} Total Deposits
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {selectedCaseIds.length > 0 && (
+              <button
+                onClick={() => { setConfirmType('selected'); setShowConfirmModal(true); }}
+                disabled={bulkProcessing}
+                style={{
+                  background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.35)'
+                }}
+              >
+                <Zap size={15} />
+                <span>Analyze Selected ({selectedCaseIds.length})</span>
+              </button>
+            )}
+
+            {newCases.length > 0 && (
+              <button
+                onClick={() => { setConfirmType('all_new'); setShowConfirmModal(true); }}
+                disabled={bulkProcessing}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #6366f1',
+                  color: '#4f46e5',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Play size={14} />
+                <span>Analyze All NEW ({newCases.length})</span>
+              </button>
+            )}
+          </div>
+
         </div>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
           <thead>
-            <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
-              <th style={{ padding: '14px 20px', fontWeight: '700' }}>TXN ID</th>
-              <th style={{ padding: '14px 20px', fontWeight: '700' }}>Sender & Account</th>
-              <th style={{ padding: '14px 20px', fontWeight: '700' }}>Deposit Amount</th>
-              <th style={{ padding: '14px 20px', fontWeight: '700' }}>Date</th>
-              <th style={{ padding: '14px 20px', fontWeight: '700' }}>Payment Status</th>
-              <th style={{ padding: '14px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
+            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase' }}>
+              <th style={{ padding: '12px 16px', width: '40px' }}>
+                <input
+                  type="checkbox"
+                  checked={cases.length > 0 && selectedCaseIds.length === cases.length}
+                  onChange={handleSelectAll}
+                  style={{ cursor: 'pointer', accentColor: '#4f46e5', width: '16px', height: '16px' }}
+                />
+              </th>
+              <th style={{ padding: '12px 16px', fontWeight: '700' }}>CASE & TXN ID</th>
+              <th style={{ padding: '12px 16px', fontWeight: '700' }}>SENDER & ACCOUNT</th>
+              <th style={{ padding: '12px 16px', fontWeight: '700' }}>DEPOSIT AMOUNT</th>
+              <th style={{ padding: '12px 16px', fontWeight: '700' }}>RECEIVED DATE & TIME</th>
+              <th style={{ padding: '12px 16px', fontWeight: '700' }}>CASE STATUS</th>
+              <th style={{ padding: '12px 16px', fontWeight: '700', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Loading deposits...</td></tr>
-            ) : payments.map(p => (
-              <tr
-                key={p.id}
-                onClick={() => handleSelectDeposit(p)}
-                style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s ease' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                <td style={{ padding: '14px 20px', fontWeight: '700', color: '#2563eb', fontFamily: 'monospace' }}>{p.transaction_id}</td>
-                <td style={{ padding: '14px 20px' }}>
-                  <div style={{ color: '#0f172a', fontWeight: '600' }}>{p.sender_name || 'N/A'}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.sender_account || 'N/A'}</div>
-                </td>
-                <td style={{ padding: '14px 20px', fontWeight: '800', color: '#0f172a' }}>
-                  ₹{parseFloat(p.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </td>
-                <td style={{ padding: '14px 20px', color: '#64748b' }}>{p.payment_date}</td>
-                <td style={{ padding: '14px 20px' }}>
-                  <StatusBadge status={p.status} />
-                </td>
-                <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleSelectDeposit(p); }}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      color: '#4f46e5',
-                      borderRadius: '8px',
-                      padding: '6px 12px',
-                      fontSize: '0.75rem',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Eye size={14} />
-                    <span>View Case</span>
-                  </button>
+              <tr>
+                <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                  Loading deposit records...
                 </td>
               </tr>
-            ))}
+            ) : payments.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                  No payment deposits ingested yet.
+                </td>
+              </tr>
+            ) : (
+              payments.map(p => {
+                const matchedCase = cases.find(c => c.payment_id === p.id);
+                const caseId = matchedCase ? matchedCase.id : p.case_id;
+                const normStatus = matchedCase ? (matchedCase.status || '').toLowerCase() : (p.status || '').toLowerCase();
+                const isSelected = caseId ? selectedCaseIds.includes(caseId) : false;
+                const isProcessingThis = processingCaseId === caseId || normStatus === 'ai_processing';
+
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => matchedCase && setSelectedCase(matchedCase)}
+                    style={{
+                      borderBottom: '1px solid #f1f5f9',
+                      cursor: matchedCase ? 'pointer' : 'default',
+                      background: isSelected ? '#f0f9ff' : 'transparent',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => { if (matchedCase && !isSelected) e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    {/* Checkbox Column */}
+                    <td style={{ padding: '12px 16px' }} onClick={(e) => e.stopPropagation()}>
+                      {caseId ? (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectRow(caseId, e)}
+                          style={{ cursor: 'pointer', accentColor: '#4f46e5', width: '16px', height: '16px' }}
+                        />
+                      ) : null}
+                    </td>
+
+                    {/* Case # & TXN ID Column */}
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '0.9rem' }}>
+                        {caseId ? `Case #${caseId}` : `Payment #${p.id}`}
+                      </div>
+                      <div style={{ fontSize: '0.725rem', fontFamily: 'monospace', color: '#2563eb', fontWeight: '600', marginTop: '2px' }}>
+                        TXN ID: {p.transaction_id}
+                      </div>
+                    </td>
+
+                    {/* Sender & Account */}
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: '700', color: '#0f172a' }}>{p.sender_name || 'N/A'}</div>
+                      <div style={{ fontSize: '0.725rem', color: '#64748b' }}>
+                        {p.sender_account ? `Acct: ${p.sender_account}` : p.reference || 'N/A'}
+                      </div>
+                    </td>
+
+                    {/* Deposit Amount */}
+                    <td style={{ padding: '12px 16px', fontWeight: '800', color: '#0f172a' }}>
+                      ₹{parseFloat(p.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+
+                    {/* Exact Received Date & Time Timestamp */}
+                    <td style={{ padding: '12px 16px', color: '#334155', fontWeight: '600', fontSize: '0.8rem' }}>
+                      {formatDateTime(p.payment_date, p.created_at || (matchedCase && matchedCase.created_at))}
+                    </td>
+
+                    {/* Case Status */}
+                    <td style={{ padding: '12px 16px' }}>
+                      <StatusBadge status={normStatus} />
+                    </td>
+
+                    {/* Actions Column */}
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                        
+                        {/* Single Case AI Analyze / Retry Trigger */}
+                        {caseId && (normStatus === 'new' || normStatus === 'ai_failed') && (
+                          <button
+                            onClick={(e) => handleSingleAnalyze(caseId, e)}
+                            disabled={isProcessingThis || bulkProcessing}
+                            style={{
+                              background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '5px 12px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                            }}
+                          >
+                            {isProcessingThis ? (
+                              <>
+                                <RefreshCw size={12} className="animate-spin" />
+                                <span>Analyzing...</span>
+                              </>
+                            ) : normStatus === 'ai_failed' ? (
+                              <>
+                                <RefreshCw size={12} />
+                                <span>Retry</span>
+                              </>
+                            ) : (
+                              <>
+                                <Zap size={12} />
+                                <span>Analyze</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {/* View Case Drawer Button */}
+                        {matchedCase && (
+                          <button
+                            onClick={() => setSelectedCase(matchedCase)}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              color: '#475569',
+                              padding: '5px 10px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <Eye size={12} /> View Case
+                          </button>
+                        )}
+
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
@@ -290,6 +576,119 @@ export const PaymentIngestion = () => {
           onClose={() => setSelectedCase(null)}
           onRefresh={fetchPaymentsAndCases}
         />
+      )}
+
+      {/* Confirmation Modal for Bulk Analysis */}
+      {showConfirmModal && (
+        <div
+          onClick={() => setShowConfirmModal(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            cursor: 'pointer'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '28px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e2e8f0',
+              animation: 'fadeIn 0.2s ease-out',
+              cursor: 'default'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Zap size={24} color="#4f46e5" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                  Confirm Bulk AI Agent Analysis
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
+                  {confirmType === 'selected' 
+                    ? `Execute Agent 1 investigation on ${selectedCaseIds.length} selected cases?`
+                    : `Execute Agent 1 investigation on all ${newCases.length} pending NEW cases?`}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', marginBottom: '20px', fontSize: '0.8rem', color: '#334155' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: '#059669', marginBottom: '4px' }}>
+                <ShieldCheck size={16} />
+                <span>Deterministic Pre-Check Engine Active</span>
+              </div>
+              <p style={{ margin: 0, lineHeight: 1.4 }}>
+                High-confidence exact bank matches ($\ge 85\%$) will be auto-scored with <strong>0 LLM tokens consumed</strong>. Remaining cases will run Groq tool-calling with concurrency limit of 5 worker runs.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                disabled={bulkProcessing}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  color: '#475569',
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExecuteBulk}
+                disabled={bulkProcessing}
+                style={{
+                  background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 22px',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+                }}
+              >
+                {bulkProcessing ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Processing Batch...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={16} />
+                    <span>Start Bulk Analysis</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
       )}
 
     </div>

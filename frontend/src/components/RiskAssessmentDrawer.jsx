@@ -58,6 +58,16 @@ export const RiskAssessmentDrawer = ({ company, onClose, onOpenCollectionModal }
   }, [company]);
 
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const getRiskBadgeColor = (level) => {
     switch (level) {
       case 'CRITICAL': return { bg: '#fee2e2', text: '#dc2626', border: '#fca5a5' };
@@ -68,24 +78,32 @@ export const RiskAssessmentDrawer = ({ company, onClose, onOpenCollectionModal }
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(15, 23, 42, 0.4)',
-      backdropFilter: 'blur(3px)',
-      display: 'flex',
-      justifyContent: 'flex-end',
-      zIndex: 90
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '540px',
-        background: '#ffffff',
-        height: '100%',
-        boxShadow: '-10px 0 30px rgba(0, 0, 0, 0.1)',
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(15, 23, 42, 0.4)',
+        backdropFilter: 'blur(3px)',
         display: 'flex',
-        flexDirection: 'column'
-      }}>
+        justifyContent: 'flex-end',
+        zIndex: 90,
+        cursor: 'pointer'
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '540px',
+          background: '#ffffff',
+          height: '100%',
+          boxShadow: '-10px 0 30px rgba(0, 0, 0, 0.1)',
+          display: 'flex',
+          flexDirection: 'column',
+          cursor: 'default'
+        }}
+      >
         
         {/* Header */}
         <div style={{

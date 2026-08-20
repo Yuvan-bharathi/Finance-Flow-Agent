@@ -7,12 +7,16 @@ import { CasesOverTimeChart } from './CasesOverTimeChart';
 import { AIPerformanceCard } from './AIPerformanceCard';
 import { RecentCasesTable } from './RecentCasesTable';
 import { ActionCenterDrawer } from '../ActionCenterDrawer';
+import { LiveToastNotifications } from '../LiveToastNotifications';
+import { AiAssistantModal } from '../AiAssistantModal';
 import { PaymentIngestion } from '../../pages/PaymentIngestion';
 import { CompanyList } from '../../pages/CompanyList';
 import { LoanList } from '../../pages/LoanList';
 import { AuditLogs } from '../../pages/AuditLogs';
 import { DocumentList } from '../../pages/DocumentList';
 import { ReportsAnalytics } from '../../pages/ReportsAnalytics';
+import { AgentControlCenter } from '../../pages/AgentControlCenter';
+import { Settings } from '../../pages/Settings';
 import { getCases, getStats } from '../../services/reconciliationService';
 import { AlertCircle, RefreshCw, Construction } from 'lucide-react';
 
@@ -23,116 +27,86 @@ import { AlertCircle, RefreshCw, Construction } from 'lucide-react';
  * Called by:
  * - App.jsx
  */
-export const Dashboard = ({ activeTab = 'reconciliations', setActiveTab }) => {
-  const [stats, setStats] = useState(null);
+export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', setActiveTab: externalSetActiveTab }) => {
+  const [internalActiveTab, setInternalActiveTab] = useState('reconciliations');
   const [cases, setCases] = useState([]);
+  const [stats, setStats] = useState({ kpis: {}, status_breakdown: [], ai_performance: {} });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const [selectedCase, setSelectedCase] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
 
-  // Fetch dashboard data from backend services
-  const loadDashboardData = async () => {
+  const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
+  const setActiveTab = externalSetActiveTab || setInternalActiveTab;
+
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const [statsData, casesData] = await Promise.all([
-        getStats(),
-        getCases()
+      setErrorMsg('');
+      const [casesRes, statsRes] = await Promise.all([
+        getCases(),
+        getStats()
       ]);
-      setStats(statsData);
-      setCases(casesData);
+      setCases(casesRes.data || []);
+      const raw = statsRes.data || {};
+      setStats({
+        kpis: raw.kpis || {},
+        status_breakdown: Array.isArray(raw.status_breakdown) ? raw.status_breakdown : [],
+        ai_performance: raw.ai_performance || {}
+      });
     } catch (err) {
       console.error('Error loading dashboard data:', err);
-      setError('Unable to load reconciliation cases and analytics from server.');
+      setErrorMsg('Failed to sync real-time database state. Please check MySQL backend connection.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDashboardData();
+    fetchDashboardData();
   }, []);
 
-  const kpis = stats?.kpis || {};
-  const statusBreakdown = stats?.status_breakdown || [];
-  const aiPerformance = stats?.ai_performance || {};
-
-  const filteredCases = cases.filter(item => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      item.transaction_id?.toLowerCase().includes(q) ||
-      item.sender_name?.toLowerCase().includes(q) ||
-      item.reference?.toLowerCase().includes(q)
-    );
-  });
-
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      background: '#f8fafc',
-      fontFamily: "'Inter', sans-serif",
-      color: '#0f172a'
-    }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
       
-      {/* Left Collapsible Sidebar (Toggle Control inside Sidebar per Image 3) */}
+      {/* Collapsible Left Navigation Sidebar */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        pendingCount={kpis.pending_review || 0}
+        pendingCount={stats?.kpis?.pending_review || 0}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
+        onOpenAiAssistant={() => setShowAiModal(true)}
       />
 
-      {/* Main Content Viewport */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* Main Content Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowX: 'hidden' }}>
         
-        {/* Top Header */}
-        <Header
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-        />
+        {/* Top Floating Header */}
+        <Header />
 
-        {/* Dashboard Main Scrollable Area */}
-        <main style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px', flex: 1 }}>
+        {/* Dynamic Body View */}
+        <main style={{ padding: '24px 32px 40px', flex: 1, display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
-          {/* Error State Banner */}
-          {error && (
+          {errorMsg && (
             <div style={{
               background: '#fee2e2',
               border: '1px solid #fca5a5',
-              color: '#dc2626',
-              padding: '16px 20px',
               borderRadius: '12px',
+              padding: '14px 20px',
+              color: '#991b1b',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between'
+              justifyContent: 'space-between',
+              fontSize: '0.875rem'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: '600' }}>
-                <AlertCircle size={20} />
-                <span>{error}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <AlertCircle size={18} />
+                <span>{errorMsg}</span>
               </div>
-              <button
-                onClick={loadDashboardData}
-                style={{
-                  background: '#dc2626',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '700',
-                  fontSize: '0.8rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <RefreshCw size={14} />
-                <span>Retry Connection</span>
+              <button onClick={fetchDashboardData} style={{ background: '#ffffff', border: '1px solid #fca5a5', color: '#991b1b', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700' }}>
+                Retry Connection
               </button>
             </div>
           )}
@@ -140,35 +114,31 @@ export const Dashboard = ({ activeTab = 'reconciliations', setActiveTab }) => {
           {/* TAB 1: Action Center AI Dashboard */}
           {activeTab === 'reconciliations' && (
             <>
-              {/* 1. KPI Summary Cards Row */}
-              <KPISection kpis={kpis} loading={loading} />
+              {/* Summary KPI Cards Row */}
+              <KPISection kpis={stats.kpis} loading={loading} />
 
-              {/* 2. Analytics Charts Row (3 Cards Grid) */}
+              {/* Middle Grid: Case Status Donut, Cases Over Time, AI Performance */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1fr',
                 gap: '20px'
               }}>
-                <CaseStatusChart
-                  statusBreakdown={statusBreakdown}
-                  totalCases={kpis.total_cases}
-                  loading={loading}
-                />
-                <CasesOverTimeChart />
-                <AIPerformanceCard aiPerformance={aiPerformance} loading={loading} />
+                <CaseStatusChart statusBreakdown={Array.isArray(stats.status_breakdown) ? stats.status_breakdown : []} loading={loading} />
+                <CasesOverTimeChart loading={loading} />
+                <AIPerformanceCard aiPerformance={stats.ai_performance} loading={loading} />
               </div>
 
-              {/* 3. Recent Reconciliation Cases Table Card */}
+              {/* Bottom Large Table: Recent Reconciliation Cases */}
               <RecentCasesTable
-                cases={filteredCases}
+                cases={cases}
                 loading={loading}
                 onSelectCase={(item) => setSelectedCase(item)}
-                onRefresh={loadDashboardData}
+                onRefresh={fetchDashboardData}
               />
             </>
           )}
 
-          {/* TAB 2: Payment Manual Ingestion (Section 17) */}
+          {/* TAB 2: Payment Manual Ingestion */}
           {activeTab === 'payments' && <PaymentIngestion />}
 
           {/* TAB 3: Borrowing Companies Directory */}
@@ -186,28 +156,32 @@ export const Dashboard = ({ activeTab = 'reconciliations', setActiveTab }) => {
           {/* TAB 7: Reports & Analytics */}
           {activeTab === 'reports' && <ReportsAnalytics />}
 
-          {/* Fallback Placeholder for unimplemented tabs: Notifications, Settings */}
-          {['notifications', 'settings'].includes(activeTab) && (
+          {/* TAB 8: AI Agent Control Center */}
+          {activeTab === 'agents' && <AgentControlCenter />}
+
+          {/* TAB 9: Enterprise Settings */}
+          {activeTab === 'settings' && <Settings />}
+
+          {/* Fallback Placeholder for Notifications */}
+          {['notifications'].includes(activeTab) && (
             <div style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '16px',
-              padding: '60px 32px',
+              padding: '48px',
               textAlign: 'center',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '16px'
+              gap: '12px'
             }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Construction size={28} />
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Construction size={24} />
               </div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a' }}>
-                {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Module
-              </h2>
-              <p style={{ fontSize: '0.875rem', color: '#64748b', maxWidth: '420px' }}>
-                This module is coming soon. Select <strong>Action Center AI</strong>, <strong>Reports & Analytics</strong>, or <strong>Documents</strong> to explore live financial operations.
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a' }}>Module Under Active Development</h3>
+              <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '400px', lineHeight: 1.4 }}>
+                The <strong>{activeTab.toUpperCase()}</strong> view is being configured for real-time AI streaming updates.
               </p>
               <button onClick={() => setActiveTab('reconciliations')} className="btn-primary" style={{ marginTop: '8px' }}>
                 Return to Action Center AI
@@ -223,9 +197,15 @@ export const Dashboard = ({ activeTab = 'reconciliations', setActiveTab }) => {
         <ActionCenterDrawer
           caseItem={selectedCase}
           onClose={() => setSelectedCase(null)}
-          onRefresh={loadDashboardData}
+          onRefresh={fetchDashboardData}
         />
       )}
+
+      {/* Real-Time WebSocket Toast Notifications */}
+      <LiveToastNotifications onRealtimeUpdate={fetchDashboardData} />
+
+      {/* AI Assistant Coming Soon Modal */}
+      <AiAssistantModal isOpen={showAiModal} onClose={() => setShowAiModal(false)} />
 
     </div>
   );

@@ -102,27 +102,6 @@ export const Login = () => {
           </button>
         </form>
 
-        {/* Seed Role Shortcuts */}
-        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', marginBottom: '10px' }}>
-            Quick Demo Accounts (Password: Password123!)
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <button onClick={() => handleQuickFill('accountant@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              Senior Accountant
-            </button>
-            <button onClick={() => handleQuickFill('manager@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              Finance Manager
-            </button>
-            <button onClick={() => handleQuickFill('admin@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              System Admin
-            </button>
-            <button onClick={() => handleQuickFill('viewer@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              Audit Viewer
-            </button>
-          </div>
-        </div>
-
       </div>
     </div>
   );

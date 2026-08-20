@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import {
   analyzeCase,
+  analyzeBulk,
+  analyzeAllPending,
   getCases,
   getCaseById,
   getStats
@@ -17,16 +19,6 @@ import { authorize } from '../middleware/rbac.middleware.js';
 /**
  * Express Router: Reconciliation & Settlement Routes
  * Base Path: /api/reconciliations
- * 
- * Endpoints:
- * - GET  /api/reconciliations/stats          (Authenticated - All roles)
- * - POST /api/reconciliations/analyze/:caseId (Admin, Manager, Accountant) - Trigger Agent 1
- * - POST /api/reconciliations/approve        (Admin, Manager, Accountant) - Human-in-the-Loop Approve
- * - POST /api/reconciliations/reject         (Admin, Manager, Accountant) - Human-in-the-Loop Reject
- * - POST /api/reconciliations/override       (Admin, Manager, Accountant) - Human-in-the-Loop Manual Override
- * - GET  /api/reconciliations/cases          (Authenticated - All roles)
- * - GET  /api/reconciliations/cases/:caseId   (Authenticated - All roles)
- * - GET  /api/reconciliations/allocations    (Authenticated - All roles)
  */
 
 const router = Router();
@@ -36,8 +28,10 @@ router.use(authenticate);
 // Analytics Stats Endpoint
 router.get('/stats', getStats);
 
-// 1. AI Analysis Trigger Endpoint
+// 1. AI Analysis Trigger Endpoints
 router.post('/analyze/:caseId', authorize(['admin', 'manager', 'accountant']), analyzeCase);
+router.post('/analyze-bulk', authorize(['admin', 'manager', 'accountant']), analyzeBulk);
+router.post('/analyze-all-pending', authorize(['admin', 'manager', 'accountant']), analyzeAllPending);
 
 // 2. Human Settlement Gate Endpoints
 router.post('/approve', authorize(['admin', 'manager', 'accountant']), approveRecommendation);

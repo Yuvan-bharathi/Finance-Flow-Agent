@@ -285,8 +285,15 @@ export const CompanyList = () => {
 
       {/* Add Company Modal */}
       {showAddModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }} className="animate-fade-in">
+        <div
+          onClick={() => setShowAddModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            className="animate-fade-in"
+          >
             <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', marginBottom: '16px' }}>Add Borrowing Company</h3>
 
             <form onSubmit={handleCreateCompany} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

@@ -1,5 +1,7 @@
 import {
   analyzeCaseService,
+  analyzeBulkService,
+  analyzeAllPendingService,
   getCasesService,
   getCaseByIdService,
   getStatsService
@@ -9,20 +11,8 @@ import { sendSuccessResponse } from '../utils/apiResponse.js';
 /**
  * Controller: Reconciliation Controller
  * Purpose: Express HTTP request handlers for AI Payment Reconciliation & Dashboard Analytics endpoints.
- * 
- * Called by:
- * - reconciliation.routes.js
  */
 
-/**
- * Controller: getStats
- * Endpoint: GET /api/reconciliations/stats
- * Access: Authenticated (all roles)
- * 
- * @param {Object} req - Express request object.
- * @param {Object} res - Express response object.
- * @param {Function} next - Error callback.
- */
 export const getStats = async (req, res, next) => {
   try {
     const stats = await getStatsService();
@@ -32,26 +22,38 @@ export const getStats = async (req, res, next) => {
   }
 };
 
-/**
- * Controller: analyzeCase
- * Endpoint: POST /api/reconciliations/analyze/:caseId
- * Access: Admin, Manager, Accountant
- */
 export const analyzeCase = async (req, res, next) => {
   try {
     const caseId = parseInt(req.params.caseId, 10);
-    const result = await analyzeCaseService(caseId);
+    const userId = req.user ? req.user.id : null;
+    const result = await analyzeCaseService(caseId, userId, 'manual');
     return sendSuccessResponse(res, 200, 'AI Payment Reconciliation analysis completed successfully', result);
   } catch (error) {
     return next(error);
   }
 };
 
-/**
- * Controller: getCases
- * Endpoint: GET /api/reconciliations/cases
- * Access: Authenticated (all roles)
- */
+export const analyzeBulk = async (req, res, next) => {
+  try {
+    const { caseIds } = req.body;
+    const userId = req.user ? req.user.id : null;
+    const result = await analyzeBulkService(caseIds, userId);
+    return sendSuccessResponse(res, 200, 'Bulk AI Payment Reconciliation completed', result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const analyzeAllPending = async (req, res, next) => {
+  try {
+    const userId = req.user ? req.user.id : null;
+    const result = await analyzeAllPendingService(userId);
+    return sendSuccessResponse(res, 200, 'All NEW cases processed with AI analysis', result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const getCases = async (req, res, next) => {
   try {
     const { status, priority } = req.query;
@@ -62,15 +64,6 @@ export const getCases = async (req, res, next) => {
   }
 };
 
-/**
- * Controller: getCaseById
- * Endpoint: GET /api/reconciliations/cases/:caseId
- * Access: Authenticated (all roles)
- * 
- * @param {Object} req - Express request object containing `req.params.caseId`.
- * @param {Object} res - Express response object.
- * @param {Function} next - Error callback.
- */
 export const getCaseById = async (req, res, next) => {
   try {
     const caseId = parseInt(req.params.caseId, 10);

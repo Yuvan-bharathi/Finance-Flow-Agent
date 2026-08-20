@@ -13,36 +13,27 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Bot,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 /**
- * Collapsible Enterprise Sidebar Component
- * 
- * Behavior when COLLAPSED (80px):
- *  - Only icons are shown, no labels
- *  - Toggle button is HIDDEN
- *  - On hover of the brand logo icon → toggle button fades in with "Open sidebar" tooltip (ChatGPT style)
- *  - Clicking the toggle button expands the sidebar
- * 
- * Behavior when EXPANDED (280px):
- *  - Full labels, badges, AI Assistant card, and user profile shown
- *  - Collapse button (PanelLeftClose) is visible in the top-right corner
- * 
- * Called by:
- * - Dashboard.jsx
+ * Collapsible Enterprise Sidebar Component with AI Assistant & Account Controls
  */
 export const Sidebar = ({
   activeTab = 'reconciliations',
   setActiveTab,
   pendingCount = 0,
   collapsed = false,
-  setCollapsed
+  setCollapsed,
+  onOpenAiAssistant
 }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [hoveredTab, setHoveredTab] = useState(null);
   const [logoHovered, setLogoHovered] = useState(false);
+  const [aiHovered, setAiHovered] = useState(false);
 
   const navItems = [
     { id: 'reconciliations', label: 'Action Center AI', icon: Zap, badge: pendingCount || null },
@@ -52,6 +43,7 @@ export const Sidebar = ({
     { id: 'audit-logs', label: 'Audit Compliance', icon: History },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'agents', label: 'AI Agent Control', icon: Bot },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: 8 },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
@@ -77,7 +69,7 @@ export const Sidebar = ({
       boxShadow: '2px 0 12px rgba(0, 0, 0, 0.03)'
     }}>
 
-      {/* ───── TOP: Brand Logo & Toggle ───── */}
+      {/* Brand Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -86,7 +78,6 @@ export const Sidebar = ({
         minHeight: '44px',
         position: 'relative'
       }}>
-        {/* Brand Icon + Title — hover triggers toggle button when collapsed */}
         <div
           style={{
             display: 'flex',
@@ -99,7 +90,6 @@ export const Sidebar = ({
           onMouseLeave={() => setLogoHovered(false)}
           onClick={() => collapsed && setCollapsed && setCollapsed(false)}
         >
-          {/* Logo Icon */}
           <div style={{
             width: '42px',
             height: '42px',
@@ -114,7 +104,6 @@ export const Sidebar = ({
             transition: 'box-shadow 0.2s ease',
             position: 'relative'
           }}>
-            {/* When collapsed + hovered: overlay the PanelLeftOpen icon on the logo */}
             {collapsed && logoHovered ? (
               <PanelLeftOpen size={22} />
             ) : (
@@ -122,13 +111,10 @@ export const Sidebar = ({
             )}
           </div>
 
-          {/* "Open sidebar" tooltip (ChatGPT-style) — only when collapsed & logo hovered */}
           {collapsed && logoHovered && (
             <div style={{
-              position: 'absolute',
-              left: '52px',
-              top: '50%',
-              transform: 'translateY(-50%)',
+              position: 'fixed',
+              left: '80px',
               background: '#0f172a',
               color: '#ffffff',
               padding: '6px 12px',
@@ -137,7 +123,7 @@ export const Sidebar = ({
               fontWeight: '600',
               whiteSpace: 'nowrap',
               boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
-              zIndex: 200,
+              zIndex: 9999,
               pointerEvents: 'none',
               animation: 'fadeIn 0.15s ease forwards',
               display: 'flex',
@@ -148,7 +134,6 @@ export const Sidebar = ({
             </div>
           )}
 
-          {/* Text label — only when expanded */}
           {!collapsed && (
             <div>
               <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1, whiteSpace: 'nowrap' }}>
@@ -161,7 +146,6 @@ export const Sidebar = ({
           )}
         </div>
 
-        {/* Collapse button — only visible when EXPANDED */}
         {!collapsed && (
           <button
             onClick={() => setCollapsed && setCollapsed(true)}
@@ -188,8 +172,8 @@ export const Sidebar = ({
         )}
       </div>
 
-      {/* ───── NAVIGATION LINKS ───── */}
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto', overflowX: 'visible' }}>
+      {/* Navigation Links */}
+      <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto', overflowX: 'clip' }}>
         {navItems.map(item => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -243,13 +227,10 @@ export const Sidebar = ({
                 )}
               </button>
 
-              {/* Tooltip when collapsed + hovered (nav items) */}
               {collapsed && isHovered && (
                 <div style={{
-                  position: 'absolute',
-                  left: '60px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
+                  position: 'fixed',
+                  left: '80px',
                   background: '#0f172a',
                   color: '#ffffff',
                   padding: '6px 12px',
@@ -258,8 +239,9 @@ export const Sidebar = ({
                   fontWeight: '600',
                   whiteSpace: 'nowrap',
                   boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
-                  zIndex: 200,
+                  zIndex: 9999,
                   pointerEvents: 'none',
+                  transform: 'translateY(-50%) translateY(10px)',
                   animation: 'fadeIn 0.15s ease forwards'
                 }}>
                   {item.label}
@@ -275,28 +257,30 @@ export const Sidebar = ({
         })}
       </nav>
 
-      {/* ───── FOOTER ───── */}
+      {/* Footer Section */}
       <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
         {!collapsed ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {/* AI Assistant Card */}
-            <div style={{
-              background: 'linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%)',
-              border: '1px solid #d8b4fe',
-              borderRadius: '14px',
-              padding: '12px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(124, 58, 237, 0.15)'; }}
+            <div
+              onClick={() => onOpenAiAssistant && onOpenAiAssistant()}
+              style={{
+                background: 'linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%)',
+                border: '1px solid #d8b4fe',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(124, 58, 237, 0.22)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff' }}>
-                  <Sparkles size={18} />
+                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)' }}>
+                  <Bot size={20} />
                 </div>
                 <div>
                   <div style={{ fontSize: '0.83rem', fontWeight: '700', color: '#4c1d95' }}>AI Assistant</div>
@@ -307,25 +291,104 @@ export const Sidebar = ({
             </div>
 
             {/* User Profile Row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 4px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#4f46e5', color: '#ffffff', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {userInitials}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#4f46e5', color: '#ffffff', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {userInitials}
+                </div>
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontSize: '0.83rem', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user ? user.email : 'accountant@financeflow.com'}</div>
+                </div>
               </div>
-              <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: '0.83rem', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user ? user.email : 'accountant@financeflow.com'}</div>
-              </div>
+
+              <button
+                onClick={logout}
+                title="Sign Out"
+                style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; }}
+              >
+                <LogOut size={16} />
+              </button>
             </div>
           </div>
         ) : (
-          /* Collapsed: just avatar */
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
+          /* Collapsed: AI Assistant Icon + User Avatar */
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '4px 0' }}>
+            
+            {/* Collapsed AI Assistant Icon Button */}
             <div
-              title={userName}
-              style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#4f46e5', color: '#ffffff', fontWeight: '800', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)' }}
+              style={{ position: 'relative' }}
+              onMouseEnter={() => setAiHovered(true)}
+              onMouseLeave={() => setAiHovered(false)}
             >
-              {userInitials}
+              <button
+                onClick={() => onOpenAiAssistant && onOpenAiAssistant()}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(124, 58, 237, 0.35)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Bot size={20} />
+              </button>
+
+              {aiHovered && (
+                <div style={{
+                  position: 'fixed',
+                  left: '80px',
+                  background: '#0f172a',
+                  color: '#ffffff',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+                  zIndex: 9999,
+                  pointerEvents: 'none'
+                }}>
+                  AI Assistant (Coming Soon)
+                </div>
+              )}
             </div>
+
+            {/* Collapsed User Avatar */}
+            <button
+              onClick={logout}
+              title={`Sign Out (${userName})`}
+              style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+            >
+              <div
+                style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#4f46e5', color: '#ffffff', fontWeight: '800', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)' }}
+              >
+                {userInitials}
+              </div>
+            </button>
+
           </div>
         )}
       </div>

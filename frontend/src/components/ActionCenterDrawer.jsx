@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Zap,
@@ -30,6 +30,7 @@ import { StatusBadge } from './Dashboard/StatusBadge';
  * @param {Function} onRefresh - Callback to refresh parent dashboard data.
  */
 export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
+  const [activeCase, setActiveCase] = useState(caseItem);
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -44,9 +45,26 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  useEffect(() => {
+    setActiveCase(caseItem);
+  }, [caseItem]);
+
+  // Handle Escape key press to close drawer
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   if (!caseItem) return null;
 
-  const rec = caseItem.latest_recommendation;
+  const currentCase = activeCase || caseItem;
+  const normStatus = (currentCase.status || '').toLowerCase();
+  const rec = currentCase.latest_recommendation;
   const confidenceScore = rec ? parseFloat(rec.confidence_score) : null;
 
   // Trigger Groq AI Analysis for unanalyzed case
@@ -54,8 +72,18 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
     try {
       setAnalyzing(true);
       setErrorMsg('');
-      await analyzeCase(caseItem.id);
+      const res = await analyzeCase(currentCase.id);
       setSuccessMsg('AI Payment Reconciliation Analysis completed successfully!');
+
+      if (res) {
+        const updated = {
+          ...(res.case || currentCase),
+          status: 'pending_review',
+          latest_recommendation: res.recommendation || (res.case && res.case.latest_recommendation) || currentCase.latest_recommendation
+        };
+        setActiveCase(updated);
+      }
+
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error(err);
@@ -136,28 +164,37 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(15, 23, 42, 0.4)',
-      backdropFilter: 'blur(6px)',
-      zIndex: 50,
-      display: 'flex',
-      justifyContent: 'flex-end',
-      fontFamily: "'Inter', sans-serif"
-    }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(15, 23, 42, 0.4)',
+        backdropFilter: 'blur(6px)',
+        zIndex: 50,
+        display: 'flex',
+        justifyContent: 'flex-end',
+        fontFamily: "'Inter', sans-serif",
+        cursor: 'pointer'
+      }}
+    >
       
       {/* Drawer Container */}
-      <div style={{
-        width: '560px',
-        maxWidth: '100vw',
-        background: '#ffffff',
-        height: '100%',
-        boxShadow: '-8px 0 24px rgba(0, 0, 0, 0.12)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-      }} className="animate-fade-in">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '560px',
+          maxWidth: '100vw',
+          background: '#ffffff',
+          height: '100%',
+          boxShadow: '-8px 0 24px rgba(0, 0, 0, 0.12)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          cursor: 'default'
+        }}
+        className="animate-fade-in"
+      >
         
         {/* Drawer Header */}
         <div style={{
@@ -331,10 +368,10 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
 
             </div>
           ) : (
-            /* Unanalyzed Case State: Offer AI Trigger Button */
+            /* Unanalyzed / Processing / Failed Case States */
             <div style={{
-              background: '#f8fafc',
-              border: '1.5px dashed #cbd5e1',
+              background: normStatus === 'ai_failed' ? '#fff5f5' : '#f8fafc',
+              border: normStatus === 'ai_failed' ? '1.5px solid #fca5a5' : '1.5px dashed #cbd5e1',
               borderRadius: '16px',
               padding: '24px',
               textAlign: 'center',
@@ -343,31 +380,64 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
               alignItems: 'center',
               gap: '12px'
             }}>
-              <Sparkles size={32} color="#6366f1" />
-              <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
-                AI Analysis Not Yet Generated
-              </div>
-              <p style={{ fontSize: '0.8rem', color: '#64748b', maxWidth: '360px' }}>
-                Run Groq Payment Reconciliation AI to automatically investigate borrower records, loan schedules, and bank account numbers.
-              </p>
-              <button
-                onClick={handleRunAnalysis}
-                disabled={analyzing}
-                className="btn-primary"
-                style={{ marginTop: '8px', width: '100%', justifyContent: 'center' }}
-              >
-                {analyzing ? (
-                  <>
-                    <RefreshCw size={18} className="animate-spin" />
-                    <span>Running Groq Agent 1 Investigation...</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap size={18} />
-                    <span>Trigger Groq AI Payment Analysis</span>
-                  </>
-                )}
-              </button>
+              {normStatus === 'ai_processing' || normStatus === 'ai_queued' ? (
+                <>
+                  <RefreshCw size={32} color="#2563eb" className="animate-spin" />
+                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#1e40af' }}>
+                    AI Agent Execution in Progress…
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: '#3b82f6', maxWidth: '360px' }}>
+                    Agent 1 is running deterministic pre-checks and investigating database records. Run lock active to prevent duplicate execution.
+                  </p>
+                </>
+              ) : normStatus === 'ai_failed' ? (
+                <>
+                  <AlertTriangle size={32} color="#dc2626" />
+                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#991b1b' }}>
+                    AI Analysis Encountered an Issue
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: '#b91c1c', maxWidth: '360px' }}>
+                    The agent execution did not complete successfully. You can retry the AI analysis or manually override.
+                  </p>
+                  <button
+                    onClick={handleRunAnalysis}
+                    disabled={analyzing}
+                    className="btn-primary"
+                    style={{ marginTop: '8px', width: '100%', justifyContent: 'center', background: '#dc2626' }}
+                  >
+                    <RefreshCw size={16} className={analyzing ? 'animate-spin' : ''} />
+                    <span>{analyzing ? 'Retrying Agent…' : 'Retry AI Analysis'}</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={32} color="#6366f1" />
+                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
+                    Payment Received — Awaiting AI Analysis
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b', maxWidth: '360px' }}>
+                    Payment is registered in status <strong>NEW</strong>. Trigger Agent 1 to execute zero-token pre-checks and Groq LLM tool calling.
+                  </p>
+                  <button
+                    onClick={handleRunAnalysis}
+                    disabled={analyzing}
+                    className="btn-primary"
+                    style={{ marginTop: '8px', width: '100%', justifyContent: 'center' }}
+                  >
+                    {analyzing ? (
+                      <>
+                        <RefreshCw size={16} className="animate-spin" />
+                        <span>Running Agent 1 Analysis…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={16} />
+                        <span>Trigger Groq AI Payment Analysis</span>
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           )}
 

@@ -121,24 +121,33 @@ export const AuditLogs = () => {
 
       {/* Selected Audit Log Drawer */}
       {selectedLog && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15,23,42,0.4)',
-          backdropFilter: 'blur(4px)',
-          zIndex: 50,
-          display: 'flex',
-          justifyContent: 'flex-end'
-        }}>
-          <div style={{
-            width: '560px',
-            maxWidth: '100vw',
-            background: '#ffffff',
-            height: '100%',
-            boxShadow: '-8px 0 24px rgba(0,0,0,0.12)',
+        <div
+          onClick={() => setSelectedLog(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.4)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 50,
             display: 'flex',
-            flexDirection: 'column'
-          }} className="animate-fade-in">
+            justifyContent: 'flex-end',
+            cursor: 'pointer'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '560px',
+              maxWidth: '100vw',
+              background: '#ffffff',
+              height: '100%',
+              boxShadow: '-8px 0 24px rgba(0,0,0,0.12)',
+              display: 'flex',
+              flexDirection: 'column',
+              cursor: 'default'
+            }}
+            className="animate-fade-in"
+          >
             
             {/* Header */}
             <div style={{ padding: '24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

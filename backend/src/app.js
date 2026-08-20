@@ -18,6 +18,7 @@ import auditRoutes from './routes/audit.routes.js';
 import riskRoutes from './routes/risk.routes.js';
 import collectionRoutes from './routes/collection.routes.js';
 import documentRoutes from './routes/document.routes.js';
+import agentControlRoutes from './routes/agentControl.routes.js';
 
 /**
  * Express Application Setup
@@ -80,6 +81,7 @@ app.use('/api/audit-logs', auditRoutes);
 app.use('/api/risk', riskRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/agents', agentControlRoutes);
 
 // 7. 404 Route Handler
 app.use((req, res, next) => {

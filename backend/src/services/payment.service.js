@@ -7,6 +7,7 @@ import {
   findPaymentById
 } from '../models/payment.model.js';
 import { insertReconciliationCase, findCaseById } from '../models/reconciliationCase.model.js';
+import { emitSocketEvent } from '../config/socket.js';
 
 /**
  * Service: Payment Ingestion Service
@@ -92,7 +93,7 @@ export const ingestPaymentService = async (paymentData, userId = null) => {
     const caseId = await insertReconciliationCase({
       payment_id: paymentId,
       assigned_to: userId,
-      status: 'open',
+      status: 'new',
       priority
     }, connection);
 
@@ -101,6 +102,13 @@ export const ingestPaymentService = async (paymentData, userId = null) => {
 
     const payment = await findPaymentById(paymentId);
     const caseDetails = await findCaseById(caseId);
+
+    // Emit real-time WebSocket event
+    emitSocketEvent('PAYMENT_INGESTED', {
+      payment,
+      case: caseDetails,
+      isPatternDuplicate
+    });
 
     return {
       payment,

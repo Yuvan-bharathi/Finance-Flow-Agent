@@ -2,61 +2,62 @@ import React from 'react';
 
 /**
  * Reusable Status Badge Component
- * 
- * Called by:
- * - RecentCasesTable.jsx
- * - ActionCenterDrawer.jsx
- * 
- * @param {string} status - Case status string ('resolved', 'pending_review', 'ai_processing', 'rejected', 'pending_info', 'under_review').
+ * Handles state machine statuses: new, ai_queued, ai_processing, pending_review, resolved, rejected, ai_failed
  */
-export const StatusBadge = ({ status = 'pending_review' }) => {
+export const StatusBadge = ({ status = 'new' }) => {
   const normStatus = (status || '').toLowerCase();
 
-  let label = status.toUpperCase();
-  let styleClass = 'badge-pending';
+  let label = (status || '').toUpperCase();
   let inlineStyle = {
-    background: '#fef3c7',
-    color: '#d97706',
-    border: '1px solid #fcd34d'
+    background: '#f1f5f9',
+    color: '#475569',
+    border: '1px solid #cbd5e1'
   };
 
-  if (normStatus === 'resolved' || normStatus === 'approved' || normStatus === 'completed') {
+  if (normStatus === 'new') {
+    label = 'NEW';
+    inlineStyle = {
+      background: '#f1f5f9',
+      color: '#475569',
+      border: '1px solid #cbd5e1'
+    };
+  } else if (normStatus === 'ai_queued') {
+    label = 'AI QUEUED';
+    inlineStyle = {
+      background: '#e0e7ff',
+      color: '#4338ca',
+      border: '1px solid #c7d2fe'
+    };
+  } else if (normStatus === 'ai_processing') {
+    label = 'AI PROCESSING…';
+    inlineStyle = {
+      background: '#dbeafe',
+      color: '#1d4ed8',
+      border: '1px solid #bfdbfe'
+    };
+  } else if (normStatus === 'pending_review') {
+    label = 'PENDING REVIEW';
+    inlineStyle = {
+      background: '#fef3c7',
+      color: '#b45309',
+      border: '1px solid #fde68a'
+    };
+  } else if (normStatus === 'resolved' || normStatus === 'approved' || normStatus === 'completed') {
     label = 'RESOLVED';
     inlineStyle = {
       background: '#d1fae5',
-      color: '#059669',
+      color: '#047857',
       border: '1px solid #a7f3d0'
-    };
-  } else if (normStatus === 'pending_review') {
-    label = 'PENDING_REVIEW';
-    inlineStyle = {
-      background: '#fef3c7',
-      color: '#d97706',
-      border: '1px solid #fcd34d'
-    };
-  } else if (normStatus === 'ai_processing') {
-    label = 'AI_PROCESSING';
-    inlineStyle = {
-      background: '#dbeafe',
-      color: '#2563eb',
-      border: '1px solid #bfdbfe'
     };
   } else if (normStatus === 'rejected') {
     label = 'REJECTED';
     inlineStyle = {
       background: '#fee2e2',
-      color: '#dc2626',
+      color: '#b91c1c',
       border: '1px solid #fca5a5'
     };
-  } else if (normStatus === 'pending_info') {
-    label = 'PENDING_INFO';
-    inlineStyle = {
-      background: '#f3e8ff',
-      color: '#7c3aed',
-      border: '1px solid #e9d5ff'
-    };
-  } else if (normStatus === 'under_review') {
-    label = 'UNDER_REVIEW';
+  } else if (normStatus === 'ai_failed') {
+    label = 'AI FAILED';
     inlineStyle = {
       background: '#ffedd5',
       color: '#c2410c',
@@ -73,6 +74,7 @@ export const StatusBadge = ({ status = 'pending_review' }) => {
       fontSize: '0.725rem',
       fontWeight: '700',
       letterSpacing: '0.04em',
+      whiteSpace: 'nowrap',
       ...inlineStyle
     }}>
       {label}
