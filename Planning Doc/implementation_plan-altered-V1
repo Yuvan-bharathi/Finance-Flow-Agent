@@ -1,0 +1,150 @@
+# Implementation Plan — FinanceFlow AI (Agentic Financial Operations Platform)
+
+FinanceFlow AI is an Agentic AI-powered financial operations platform built with React, Node.js + Express, MySQL, and Groq API. It automates payment reconciliation, repayment risk assessment, collection follow-ups, document intelligence, and financial analytics through controlled backend tool calling and a strict **Human-in-the-Loop** architecture.
+
+---
+
+> [!IMPORTANT]
+> **ARCHITECTURE STATUS: FROZEN ❄️**
+> The 12-table relational database architecture, entity relationships, cardinalities, and human-in-the-loop payment lifecycle are officially **FROZEN**. No further structural or table schema changes will be made without explicit approval.
+
+---
+
+## 1. Frozen 12-Table Database ER Diagram
+
+The ER diagram below represents the frozen 12-table schema cleanly organized into logical layers: Security/System, Borrower Lifecycle, Unmatched Ingestion & AI Reasoning, Accounting Ledger Settlement, and Compliance Auditability.
+
+```mermaid
+erDiagram
+    %% --- SECURITY & SYSTEM ---
+    roles ||--o{ users : "governs permissions"
+    users ||--o{ audit_logs : "records actions"
+    users ||--o{ notifications : "receives alerts"
+    users ||--o{ documents : "uploaded_by"
+    users ||--o{ documents : "approved_by (nullable)"
+
+    %% --- BORROWER & EXPECTED CASHFLOW ---
+    companies ||--o{ loans : "borrows facility"
+    companies ||--o{ documents : "owns document"
+    loans ||--o{ repayment_schedules : "has installments"
+
+    %% --- INGESTION & AI INVESTIGATION ---
+    payments ||--o{ reconciliation_cases : "opens investigation case"
+    reconciliation_cases ||--o{ ai_recommendations : "generates candidate matches"
+    users ||--o{ reconciliation_cases : "assigned_to"
+    ai_recommendations }o--|| repayment_schedules : "recommends schedule installment"
+    users ||--o{ ai_recommendations : "reviews AI candidate"
+
+    %% --- HUMAN APPROVAL & LEDGER SETTLEMENT ---
+    payments ||--o{ payment_allocations : "splits into ledger allocations"
+    repayment_schedules ||--o{ payment_allocations : "receives ledger allocation"
+    users ||--o{ payment_allocations : "approved_by"
+```
+
+---
+
+## 2. Frozen 12-Table Schema Specifications
+
+1. **`roles`**: `id` (PK), `name` (UNIQUE), `description`, `created_at`. Seed values: `admin`, `accountant`, `manager`, `viewer`.
+2. **`users`**: `id` (PK), `role_id` (FK ➔ `roles.id`), `name`, `email` (UNIQUE), `password_hash`, `status`, `last_login_at`, `created_at`, `updated_at`.
+3. **`companies`**: `id` (PK), `company_name`, `registration_number` (UNIQUE), `email`, `phone`, `address`, `industry`, `status`, `created_at`, `updated_at`.
+4. **`loans`**: `id` (PK), `company_id` (FK ➔ `companies.id`), `loan_number` (UNIQUE), `principal_amount`, `interest_rate`, `total_payable`, `start_date`, `end_date`, `status`, `created_at`, `updated_at`.
+5. **`repayment_schedules`**: `id` (PK), `loan_id` (FK ➔ `loans.id`), `installment_number`, `due_date`, `principal_due`, `interest_due`, `total_due`, `amount_paid`, `amount_pending`, `status`, UNIQUE(`loan_id`, `installment_number`), `created_at`, `updated_at`.
+6. **`payments`**: `id` (PK), `payment_reference` (UNIQUE), `transaction_reference` (UNIQUE), `payment_date`, `amount`, `payment_method`, `bank_reference`, `sender_name`, `sender_account`, `raw_description`, `source`, `status` (`unmatched`, `under_review`, `matched`, `partially_allocated`, `fully_allocated`, `rejected`), `created_at`, `updated_at`.
+7. **`reconciliation_cases`**: `id` (PK), `payment_id` (FK ➔ `payments.id`), `status` (`pending`, `ai_analyzing`, `ai_recommended`, `under_review`, `approved`, `rejected`, `resolved`), `priority`, `assigned_to` (FK ➔ `users.id`, nullable), `matched_company_id` (FK ➔ `companies.id`, nullable), `matched_loan_id` (FK ➔ `loans.id`, nullable), `matched_repayment_id` (FK ➔ `repayment_schedules.id`, nullable), `created_at`, `resolved_at`.
+8. **`ai_recommendations`**: `id` (PK), `reconciliation_case_id` (FK ➔ `reconciliation_cases.id`), `agent_name`, `recommended_company_id` (FK ➔ `companies.id`, nullable), `recommended_loan_id` (FK ➔ `loans.id`, nullable), `recommended_repayment_id` (FK ➔ `repayment_schedules.id`, nullable), `recommended_amount`, `confidence_score`, `reasoning_summary`, `status` (`pending`, `approved`, `rejected`), `reviewed_by` (FK ➔ `users.id`, nullable), `reviewed_at`, `created_at`.
+9. **`payment_allocations`**: `id` (PK), `payment_id` (FK ➔ `payments.id`), `repayment_schedule_id` (FK ➔ `repayment_schedules.id`), `allocated_amount`, `allocation_type` (`full`, `partial`, `overpayment`, `manual`, `ai_recommended`), `approved_by` (FK ➔ `users.id`), `approved_at`, `created_at`.
+10. **`documents`**: `id` (PK), `company_id` (FK ➔ `companies.id`), `loan_id` (FK ➔ `loans.id`, nullable), `document_type`, `file_name`, `file_url`, `mime_type`, `file_size`, `uploaded_by` (FK ➔ `users.id`), `approved_by` (FK ➔ `users.id`, nullable), `approved_at`, `status`, `created_at`.
+11. **`audit_logs`**: `id` (PK BIGINT), `user_id` (FK ➔ `users.id`, nullable), `action`, `entity_type`, `entity_id`, `old_value` (JSON), `new_value` (JSON), `ip_address`, `created_at`.
+12. **`notifications`**: `id` (PK BIGINT), `user_id` (FK ➔ `users.id`), `type`, `title`, `message`, `reference_type`, `reference_id`, `is_read`, `created_at`.
+
+---
+
+## 3. End-to-End Payment Lifecycle & Human-in-the-Loop Gate
+
+```
+                  Payment API Trigger (POST /api/payments/ingest)
+                                        │
+                                        ▼
+                  1. Ingest original payment into payments table
+                         (status: "unmatched", source: "api")
+                                        │
+                                        ▼
+                 2. Duplicate Check (transaction_reference & pattern)
+                      ├── Duplicate Found ➔ Flag / Mark Rejected
+                      └── Unique Payment ➔ Proceed
+                                        │
+                                        ▼
+                 3. Create reconciliation_cases Record (status: "pending")
+                                        │
+                                        ▼
+                 4. Payment Reconciliation AI Agent Execution (Groq Tool Calling)
+                      ├── searchCompany(senderName, senderAccount)
+                      ├── getActiveLoans(companyId)
+                      ├── getDueRepayments(loanId)
+                      ├── getPaymentHistory(companyId)
+                      └── checkDuplicateTransactions(txnRef, sender, amount)
+                                        │
+                                        ▼
+                 5. AI Writes Candidate to ai_recommendations Table
+                      ├── recommended_company_id, recommended_loan_id, recommended_repayment_id
+                      ├── confidence_score (e.g. 96%)
+                      ├── reasoning_summary
+                      └── status: "pending"
+                                        │
+                                        ▼
+                 6. Human Verification (React Accountant Dashboard)
+                                        │
+             ┌──────────────────────────┼──────────────────────────┐
+             ▼                          ▼                          ▼
+        [ REJECT ]                 [ PENDING ]                [ APPROVE ]
+             │                          │                          │
+             ▼                          ▼                          ▼
+   - ai_rec.status='rejected'    - case.status='under_review' - Backend ACID Transaction:
+   - case.status='rejected'      - Kept open for manual        * Insert payment_allocations
+   - payments.status='rejected'    investigation               * Update repayment_schedules (amount_paid/pending/status)
+   - Reason logged in audit_logs                               * Update payments (status='fully_allocated' / 'partially_allocated')
+                                                               * case.status='resolved'
+                                                               * ai_rec.status='approved'
+                                                               * Detailed entry in audit_logs
+```
+
+---
+
+## 4. Mandatory Audit & Overrides Specification
+
+| Action | Audit Trail & Ledger Rules |
+|---|---|
+| **AI Candidate Generation** | System logs candidate creation in `ai_recommendations`. Financial ledger is **untouched**. |
+| **Human Approval** | Creates `payment_allocations` row (`approved_by = req.user.id`), updates `repayment_schedules`, updates `payments` status, sets `reconciliation_cases.status = 'resolved'`. Writes action `APPROVE_ALLOCATION` to `audit_logs`. |
+| **Human Rejection** | Sets `ai_recommendations.status = 'rejected'`, sets `reconciliation_cases.status = 'rejected'`. Rejection reason is recorded in `audit_logs`. |
+| **Pending Investigation** | Sets `reconciliation_cases.status = 'under_review'`. Open for manual search and investigation in Accountant Dashboard. |
+| **Accountant Override** | Requires a mandatory `override_reason` text string. Backend writes `{ old_ai_recommendation, manual_allocation, override_reason }` to `audit_logs` under action `OVERRIDE_RECONCILIATION`. |
+
+---
+
+## 5. Phased Implementation Roadmap
+
+- **Phase 1: Database Setup & Core Backend Foundation**
+  - Run physical DDL `schema.sql` script for all 12 frozen tables.
+  - Insert initial `seed.sql` data for system roles, initial companies, loans, and schedules.
+  - Setup Express server, MySQL pool, JWT Auth (HTTP-only cookies), and RBAC middleware.
+  - Create table documentation under `database/documentation/`.
+
+- **Phase 2: Core Financial Operations CRUD & Ingestion API**
+  - CRUD APIs for Companies, Loans, and Repayment Schedules.
+  - Ingestion API (`POST /api/payments/ingest`) with duplicate check and `reconciliation_cases` creation.
+  - Module `.md` documentation files for controllers, services, repositories, and routes.
+
+- **Phase 3: Payment Reconciliation AI Agent (Agent 1)**
+  - Implement tool handlers (`searchCompany`, `getActiveLoans`, `getDueRepayments`, `getPaymentHistory`, `checkDuplicateTransactions`).
+  - Implement `reconciliationAgent.js` using Groq LLM tool-calling loop.
+  - Analysis trigger API (`POST /api/reconciliations/analyze/:caseId`).
+
+- **Phase 4: Accountant Action Center & Human Approval Workflow**
+  - React UI with modern Vanilla CSS styling.
+  - Payment Reconciliation page displaying AI confidence pill, reasoning summary, candidate selection, and `[Approve]`, `[Reject]`, `[Override]` actions.
+  - Settlement endpoint `POST /api/reconciliations/approve` executing MySQL ACID transaction and audit logging.
+
+- **Phase 5: Additional AI Agents Expansion (Risk, Collection, Analyst, Document)**
+- **Phase 6: WebSocket Real-Time Updates, Swagger API Docs, Testing & Deployment**

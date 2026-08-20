@@ -1,0 +1,364 @@
+FinanceFlow AI
+Phase 2 — Final Table Schema & Physical DDL Specification
+―――――――――――――――――――――――――――――――――――――――――――――――――――――――
+1. roles
+CREATE TABLE roles (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+System roles defining user access levels. Example seed values:
+1 | admin
+2 | accountant
+3 | manager
+4 | viewer
+2. users
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    role_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+    last_login_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_users_role
+        FOREIGN KEY (role_id)
+        REFERENCES roles(id)
+);
+Foreign Key Relationship: users.role_id → roles.id
+3. companies
+CREATE TABLE companies (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    company_name VARCHAR(150) NOT NULL,
+    registration_number VARCHAR(100) UNIQUE,
+    email VARCHAR(150),
+    phone VARCHAR(20),
+    address TEXT,
+    industry VARCHAR(100),
+    status ENUM('active', 'inactive', 'blacklisted') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+Corporate borrower profiles maintaining central master data.
+4. loans
+CREATE TABLE loans (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    company_id INT NOT NULL,
+    loan_number VARCHAR(50) NOT NULL UNIQUE,
+    principal_amount DECIMAL(15,2) NOT NULL,
+    interest_rate DECIMAL(5,2) NOT NULL,
+    total_payable DECIMAL(15,2) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    status ENUM(
+        'active',
+        'completed',
+        'overdue',
+        'defaulted',
+        'cancelled'
+    ) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_loans_company
+        FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+);
+Relationship Structure: Company (1) → Loans (N) [e.g., Loan 001, Loan 002, Loan 003]
+5. repayment_schedules
+CREATE TABLE repayment_schedules (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    loan_id INT NOT NULL,
+    installment_number INT NOT NULL,
+    due_date DATE NOT NULL,
+    principal_due DECIMAL(15,2) NOT NULL DEFAULT 0,
+    interest_due DECIMAL(15,2) NOT NULL DEFAULT 0,
+    total_due DECIMAL(15,2) NOT NULL,
+    amount_paid DECIMAL(15,2) NOT NULL DEFAULT 0,
+    amount_pending DECIMAL(15,2) NOT NULL,
+    status ENUM(
+        'pending',
+        'partial',
+        'paid',
+        'overdue'
+    ) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_schedule_loan
+        FOREIGN KEY (loan_id)
+        REFERENCES loans(id),
+    CONSTRAINT unique_loan_installment
+        UNIQUE (loan_id, installment_number)
+);
+Represents expected payment installments.
+Example State: Expected = ₹100,000 | Paid = ₹75,000 | Pending = ₹25,000 | Status = partial
+6. payments
+CREATE TABLE payments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    payment_reference VARCHAR(100) NOT NULL UNIQUE,
+    transaction_reference VARCHAR(150) UNIQUE,
+    payment_date DATETIME NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    payment_method ENUM(
+        'bank_transfer',
+        'upi',
+        'cheque',
+        'cash',
+        'other'
+    ) NOT NULL,
+    bank_reference VARCHAR(150),
+    sender_name VARCHAR(150),
+    sender_account VARCHAR(100),
+    raw_description TEXT,
+    status ENUM(
+        'unmatched',
+        'under_review',
+        'matched',
+        'partially_allocated',
+        'fully_allocated',
+        'rejected'
+    ) DEFAULT 'unmatched',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+Decoupled raw incoming financial records.
+Flow: BANK → ₹75,000 → payments → UNMATCHED (No upfront company/loan assignment).
+7. reconciliation_cases
+CREATE TABLE reconciliation_cases (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    payment_id INT NOT NULL,
+    status ENUM(
+        'pending',
+        'ai_analyzing',
+        'ai_recommended',
+        'under_review',
+        'approved',
+        'rejected',
+        'resolved'
+    ) DEFAULT 'pending',
+    priority ENUM(
+        'low',
+        'medium',
+        'high',
+        'critical'
+    ) DEFAULT 'medium',
+    assigned_to INT NULL,
+    matched_company_id INT NULL,
+    matched_loan_id INT NULL,
+    matched_repayment_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP NULL,
+    CONSTRAINT fk_case_payment
+        FOREIGN KEY (payment_id)
+        REFERENCES payments(id),
+    CONSTRAINT fk_case_assigned_user
+        FOREIGN KEY (assigned_to)
+        REFERENCES users(id),
+    CONSTRAINT fk_case_company
+        FOREIGN KEY (matched_company_id)
+        REFERENCES companies(id),
+    CONSTRAINT fk_case_loan
+        FOREIGN KEY (matched_loan_id)
+        REFERENCES loans(id),
+    CONSTRAINT fk_case_repayment
+        FOREIGN KEY (matched_repayment_id)
+        REFERENCES repayment_schedules(id)
+);
+Investigation workflow container linking raw payment to prospective company, loan, and repayment schedule.
+8. ai_recommendations
+CREATE TABLE ai_recommendations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    reconciliation_case_id INT NOT NULL,
+    agent_name VARCHAR(100) NOT NULL,
+    recommended_company_id INT NULL,
+    recommended_loan_id INT NULL,
+    recommended_repayment_id INT NULL,
+    recommended_amount DECIMAL(15,2),
+    confidence_score DECIMAL(5,2),
+    reasoning_summary TEXT,
+    status ENUM(
+        'pending',
+        'approved',
+        'rejected'
+    ) DEFAULT 'pending',
+    reviewed_by INT NULL,
+    reviewed_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_case
+        FOREIGN KEY (reconciliation_case_id)
+        REFERENCES reconciliation_cases(id),
+    CONSTRAINT fk_ai_company
+        FOREIGN KEY (recommended_company_id)
+        REFERENCES companies(id),
+    CONSTRAINT fk_ai_loan
+        FOREIGN KEY (recommended_loan_id)
+        REFERENCES loans(id),
+    CONSTRAINT fk_ai_repayment
+        FOREIGN KEY (recommended_repayment_id)
+        REFERENCES repayment_schedules(id),
+    CONSTRAINT fk_ai_reviewer
+        FOREIGN KEY (reviewed_by)
+        REFERENCES users(id)
+);
+Stores AI matching analysis and candidate scoring.
+Example: Agent = PaymentReconciliationAgent | Company = ABC Technologies | Confidence = 94% | Status = pending
+9. payment_allocations
+CREATE TABLE payment_allocations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    payment_id INT NOT NULL,
+    company_id INT NOT NULL,
+    loan_id INT NOT NULL,
+    repayment_schedule_id INT NOT NULL,
+    allocated_amount DECIMAL(15,2) NOT NULL,
+    allocation_type ENUM(
+        'full',
+        'partial',
+        'overpayment',
+        'manual',
+        'ai_recommended'
+    ) NOT NULL,
+    approved_by INT NOT NULL,
+    approved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_allocation_payment
+        FOREIGN KEY (payment_id)
+        REFERENCES payments(id),
+    CONSTRAINT fk_allocation_company
+        FOREIGN KEY (company_id)
+        REFERENCES companies(id),
+    CONSTRAINT fk_allocation_loan
+        FOREIGN KEY (loan_id)
+        REFERENCES loans(id),
+    CONSTRAINT fk_allocation_schedule
+        FOREIGN KEY (repayment_schedule_id)
+        REFERENCES repayment_schedules(id),
+    CONSTRAINT fk_allocation_user
+        FOREIGN KEY (approved_by)
+        REFERENCES users(id)
+);
+Official financial ledger entry created after human accountant approval.
+Workflow: AI (94% confidence) → Accountant Approval → payment_allocations → Ledger Finalized
+10. documents
+CREATE TABLE documents (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    company_id INT NOT NULL,
+    loan_id INT NULL,
+    document_type ENUM(
+        'loan_agreement',
+        'invoice',
+        'bank_statement',
+        'payment_proof',
+        'identity_document',
+        'other'
+    ) NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_url TEXT NOT NULL,
+    mime_type VARCHAR(100),
+    file_size BIGINT,
+    uploaded_by INT NOT NULL,
+    status ENUM(
+        'uploaded',
+        'processing',
+        'processed',
+        'failed'
+    ) DEFAULT 'uploaded',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_document_company
+        FOREIGN KEY (company_id)
+        REFERENCES companies(id),
+    CONSTRAINT fk_document_loan
+        FOREIGN KEY (loan_id)
+        REFERENCES loans(id),
+    CONSTRAINT fk_document_user
+        FOREIGN KEY (uploaded_by)
+        REFERENCES users(id)
+);
+Metadata for compliance, bank statements, and uploaded financial proof documents.
+11. audit_logs
+CREATE TABLE audit_logs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NULL,
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(100) NOT NULL,
+    entity_id INT NOT NULL,
+    old_value JSON NULL,
+    new_value JSON NULL,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_audit_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+);
+Immutable compliance log answering: WHO, WHAT, WHEN, WHICH RECORD, BEFORE state, and AFTER state.
+12. notifications
+CREATE TABLE notifications (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    message TEXT NOT NULL,
+    reference_type VARCHAR(100),
+    reference_id INT,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notification_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+);
+User alert and notification queue system.
+13. Strategic Performance Indexes
+To optimize frequent querying across large payment logs and audit historical records, targeted B-Tree indexes are defined as follows:
+CREATE INDEX idx_users_role ON users(role_id);
+CREATE INDEX idx_companies_name ON companies(company_name);
+CREATE INDEX idx_loans_company ON loans(company_id);
+CREATE INDEX idx_loans_status ON loans(status);
+CREATE INDEX idx_schedule_loan ON repayment_schedules(loan_id);
+CREATE INDEX idx_schedule_due_date ON repayment_schedules(due_date);
+CREATE INDEX idx_schedule_status ON repayment_schedules(status);
+CREATE INDEX idx_payments_date ON payments(payment_date);
+CREATE INDEX idx_payments_status ON payments(status);
+CREATE INDEX idx_payments_sender ON payments(sender_name);
+CREATE INDEX idx_reconciliation_status ON reconciliation_cases(status);
+CREATE INDEX idx_reconciliation_assigned ON reconciliation_cases(assigned_to);
+CREATE INDEX idx_notifications_user ON notifications(user_id);
+CREATE INDEX idx_notifications_read ON notifications(is_read);
+Performance Rationale:
+Dashboard metrics frequently execute targeted filtering queries such as 
+SELECT * FROM payments WHERE status = 'unmatched';
+ These indexes allow MySQL to locate records via B-Tree index scans rather than performing full table scans.
+14. Final End-to-End Business Lifecycle
+COMPANY ──► LOAN ──► REPAYMENT SCHEDULE (EXPECTED PAYMENT)
+                                │
+                                ▼
+                       BANK (ACTUAL PAYMENT)
+                                │
+                                ▼
+                            PAYMENTS
+                                │
+                                ▼
+                      RECONCILIATION CASE
+                                │
+                                ▼
+                            AI AGENT
+                                │
+                                ▼
+                       AI RECOMMENDATION
+                                │
+                                ▼
+                        ACCOUNTANT REVIEW
+                        /               \
+                   REJECT               APPROVE
+                     │                     │
+                     │                     ▼
+                     │            PAYMENT ALLOCATION
+                     │                     │
+                     │                     ▼
+                     │            REPAYMENT SCHEDULE
+                     │                     │
+                     │                     ▼
+                     │               PAID / PARTIAL
+                     │
+                     ▼
+                 AUDIT LOG

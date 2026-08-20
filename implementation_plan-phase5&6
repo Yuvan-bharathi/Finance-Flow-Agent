@@ -1,0 +1,119 @@
+# Implementation Plan — Multi-Agent AI Expansion & Infrastructure Polish
+
+This implementation plan details the addition of **Agent 2 (Repayment Risk Assessment)**, **Agent 3 (Automated Collection Follow-Up)**, **Agent 4 (Document Intelligence)**, rich **Test Data Seeding**, **WebSocket Real-Time Notifications**, **Interactive Reports & Analytics**, and **Swagger API Docs** to the **FinanceFlow AI** platform.
+
+---
+
+## 1. Overview of Proposed Additions
+
+```mermaid
+flowchart TD
+    subgraph DataLayer [1. Test Data & Seed Layer]
+        DB[(MySQL Database)]
+        SeedData[Seed Overdue Loans, Contract PDFs, Delay History]
+    end
+
+    subgraph MultiAgentEngine [2. Groq Multi-Agent Suite]
+        Agent1[Agent 1: Payment Reconciliation Agent]
+        Agent2[Agent 2: Repayment Risk Assessment Agent]
+        Agent3[Agent 3: Automated Collection Follow-Up Agent]
+        Agent4[Agent 4: Document Intelligence Agent]
+    end
+
+    subgraph BackendAPI [3. Express Backend & Real-Time Push]
+        APIEndpoints[Express API Endpoints & ACID Settlement]
+        WebSockets[Socket.io Real-Time Event Push]
+        SwaggerDocs[Swagger UI API Documentation at /api-docs]
+    end
+
+    subgraph FrontendUI [4. React Enterprise SPA Dashboard]
+        DashboardUI[Action Center & Dashboard Analytics]
+        RiskUI[Borrower Risk Health & Risk Score Cards]
+        CollectionUI[1-Click AI Collection Email Generator]
+        DocumentUI[PDF Contract Parsing & Term Extractor]
+        ReportsUI[Interactive Reports & Revenue Projections]
+    end
+
+    DataLayer --> MultiAgentEngine
+    MultiAgentEngine --> BackendAPI
+    BackendAPI --> WebSockets
+    BackendAPI --> FrontendUI
+```
+
+---
+
+## 2. Proposed Changes & Component Architecture
+
+### A. Rich Test Data Seeding (`database/seed_extended.sql`)
+- **Overdue Loans & Installments**: Add test companies with past-due installments (`LN-OVERDUE-01` for *Apex Logistics*, `LN-RISK-02` for *CyberNet Systems*).
+- **Payment Delay History**: Insert historical payments showing 15-day and 30-day payment delays to give Agent 2 (Risk) concrete mathematical signals to evaluate.
+- **Documents & Contracts**: Insert sample borrower agreements (PDF metadata & terms) in `documents` table.
+
+---
+
+### B. Multi-Agent AI Suite (Backend & Agents)
+
+#### 1. Agent 2: Repayment Risk Assessment Agent
+- **System Prompt**: `backend/src/prompts/risk.prompt.js`
+- **Backend Tools**: `backend/src/tools/riskTools.js` (`getBorrowerPaymentHistory`, `getLoanScheduleStatus`, `calculateHistoricalDelayAvg`, `checkOutstandingOverdueCount`)
+- **Agent Orchestrator**: `backend/src/agents/riskAgent.js` (Calculates Risk Score 0-100, assigns `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` risk level, and identifies default warning signals).
+- **API Endpoints**:
+  - `GET /api/risk/assess/:companyId`
+  - `GET /api/risk/overview`
+
+#### 2. Agent 3: Automated Collection Follow-Up Agent
+- **System Prompt**: `backend/src/prompts/collection.prompt.js`
+- **Backend Tools**: `backend/src/tools/collectionTools.js` (`getOverdueInstallments`, `getCompanyContactDetails`, `getPastRemindersHistory`)
+- **Agent Orchestrator**: `backend/src/agents/collectionAgent.js` (Drafts polite, firm, or urgent payment reminder emails based on delinquency days and loan terms).
+- **API Endpoints**:
+  - `POST /api/collections/generate-reminder`
+  - `GET /api/collections/history/:companyId`
+
+#### 3. Agent 4: Document Intelligence Agent
+- **System Prompt**: `backend/src/prompts/document.prompt.js`
+- **Agent Orchestrator**: `backend/src/agents/documentAgent.js` (Extracts borrower name, loan amount, interest rate, penalty rate, governing jurisdiction, and expiration date from contract text).
+- **API Endpoints**:
+  - `POST /api/documents/upload`
+  - `POST /api/documents/extract/:documentId`
+
+---
+
+### C. Infrastructure & Real-Time Polish (Phase 6)
+
+#### 1. WebSocket Real-Time Event Push (`Socket.io`)
+- Mount `socket.io` server in `backend/src/server.js`.
+- Emit events: `payment_ingested`, `reconciliation_completed`, `risk_alert`, `collection_sent`.
+- Create `frontend/src/services/socketService.js` for instant toast notifications in the React app.
+
+#### 2. Interactive Reports & Analytics Page (`src/pages/ReportsAnalytics.jsx`)
+- Interactive charts: Monthly Collection Efficiency Rate (%), Overdue Aging Bucket Breakdown (30 / 60 / 90+ days), Revenue Projection Spline Chart.
+
+#### 3. Swagger / OpenAPI Documentation (`/api-docs`)
+- Mount `swagger-ui-express` in `backend/src/app.js` serving interactive OpenAPI 3.0 specification.
+
+---
+
+## 3. User Review Required
+
+> [!IMPORTANT]
+> **MULTI-AGENT ARCHITECTURE CONFIRMATION**
+> All new agents (Risk Assessment, Collection Follow-Up, Document Intelligence) utilize Groq LLM tool calling with fallback heuristic rule engines to guarantee system stability if API rate limits occur.
+> No schema changes to the **12-Table Frozen ER Schema** are required — new agent outputs leverage existing tables (`reconciliation_cases`, `ai_recommendations`, `documents`, `audit_logs`, `notifications`).
+
+---
+
+## 4. Verification Plan
+
+### Automated Verification
+1. Execute `node backend/scripts/seedExtendedData.js` to insert multi-agent test data.
+2. Run automated integration test script `node backend/scripts/testMultiAgentSuite.js` verifying:
+   - Agent 2 Risk Assessment calculation for overdue companies.
+   - Agent 3 Collection Follow-Up email generation.
+   - Agent 4 Document key term extraction.
+
+### Manual Verification
+1. Open React SPA at `http://localhost:5173/`.
+2. Inspect the new **Borrower Risk Health** indicator on Company Directory rows.
+3. Open **1-Click AI Collection Reminder** modal for an overdue loan installment.
+4. Upload/Inspect contract documents in the **Documents** tab.
+5. Open `/api-docs` to inspect interactive Swagger documentation.

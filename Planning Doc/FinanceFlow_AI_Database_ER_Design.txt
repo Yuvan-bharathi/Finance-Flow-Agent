@@ -1,0 +1,167 @@
+FinanceFlow AI
+Database ER Design & Architectural Architecture Specification (v1.0)
+―――――――――――――――――――――――――――――――――――――――――――――――――――――――
+Document Overview & Core Concept
+This specification outlines the freeze-state database design for FinanceFlow AI using MySQL as the relational database engine. The architecture decouples raw incoming bank payments from internal ledger entities (Companies, Loans, Repayments). Reconciliation and allocation form the operational heart of the system, leveraging AI recommendation candidate scoring and mandatory human approval workflows.
+1. Version 1 Core Database Schema (12 Tables)
+For Version 1, the relational schema is frozen across the following 12 core tables:
+roles: 
+Access control roles (e.g., Accountant, Admin, Manager).
+users: 
+User accounts, authentication references, and role assignments.
+companies: 
+Borrower entities and corporate clients.
+loans: 
+Loan agreements linked to borrower companies.
+repayment_schedules: 
+Scheduled payment installments, due amounts, and pending balances.
+payments: 
+Raw bank payment logs (unmatched incoming financial transactions).
+payment_allocations: 
+Final ledger records linking approved payments to specific repayment schedules.
+reconciliation_cases: 
+Investigation cases managing the matching process per payment.
+ai_recommendations: 
+AI engine candidate matches with confidence percentage scores.
+documents: 
+Uploaded metadata (contracts, bank receipts, identity proofs).
+audit_logs: 
+Immutable system audit trail tracking user actions, entity modifications, and old/new values.
+notifications: 
+System alerts and workflow notifications assigned to users.
+2. ER Relationship Diagram
+The structural flow below details entity dependencies from security/access down through raw incoming funds, AI evaluation, human review, and financial ledger allocation.
+[ ROLES ] ─── (1:N) ───► [ USERS ]
+                             │
+            ┌────────────────┼────────────────┐
+            ▼                ▼                ▼
+     [ AUDIT_LOGS ]   [ DOCUMENTS ]    [ NOTIFICATIONS ]
+                             ▲
+                             │ (1:N)
+                     [ COMPANIES ]
+                             │ (1:N)
+                             ▼
+                        [ LOANS ]
+                             │ (1:N)
+                             ▼
+                 [ REPAYMENT_SCHEDULES ] ◄──────────────┐
+                             │                          │
+                             ▼ (Logical Flow)           │
+                        [ PAYMENTS ]                    │
+                             │ (1:N)                    │ (1:N)
+                             ▼                          │
+               [ RECONCILIATION_CASES ]                 │
+                             │ (1:N)                    │
+                             ▼                          │
+               [ AI_RECOMMENDATIONS ]                   │
+                             │                          │
+                             ▼                          │
+                      (HUMAN REVIEW)                    │
+                             │                          │
+                             ▼                          │
+               [ PAYMENT_ALLOCATIONS ] ─────────────────┘
+3. Detailed Entity Relationship Breakdown
+3.1 Roles → Users
+Cardinality / Rule: 1 : N (One-to-Many) | Mapping: roles.id → users.role_id
+One role (e.g., Accountant) applies to multiple user accounts (e.g., Arun, Priya, Karthik).
+3.2 Companies → Loans
+Cardinality / Rule: 1 : N (One-to-Many) | Mapping: companies.id → loans.company_id
+A borrowing company (e.g., ABC Technologies) can take out multiple distinct loan facilities (Loan #001, Loan #002, Loan #003).
+3.3 Loans → Repayment Schedules
+Cardinality / Rule: 1 : N (One-to-Many) | Mapping: loans.id → repayment_schedules.loan_id
+Each loan comprises multiple scheduled installments across its lifecycle (Installments 1 through N).
+3.4 Companies → Documents
+Cardinality / Rule: 1 : N (One-to-Many) | Mapping: companies.id → documents.company_id
+A company maintains multiple documents (Loan Agreements, PAN Cards, Bank Statements). Optionally, a document can reference a specific loan (documents.loan_id).
+3.5 Payments Lifecycle & Decoupling
+Cardinality / Rule: Unmatched Initial State | Mapping: Bank Deposit → payments
+Incoming money (e.g., ₹75,000 via Bank) creates an unallocated payment entry with status UNMATCHED. It initially carries no direct company_id or loan_id foreign key.
+3.6 Payments → Reconciliation Cases
+Cardinality / Rule: 1 : N (Constrained Active Case) | Mapping: payments.id → reconciliation_cases.payment_id
+When matching starts (e.g., PAY-1001 for ₹75,000), a reconciliation case (RC-1001) is opened. While supporting full historical re-indexing, strict business rules enforce a single active case at a time.
+3.7 Reconciliation Cases → AI Recommendations
+Cardinality / Rule: 1 : N (One-to-Many Candidate Scoring) | Mapping: reconciliation_cases.id → ai_recommendations.reconciliation_case_id
+For payment ₹75,000, AI evaluates multiple candidates simultaneously:
+  • Candidate 1 → ABC Technologies (94% confidence)
+  • Candidate 2 → ABC Trading (61% confidence)
+  • Candidate 3 → XYZ Industries (28% confidence)
+Retaining candidate evaluation history empowers human reviewers and enhances model auditing.
+3.8 Payment Allocations (Decoupling Recommendation from Accounting)
+Cardinality / Rule: Workflow Transition | Mapping: AI Recommendation → Human Approval → Payment Allocation
+AI recommendations do not modify account balances directly. Actual financial ledger changes only occur after human approval generates a payment_allocations record.
+3.9 Business Rule Demonstrations
+Cardinality / Rule: Financial Flexibility | Mapping: Allocations & Balances
+• Partial Payment Example: Expected ₹100,000; Received ₹75,000. Accountant approves allocation of ₹75,000. Schedule updates: total_due = ₹100,000, amount_paid = ₹75,000, amount_pending = ₹25,000, status = PARTIAL.
+• Multiple Payments for One Installment: Expected ₹100,000. Received ₹40,000 (Payment 1) + ₹35,000 (Payment 2). Two allocation rows link to one schedule row. Total Paid = ₹75,000; Pending = ₹25,000.
+• Payment Split Across Loans: Single incoming wire of ₹150,000 splits into Allocation A (Loan A = ₹100,000) and Allocation B (Loan B = ₹50,000).
+3.10 Users → Audit Logs & Notifications
+Cardinality / Rule: 1 : N Auditability | Mapping: users.id → audit_logs.user_id / notifications.user_id
+Every sensitive operation records WHO, WHAT, WHICH RECORD, WHEN, OLD VALUE, and NEW VALUE in audit_logs. Notifications alert accountants upon high-confidence AI matches.
+4. Master Entity Relationship Table
+Parent Table
+Child Table
+Cardinality
+Business & System Reason
+roles
+users
+1 : N
+One security role governs permissions for multiple users.
+users
+audit_logs
+1 : N
+User actions create sequential system audit entries.
+users
+notifications
+1 : N
+System dispatches alerts and task queues to specific users.
+companies
+loans
+1 : N
+A corporate borrower can maintain multiple loan accounts.
+companies
+documents
+1 : N
+Corporate compliance & identity documents belong to a company.
+loans
+repayment_schedules
+1 : N
+Loans are structured into recurring installment payments.
+payments
+reconciliation_cases
+1 : N*
+Payments generate reconciliation investigation cases (1 active).
+reconciliation_cases
+ai_recommendations
+1 : N
+AI generates ranked matching candidates per case.
+payments
+payment_allocations
+1 : N
+One lump-sum payment can be split into multiple ledger allocations.
+repayment_schedules
+payment_allocations
+1 : N
+An installment can accept multiple partial allocations.
+users
+documents
+1 : N
+Tracks the specific user who uploaded each document.
+users
+ai_recommendations
+1 : N
+Tracks the accountant assigned to review AI suggestions.
+5. Architectural Refinements & Mentor Defense Guide
+Architectural Improvement: Decoupling Payments from Entities
+In naive designs, `payments` directly store `company_id`, `loan_id`, and `repayment_id`. FinanceFlow AI explicitly avoids this pattern because incoming bank feeds arrive without contextual metadata. The strictly enforced application lifecycle follows: 
+BANK PAYMENT ► payments (UNMATCHED) ► AI RECONCILIATION ► AI RECOMMENDATIONS ► HUMAN APPROVAL ► payment_allocations ► COMPANY / LOAN / REPAYMENT
+Core System Identity & Mentor Q&A Reference
+Q: What is the central table of the application?
+A: Rather than static entity tables like `companies`, `payments` and `payment_allocations` form the central engine. FinanceFlow AI bridges the delta between Expected Cashflow and Actual Bank Receipts via automated AI matching and accounting approval.
+Q: What happens if an accountant modifies or overrides a payment allocation?
+A: The operation is fully auditable. The system records the acting User ID, Action Type, Target Entity, Old Values, New Values, and precise Timestamp in `audit_logs`, guaranteeing full historical compliance.
+6. Next Steps: Physical Schema Implementation
+With all relational cardinalities and core workflows approved, the subsequent phase involves defining physical DDL specifications for all 12 tables, specifying:
+Exact MySQL column data types (e.g., BIGINT, VARCHAR, DECIMAL(15,2), DATETIME, JSON).
+Primary Key (PK) & Foreign Key (FK) constraint declarations with ON DELETE / ON UPDATE behavior.
+NULL / NOT NULL rules, DEFAULT expressions, and CHECK validation constraints.
+Indexes (B-Tree, Composite, Unique) optimized for payment matching and audit lookup performance.

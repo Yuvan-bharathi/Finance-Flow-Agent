@@ -1,0 +1,1487 @@
+FinanceFlow AI — Antigravity Development Manual
+1. Project Development Rule
+
+You are building FinanceFlow AI, an Agentic AI-powered financial operations platform.
+
+The application must be developed as a real full-stack production-style project, not as a collection of disconnected demo pages.
+
+The project should use:
+
+Frontend: React
+Backend: Node.js + Express.js
+Database: MySQL
+AI: Groq API
+Authentication: JWT + HTTP-only cookies
+Authorization: RBAC
+Real-time: WebSocket
+File Upload: Local/cloud-ready storage abstraction
+API Documentation: Swagger/OpenAPI
+Testing: Unit + API/integration testing
+Deployment: Production-ready configuration
+
+The primary business workflow is:
+
+Company
+   ↓
+Loan
+   ↓
+Repayment Schedule
+   ↓
+Incoming Payment
+   ↓
+Payment Reconciliation Agent
+   ↓
+Search / Analyze Financial Data
+   ↓
+AI Recommendation
+   ↓
+Confidence Score
+   ↓
+Human Review / Approval
+   ↓
+Payment Allocation
+   ↓
+Outstanding Balance Update
+   ↓
+Audit Log
+2. MOST IMPORTANT RULE — CODE MUST BE LEARNABLE
+
+Do not generate code only for functionality.
+
+Every important piece of code must be written so that a developer who is learning the project can understand:
+
+What the code does
+Why it exists
+Where the data comes from
+Where the data goes
+What parameters are received
+What each parameter means
+Where each parameter originated
+What the function returns
+Which function calls it
+Which function it calls
+What happens if it fails
+
+The code should be understandable by reading it from top to bottom.
+
+3. COMMENTING STANDARD
+
+Comments must be useful, not excessive.
+
+Do NOT write comments like:
+
+// Create student
+const student = await Student.create(req.body);
+
+This comment adds almost no value.
+
+Instead explain the data flow:
+
+// req.body comes from the JSON payload sent by the frontend.
+// Example:
+// {
+//   "name": "ABC Technologies",
+//   "email": "abc@example.com"
+// }
+//
+// The controller passes this object to the Company model,
+// which validates the data against the Mongoose/ORM schema
+// before creating the database record.
+const company = await Company.create(req.body);
+4. EVERY FUNCTION MUST HAVE A DATA-FLOW COMMENT
+
+For every important function, document:
+
+Function:
+Purpose:
+Called by:
+Receives:
+Data source:
+Important parameters:
+Returns:
+Calls:
+Possible errors:
+
+Example:
+
+/**
+ * Creates a new company.
+ *
+ * Called by:
+ * POST /api/companies
+ *
+ * Data flow:
+ * React form
+ *   ↓
+ * POST request
+ *   ↓
+ * Express route
+ *   ↓
+ * createCompany controller
+ *   ↓
+ * Company service
+ *   ↓
+ * MySQL
+ *
+ * @param {Object} req - Express request object.
+ * @param {Object} res - Express response object.
+ */
+export const createCompany = async (req, res) => {
+5. EXPLAIN req, res, AND next
+
+Whenever Express functions use:
+
+(req, res, next)
+
+the comments should explain them when they first appear in that file.
+
+Example:
+
+/**
+ * @param {Object} req
+ * Express request object.
+ *
+ * Data comes from:
+ * Browser → HTTP request → Express
+ *
+ * req.body:
+ * Data sent in the request body.
+ *
+ * req.params:
+ * Values coming from URL parameters.
+ *
+ * req.query:
+ * Values coming from query parameters.
+ *
+ * req.user:
+ * Authentication information added by auth middleware.
+ *
+ * @param {Object} res
+ * Express response object used to send data back to frontend.
+ *
+ * @param {Function} next
+ * Passes execution to the next middleware.
+ */
+6. NEVER HIDE DATA FLOW
+
+If data is passed between functions, make the flow obvious.
+
+For example:
+
+Frontend
+   ↓
+fetch()
+   ↓
+API Route
+   ↓
+Controller
+   ↓
+Service
+   ↓
+Repository / ORM
+   ↓
+MySQL
+
+The documentation must explain this.
+
+For example:
+
+const result = await companyService.createCompany(req.body);
+
+Document:
+
+req.body
+    ↓
+createCompany controller
+    ↓
+companyService.createCompany()
+    ↓
+database layer
+    ↓
+MySQL
+7. REACT PROPS MUST ALWAYS BE DOCUMENTED
+
+Whenever a component receives props:
+
+<CompanyCard company={company} onEdit={handleEdit} />
+
+the component documentation must explain:
+
+CompanyCard receives:
+
+
+company
+↓
+Source: CompaniesPage state
+↓
+CompaniesPage passes company through JSX
+↓
+CompanyCard receives it as a prop
+
+
+onEdit
+↓
+Source: CompaniesPage handleEdit function
+↓
+Passed to CompanyCard
+↓
+CompanyCard calls onEdit(company.id)
+↓
+Parent function executes
+
+Inside the component:
+
+/**
+ * CompanyCard
+ *
+ * Props:
+ *
+ * company:
+ * - Source: CompaniesPage
+ * - Contains company information retrieved from API.
+ *
+ * onEdit:
+ * - Source: CompaniesPage
+ * - Function passed from parent.
+ * - Called when user clicks Edit.
+ */
+function CompanyCard({ company, onEdit }) {
+8. EVERY IMPORTANT REACT COMPONENT NEEDS A .md FILE
+
+For every major page/component, create documentation.
+
+Example:
+
+frontend/
+└── src/
+    └── pages/
+        └── Companies/
+            ├── Companies.jsx
+            ├── Companies.css
+            └── Companies.md
+
+The .md file should contain:
+
+# Companies Page
+    ↓
+React state
+    ↓
+CompanyCard components
+
+
+## State
+
+
+### companies
+
+
+Stores the companies returned by the backend.
+
+
+### loading
+
+
+Tracks whether the API request is running.
+
+
+### error
+
+
+Stores API error information.
+
+
+## Props
+
+
+If this page receives props, document:
+
+
+| Prop | Source | Purpose |
+|---|---|---|
+| user | AuthContext | Current logged-in user |
+
+
+## Functions
+
+
+### fetchCompanies()
+
+
+Purpose:
+Fetch companies from backend.
+
+
+Called:
+When page loads.
+
+
+### handleDelete()
+
+
+Purpose:
+Delete selected company.
+
+
+Data flow:
+
+
+Button click
+↓
+handleDelete()
+↓
+DELETE /api/companies/:id
+↓
+Backend
+↓
+Database
+↓
+Refresh UI
+
+
+## API Used
+
+
+GET /api/companies
+
+
+POST /api/companies
+
+
+PUT /api/companies/:id
+
+
+DELETE /api/companies/:id
+
+
+## Error Handling
+
+
+Explain possible API/database errors.
+
+
+## Mentor Questions
+
+
+Possible questions:
+
+
+1. Where does company data come from?
+2. Why is useEffect used?
+3. Why is companies stored in state?
+4. How does delete reach the backend?
+5. How does the UI update after deletion?
+9. CREATE DOCUMENTATION FOR EVERY BACKEND MODULE
+
+Example:
+
+backend/
+└── src/
+    ├── controllers/
+    │   ├── company.controller.js
+    │   └── company.controller.md
+    │
+    ├── services/
+    │   ├── company.service.js
+    │   └── company.service.md
+    │
+    ├── routes/
+    │   ├── company.routes.js
+    │   └── company.routes.md
+    │
+    ├── middleware/
+    │   ├── auth.middleware.js
+    │   └── auth.middleware.md
+    │
+    └── models/
+        ├── company.model.js
+        └── company.model.md
+10. ROUTE DOCUMENTATION
+
+Every API route must document:
+
+HTTP Method
+Endpoint
+Authentication Required?
+Required Role
+Request Body
+Path Parameters
+Query Parameters
+Response
+Errors
+Controller
+Service
+Database Operation
+
+Example:
+
+# Create Company API
+
+
+## Endpoint
+
+
+POST /api/companies
+
+
+## Authentication
+
+
+Required: Yes
+
+
+## Role
+
+
+Admin / Accountant
+
+
+## Request Body
+
+
+{
+  "name": "ABC Technologies",
+  "email": "abc@example.com"
+}
+
+
+## Flow
+
+
+React Form
+↓
+POST /api/companies
+↓
+company.routes.js
+↓
+authMiddleware
+↓
+companyController.createCompany()
+↓
+companyService.createCompany()
+↓
+MySQL
+↓
+Response
+↓
+React
+
+
+## Success Response
+
+
+201 Created
+
+
+## Possible Errors
+
+
+400 - Validation error
+401 - Not authenticated
+403 - Not authorized
+500 - Server error
+11. DATABASE DOCUMENTATION
+
+Every database table must have a .md.
+
+Example:
+
+database/
+└── documentation/
+    ├── users.md
+    ├── companies.md
+    ├── loans.md
+    ├── repayments.md
+    ├── payments.md
+    ├── payment_allocations.md
+    ├── ai_recommendations.md
+    └── audit_logs.md
+
+Each file must explain:
+
+# Companies Table
+
+
+## Purpose
+
+
+Stores companies that have borrowed money.
+
+
+## Columns
+
+
+| Column | Type | Purpose |
+|---|---|---|
+| id | INT | Unique company ID |
+| name | VARCHAR | Company name |
+| email | VARCHAR | Company email |
+| status | ENUM | Active / Inactive |
+
+
+## Relationships
+
+
+Company
+↓
+has many Loans
+
+
+Company
+↓
+has many Payments
+
+
+## Used By
+
+
+- Company API
+- Payment Reconciliation Agent
+- Risk Agent
+- Dashboard
+12. AI AGENT DOCUMENTATION IS MANDATORY
+
+This is especially important for FinanceFlow.
+
+Each AI agent must have its own documentation.
+
+Example:
+
+backend/
+└── src/
+    └── agents/
+        ├── reconciliationAgent.js
+        ├── reconciliationAgent.md
+        ├── riskAgent.js
+        ├── riskAgent.md
+        ├── collectionAgent.js
+        ├── collectionAgent.md
+        ├── analystAgent.js
+        └── analystAgent.md
+
+The documentation must explain:
+
+# Payment Reconciliation Agent
+
+
+## Purpose
+
+
+Identifies the most likely company and repayment
+for an incoming payment.
+
+
+## Input
+
+
+Payment ID
+
+
+## Agent Process
+
+
+Payment ID
+↓
+Get payment details
+↓
+Search possible companies
+↓
+Find active loans
+↓
+Find repayment schedules
+↓
+Check payment history
+↓
+Compare amount/date/reference
+↓
+Generate recommendation
+↓
+Calculate confidence
+↓
+Return structured result
+
+
+## Tools Used
+
+
+- getPayment()
+- searchCompany()
+- getActiveLoans()
+- getRepaymentSchedule()
+- getPaymentHistory()
+
+
+## Output
+
+
+{
+  "companyId": 25,
+  "loanId": 101,
+  "repaymentId": 5001,
+  "confidence": 94,
+  "recommendation": "PARTIAL_PAYMENT"
+}
+
+
+## Important Rule
+
+
+The AI does NOT directly update MySQL.
+
+
+AI
+↓
+Recommendation
+↓
+Backend validation
+↓
+Human approval
+↓
+Database update
+13. GROQ API MUST BE DOCUMENTED
+
+Do not simply write:
+
+const response = await groq.chat.completions.create(...)
+
+Document:
+
+Frontend
+   ↓
+Backend Agent
+   ↓
+Groq API
+   ↓
+LLM reasoning
+   ↓
+Tool request
+   ↓
+Backend executes tool
+   ↓
+Tool result
+   ↓
+Groq
+   ↓
+Final recommendation
+
+Also document:
+
+Model used
+Why it was selected
+System prompt
+User prompt
+Tools
+Tool parameters
+Tool response
+Error handling
+Token/API-key handling
+Why AI cannot directly modify financial data
+14. AI PROMPTS MUST BE STORED SEPARATELY
+
+Do not bury large prompts inside controller files.
+
+Prefer:
+
+agents/
+├── prompts/
+│   ├── reconciliation.prompt.js
+│   ├── risk.prompt.js
+│   ├── collection.prompt.js
+│   └── analyst.prompt.js
+
+Each prompt should have documentation explaining:
+
+Purpose
+Input
+Expected behavior
+Restrictions
+Output format
+Examples
+15. AI TOOL FUNCTIONS MUST BE SIMPLE
+
+Do not give the LLM unrestricted database access.
+
+Bad:
+
+executeAnySQL(query)
+
+Preferred:
+
+getPayment(paymentId)
+
+
+searchCompany(name)
+
+
+getActiveLoans(companyId)
+
+
+getRepaymentSchedule(loanId)
+
+
+getPaymentHistory(companyId)
+
+
+getOutstandingBalance(loanId)
+
+This makes the architecture easier to understand and safer.
+
+16. AUTHENTICATION DOCUMENTATION
+
+For authentication, document the complete flow:
+
+Login Form
+   ↓
+POST /api/auth/login
+   ↓
+Controller
+   ↓
+Find User
+   ↓
+Bcrypt.compare()
+   ↓
+Password Valid?
+   ↓
+JWT Generation
+   ↓
+HTTP-only Cookie
+   ↓
+Browser
+
+Protected request:
+
+Browser
+   ↓
+Cookie
+   ↓
+authMiddleware
+   ↓
+JWT verification
+   ↓
+req.user
+   ↓
+RBAC middleware
+   ↓
+Controller
+
+Create:
+
+authentication.md
+authorization.md
+rbac.md
+jwt-flow.md
+17. STATE MANAGEMENT DOCUMENTATION
+
+Whenever React state is used, explain:
+
+State Name
+Purpose
+Initial Value
+Who Changes It
+When It Changes
+What Components Consume It
+
+Example:
+
+const [payments, setPayments] = useState([]);
+
+Documentation:
+
+payments
+
+
+Purpose:
+Stores payments retrieved from backend.
+
+
+Initial value:
+[]
+
+
+Updated by:
+setPayments()
+
+
+Source:
+GET /api/payments
+
+
+Used by:
+PaymentTable
+PaymentSummary
+ReconciliationPanel
+18. useEffect MUST BE EXPLAINED
+
+Whenever Antigravity generates:
+
+useEffect(() => {
+    fetchPayments();
+}, []);
+
+comment:
+
+This effect runs after the component's initial render.
+
+
+Dependency array:
+[]
+
+
+Meaning:
+It does not re-run because of a state/prop dependency.
+
+
+Purpose:
+Load payment data when the page opens.
+19. CUSTOM HOOKS MUST HAVE DOCUMENTATION
+
+If creating:
+
+usePayments()
+useAuth()
+useCompanies()
+useReconciliation()
+
+create:
+
+usePayments.md
+useAuth.md
+useCompanies.md
+useReconciliation.md
+
+Explain:
+
+What problem the hook solves
+What state it manages
+What functions it exposes
+Where it gets its data
+Which components use it
+20. DO NOT OVER-COMMENT TRIVIAL CODE
+
+Avoid:
+
+// Increment count
+count++;
+
+Avoid:
+
+// Return response
+return res.json(data);
+
+Comments should explain why and data flow, not repeat obvious syntax.
+
+21. EVERY PAGE MUST HAVE A README
+
+Each major screen should have:
+
+README.md
+
+or:
+
+PageName.md
+
+Minimum sections:
+
+# Page Name
+
+
+## Purpose
+
+
+## User Role
+
+
+## Main Features
+
+
+## UI Structure
+
+
+## Data Source
+
+
+## State
+
+
+## Props
+
+
+## API Endpoints
+
+
+## Functions
+
+
+## Data Flow
+
+
+## Error Handling
+
+
+## Authentication / Authorization
+
+
+## Related Components
+
+
+## Related Backend APIs
+
+
+## Mentor Questions
+22. EVERY FEATURE MUST HAVE A DATA-FLOW DIAGRAM
+
+For example, Payment Reconciliation:
+
+Payment Page
+     ↓
+fetchPayments()
+     ↓
+GET /api/payments
+     ↓
+Payment Controller
+     ↓
+Payment Service
+     ↓
+MySQL
+     ↓
+Payments returned
+     ↓
+React State
+     ↓
+Payment Table
+
+AI:
+
+User clicks "Analyze"
+        ↓
+POST /api/reconciliation/analyze
+        ↓
+Reconciliation Controller
+        ↓
+Reconciliation Agent
+        ↓
+Groq
+        ↓
+Tool Request
+        ↓
+Backend Tool
+        ↓
+MySQL
+        ↓
+Tool Result
+        ↓
+Groq
+        ↓
+Recommendation
+        ↓
+Frontend
+23. ERROR HANDLING MUST BE DOCUMENTED
+
+For every API:
+
+Success
+↓
+400 Validation Error
+↓
+401 Authentication Error
+↓
+403 Authorization Error
+↓
+404 Not Found
+↓
+409 Conflict
+↓
+500 Server Error
+
+Explain where each error originates.
+
+24. DO NOT CREATE HUGE FILES
+
+Avoid:
+
+PaymentController.js
+    1500 lines
+
+Instead:
+
+controllers/
+services/
+repositories/
+routes/
+middleware/
+validators/
+agents/
+tools/
+utils/
+
+Follow Single Responsibility Principle.
+
+25. PROJECT STRUCTURE
+
+Use a clean structure similar to:
+
+FinanceFlow-AI/
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── hooks/
+│   │   ├── context/
+│   │   ├── services/
+│   │   ├── utils/
+│   │   └── styles/
+│   │
+│   └── README.md
+│
+├── backend/
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── services/
+│   │   ├── repositories/
+│   │   ├── routes/
+│   │   ├── middleware/
+│   │   ├── models/
+│   │   ├── validators/
+│   │   ├── agents/
+│   │   ├── tools/
+│   │   ├── prompts/
+│   │   ├── websocket/
+│   │   ├── utils/
+│   │   └── config/
+│   │
+│   └── README.md
+│
+├── database/
+│   ├── migrations/
+│   ├── seeders/
+│   └── documentation/
+│
+├── docs/
+│   ├── architecture/
+│   ├── api/
+│   ├── ai/
+│   ├── database/
+│   ├── features/
+│   └── deployment/
+│
+├── tests/
+│
+├── .env.example
+├── README.md
+├── AI_DEVELOPMENT_GUIDELINES.md
+└── PROJECT_ARCHITECTURE.md
+26. MASTER README
+
+The root README.md must always be maintained.
+
+It should contain:
+
+# FinanceFlow AI
+
+
+## Project Overview
+
+
+## Business Problem
+
+
+## Solution
+
+
+## Key Features
+
+
+## AI Agents
+
+
+## Technology Stack
+
+
+## Architecture
+
+
+## Project Structure
+
+
+## Database
+
+
+## Authentication
+
+
+## RBAC
+
+
+## Payment Reconciliation
+
+
+## AI Tool Calling
+
+
+## WebSocket
+
+
+## File Upload
+
+
+## Environment Setup
+
+
+## Installation
+
+
+## Running Frontend
+
+
+## Running Backend
+
+
+## API Documentation
+
+
+## Testing
+
+
+## Deployment
+
+
+## Important Design Decisions
+
+
+## Known Limitations
+27. CHANGE DOCUMENTATION AFTER EVERY FEATURE
+
+Whenever a feature is completed, update:
+
+README.md
+
+and the relevant:
+
+FeatureName.md
+
+Do not wait until the end of the project.
+
+28. CHANGE LOG
+
+Maintain:
+
+CHANGELOG.md
+
+Example:
+
+# Changelog
+
+
+## 2026-08-17
+
+
+### Added
+
+
+- Initial project structure
+- Authentication architecture
+- Company module
+
+
+### Changed
+
+
+- N/A
+
+
+### Fixed
+
+
+- N/A
+29. DECISION LOG
+
+Maintain:
+
+ARCHITECTURE_DECISIONS.md
+
+Whenever an important technical decision is made:
+
+# Architecture Decision
+
+
+## Decision
+
+
+Use MySQL instead of MongoDB.
+
+
+## Reason
+
+
+FinanceFlow contains structured financial relationships
+between companies, loans, repayments and payments.
+
+
+## Alternatives Considered
+
+
+MongoDB
+
+
+## Why Not Chosen
+
+
+Relational relationships and transactional consistency
+are important for financial records.
+
+This will be extremely useful during your mentor review.
+
+30. MENTOR QUESTION SECTION
+
+Every major feature documentation file must finish with:
+
+## Mentor Questions
+
+
+### Q1. Why did we use this approach?
+
+
+### Q2. Where does the data come from?
+
+
+### Q3. Where does the data go?
+
+
+### Q4. Why is this function required?
+
+
+### Q5. What happens if this API fails?
+
+
+### Q6. What happens if the user is unauthorized?
+
+
+### Q7. Why did we choose this database structure?
+
+
+### Q8. What happens internally when the user clicks this button?
+
+
+### Q9. Where does this prop come from?
+
+
+### Q10. Which component/function calls this function?
+
+Antigravity should add feature-specific questions as well.
+
+31. IMPORTANT — DO NOT GENERATE EVERYTHING AT ONCE
+
+Do not generate the entire FinanceFlow application in one prompt.
+
+Work feature-by-feature.
+
+Recommended sequence:
+
+1. Project architecture
+        ↓
+2. Database design
+        ↓
+3. Backend foundation
+        ↓
+4. Authentication
+        ↓
+5. RBAC
+        ↓
+6. Company module
+        ↓
+7. Loan module
+        ↓
+8. Repayment module
+        ↓
+9. Payment module
+        ↓
+10. Payment reconciliation
+        ↓
+11. Groq integration
+        ↓
+12. Reconciliation Agent
+        ↓
+13. Risk Agent
+        ↓
+14. Collection Agent
+        ↓
+15. Document Agent
+        ↓
+16. AI Command Center
+        ↓
+17. WebSocket
+        ↓
+18. File upload
+        ↓
+19. Swagger
+        ↓
+20. Testing
+        ↓
+21. Deployment
+
+After each major feature:
+
+STOP → explain → document → test → then continue.
+
+32. REQUIRED DEVELOPMENT RESPONSE FORMAT
+
+Whenever Antigravity completes a feature, it must provide a short development summary:
+
+# Feature Completed
+
+
+## Feature
+
+
+Payment Creation
+
+
+## Files Created
+
+
+- payment.controller.js
+- payment.service.js
+- payment.routes.js
+
+
+## Files Modified
+
+
+- app.js
+
+
+## Data Flow
+
+
+Frontend
+↓
+POST /api/payments
+↓
+Route
+↓
+Middleware
+↓
+Controller
+↓
+Service
+↓
+Database
+↓
+Response
+↓
+Frontend
+
+
+## Important Functions
+
+
+### createPayment()
+
+
+Purpose:
+...
+
+
+Receives:
+...
+
+
+Source:
+...
+
+
+Returns:
+...
+
+
+## Database Changes
+
+
+...
+
+
+## API
+
+
+POST /api/payments
+
+
+## Error Handling
+
+
+...
+
+
+## Security
+
+
+...
+
+
+## Mentor Questions
+
+
+...
+33. FINAL RULE — TEACH WHILE BUILDING
+
+The most important instruction:
+
+Do not optimize only for finishing the application. Optimize for the developer understanding the application.
+
+When there is a choice between:
+
+Short but difficult code
+
+and
+
+Clean, structured and understandable code
+
+choose the second.
+
+When a design pattern is introduced, explain:
+
+Why we need it
+What problem it solves
+Why we selected it
+What alternatives exist
+
+When data moves between layers, explain:
+
+Where it started
+How it was transformed
+Where it went
+Why it was transformed
+
+When a React prop is used, explain:
+
+Who passed it
+Why it was passed
+What value it contains
+Where that value originally came from
+
+When an API is called, explain:
+
+Who called it
+What data was sent
+How the backend received it
+Which middleware processed it
+Which controller handled it
+Which service processed it
+Which database operation happened
+What response came back
+How the frontend used the response
+
+When an AI agent runs, explain:
+
+What triggered the agent
+What information it received
+What tools it has
+Why it selected a tool
+What data the tool returned
+How the result was given back to the model
+What recommendation was generated
+Why human approval is required
+What backend operation happens after approval
+
+
+Before implementing any major feature, first show me the proposed architecture, folder changes, data flow, database interaction, API flow, and files that will be created/modified. Do not immediately write the code. After implementation, update the relevant .md documentation and explain the code flow. Do not silently introduce new libraries, architecture patterns, database tables, API endpoints, or major dependencies without documenting why they are needed.

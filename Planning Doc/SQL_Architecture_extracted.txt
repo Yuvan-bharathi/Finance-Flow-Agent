@@ -1,0 +1,1198 @@
+We will not change the frozen 12-table architecture. We will only validate:
+Columns
+Data types
+Primary keys
+Foreign keys
+NULL / NOT NULL
+UNIQUE
+Default values
+Status values
+Indexes
+Relationships
+Business meaning
+Frozen table order
+We'll review them in this order:
+roles
+users
+companies
+loans
+repayment_schedules
+payments
+reconciliation_cases
+ai_recommendations
+payment_allocations
+documents
+audit_logs
+notifications
+Phase 1 — 
+roles
+This is our simplest table, so let's start here.
+Proposed structure
+Column
+Type
+Null?
+Key
+Purpose
+id
+INT UNSIGNED
+NO
+PK
+Unique role ID
+name
+VARCHAR(50)
+NO
+UNIQUE
+Role name
+description
+VARCHAR(255)
+YES
+—
+Explains the role
+created_at
+TIMESTAMP
+NO
+—
+When role was created
+updated_at
+TIMESTAMP
+NO
+—
+Last update time
+Example data 
+id    name          description
+------------------------------------------------
+1     admin         Full system access
+2     manager       Can approve financial actions
+3     accountant    Handles payment reconciliation
+4     viewer        Read-only access
+Why 
+name
+ should be UNIQUE
+We don't want:
+1 | accountant
+2 | accountant
+There should only be one 
+accountant
+ role definition. 
+Phase 2 — 
+users
+This is where authentication and authorization connect to our database.
+Proposed structure
+Column
+Type
+Null?
+Key
+Purpose
+id
+INT UNSIGNED
+NO
+PK
+User ID
+role_id
+INT UNSIGNED
+NO
+FK
+User's role
+name
+VARCHAR(100)
+NO
+—
+User's name
+email
+VARCHAR(150)
+NO
+UNIQUE
+Login email
+password_hash
+VARCHAR(255)
+NO
+—
+Hashed password
+is_active
+BOOLEAN
+NO
+—
+Whether account is active
+last_login_at
+TIMESTAMP
+YES
+—
+Last successful login
+created_at
+TIMESTAMP
+NO
+—
+Account creation
+updated_at
+TIMESTAMP
+NO
+—
+Last update
+Relationship:
+roles
+ │
+ │ 1:N
+ ▼
+users
+Meaning:
+One role can belong to many users, but each user has one role.
+For example:
+Accountant Role
+     │
+     ├── Yuvan
+     ├── Arun
+     └── Priya
+Important
+We should 
+not store the role as plain text
+ like:
+role VARCHAR(50)
+Instead:
+role_id INT UNSIGNED
+because we're using a proper relational design.
+Phase 3 — 
+companies
+This represents the businesses that borrowed money.
+Proposed structure
+Column
+Type
+Null?
+Key
+Purpose
+id
+INT UNSIGNED
+NO
+PK
+Company ID
+company_name
+VARCHAR(150)
+NO
+—
+Legal/business name
+registration_number
+VARCHAR(100)
+YES
+UNIQUE
+Company registration identifier
+tax_identifier
+VARCHAR(100)
+YES
+UNIQUE
+Tax identifier
+contact_name
+VARCHAR(100)
+YES
+—
+Main contact person
+contact_email
+VARCHAR(150)
+YES
+—
+Contact email
+contact_phone
+VARCHAR(30)
+YES
+—
+Contact number
+address
+TEXT
+YES
+—
+Company address
+status
+ENUM(...)
+NO
+—
+Company status
+created_at
+TIMESTAMP
+NO
+—
+Created time
+updated_at
+TIMESTAMP
+NO
+—
+Updated time
+Possible status:
+active
+inactive
+blacklisted
+Why this table matters to AI
+When a payment arrives:
+Payment
+  ↓
+AI searches companies
+  ↓
+Company information
+  ↓
+Possible match
+For example:
+Sender:
+ABC Technologies Pvt Ltd
+AI searches:
+companies.company_name
+But a company
+ name alone should never be the only matching signal
+.
+The AI can also consider:
+Sender information
+Payment reference
+Account information
+Loan history
+Expected installment amount
+Payment timing
+Previous payment patterns
+Phase 4 — 
+loans
+This represents money lent to a company.
+companies
+   │
+   │ 1:N
+   ▼
+loans
+Proposed structure
+Column
+Type
+Null?
+Key
+Purpose
+id
+INT UNSIGNED
+NO
+PK
+Loan ID
+company_id
+INT UNSIGNED
+NO
+FK
+Borrowing company
+loan_number
+VARCHAR(50)
+NO
+UNIQUE
+Business loan reference
+principal_amount
+DECIMAL(15,2)
+NO
+—
+Original loan amount
+interest_rate
+DECIMAL(5,2)
+NO
+—
+Interest rate
+start_date
+DATE
+NO
+—
+Loan start date
+end_date
+DATE
+YES
+—
+Expected loan completion
+status
+ENUM(...)
+NO
+—
+Loan status
+created_at
+TIMESTAMP
+NO
+—
+Created time
+updated_at
+TIMESTAMP
+NO
+—
+Updated time
+Possible status:
+active
+completed
+defaulted
+cancelled
+Example
+Company:
+ABC Technologies
+Loan:
+LN-2026-001
+Principal:
+₹10,00,000
+Status:
+active
+Important design decision: money datatype
+For all financial amounts, we should use:
+DECIMAL(15,2)
+not:
+FLOAT
+or:
+DOUBLE
+Because this is a financial application and we don't want floating-point precision problems.
+Example:
+amount DECIMAL(15,2)
+can represent:
+100000.00
+75000.50
+1250.75
+5. 
+repayment_schedules
+What is this table?
+This table stores 
+money that we expect to receive
+ from a company.
+Example:
+A company borrowed ₹10,00,000 and agreed to repay it monthly.
+Loan: LN-001
+August installment  → ₹1,00,000 → Due: Aug 5
+September installment → ₹1,00,000 → Due: Sep 5
+October installment → ₹1,00,000 → Due: Oct 5
+Those expected payments belong in 
+repayment_schedules
+.
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+INT UNSIGNED
+NO
+Schedule ID
+loan_id
+INT UNSIGNED
+NO
+Which loan this installment belongs to
+installment_number
+INT UNSIGNED
+NO
+Installment sequence
+due_date
+DATE
+NO
+Expected payment date
+scheduled_amount
+DECIMAL(15,2)
+NO
+Amount expected
+paid_amount
+DECIMAL(15,2)
+NO
+Amount already allocated
+status
+ENUM(...)
+NO
+Payment status
+created_at
+TIMESTAMP
+NO
+Creation time
+updated_at
+TIMESTAMP
+NO
+Last update
+Status
+I'd use:
+pending
+partially_paid
+paid
+overdue
+cancelled
+Example
+id:                 101
+loan_id:            25
+installment_number: 5
+due_date:           2026-08-05
+scheduled_amount:   100000.00
+paid_amount:        75000.00
+status:             partially_paid
+So:
+Expected = ₹1,00,000
+Received/allocated = ₹75,000
+Pending = ₹25,000
+Important
+paid_amount
+ is 
+not the raw bank payment
+.
+It represents the amount that has been 
+officially allocated
+ to this installment.
+That's why:
+payments
+    ↓
+payment_allocations
+    ↓
+repayment_schedules
+6. 
+payments
+Now we reach one of the most important tables.
+What is a payment?
+A payment is 
+actual money received
+.
+Our initial trigger is:
+Payment API
+    ↓
+payments
+At this stage we don't necessarily know which company/loan/installment it belongs to.
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+INT UNSIGNED
+NO
+Internal payment ID
+transaction_id
+VARCHAR(100)
+NO
+External transaction reference
+amount
+DECIMAL(15,2)
+NO
+Amount received
+payment_date
+DATE
+NO
+Date payment was received
+sender_name
+VARCHAR(150)
+YES
+Name received from payment source
+sender_account
+VARCHAR(100)
+YES
+Sender account/reference
+reference
+VARCHAR(255)
+YES
+Payment narration/reference
+source
+ENUM(...)
+NO
+How payment entered system
+status
+ENUM(...)
+NO
+Current payment state
+created_by
+INT UNSIGNED
+YES
+User/API actor that created it
+created_at
+TIMESTAMP
+NO
+Creation time
+updated_at
+TIMESTAMP
+NO
+Last update
+Source
+api
+manual
+bank_import
+excel_upload
+Status
+For our flow:
+unmatched
+processing
+pending
+completed
+rejected
+Potentially we can add:
+duplicate
+if we want duplicate payments to have a permanent status.
+Example
+Suppose the accountant receives this payment through our API:
+{
+ "transactionId": "TXN10025",
+ "amount": 100000,
+ "paymentDate": "2026-08-05",
+ "senderName": "ABC Technologies",
+ "senderAccount": "XXXX1234",
+ "reference": "LN-2026-001 AUG",
+ "source": "api"
+}
+The database initially stores:
+transaction_id: TXN10025
+amount:          100000
+sender_name:     ABC Technologies
+status:          unmatched
+We don't immediately say this is ABC's August installment.
+That's the AI agent's job to investigate.
+7. 
+reconciliation_cases
+This table represents:
+"This payment needs to be investigated and matched."
+Think of it as a 
+work item for the reconciliation team
+.
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+INT UNSIGNED
+NO
+Case ID
+payment_id
+INT UNSIGNED
+NO
+Payment being investigated
+assigned_to
+INT UNSIGNED
+YES
+Accountant assigned to case
+status
+ENUM(...)
+NO
+Case status
+priority
+ENUM(...)
+NO
+Investigation priority
+resolution_reason
+TEXT
+YES
+Explanation for final decision
+created_at
+TIMESTAMP
+NO
+Case creation
+updated_at
+TIMESTAMP
+NO
+Last update
+resolved_at
+TIMESTAMP
+YES
+When case was resolved
+Status
+open
+ai_processing
+pending_review
+approved
+rejected
+resolved
+Priority
+low
+medium
+high
+critical
+Relationship
+payments
+   │
+   │
+   ▼
+reconciliation_cases
+   │
+   └── assigned_to → users
+Example:
+Case #5001
+Payment: ₹1,00,000
+Status: pending_review
+Assigned to: Accountant Yuvan
+Priority: high
+8. 
+ai_recommendations
+🔥 
+This is one of the most important AI tables.
+This table stores what the AI thinks the payment belongs to.
+Remember:
+Recommendation ≠ Final allocation
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+INT UNSIGNED
+NO
+Recommendation ID
+reconciliation_case_id
+INT UNSIGNED
+NO
+Case being analyzed
+recommended_company_id
+INT UNSIGNED
+YES
+AI's suggested company
+recommended_loan_id
+INT UNSIGNED
+YES
+AI's suggested loan
+recommended_schedule_id
+INT UNSIGNED
+YES
+AI's suggested installment
+confidence_score
+DECIMAL(5,2)
+NO
+AI confidence percentage
+reasoning
+TEXT
+NO
+Why AI selected this candidate
+status
+ENUM(...)
+NO
+Recommendation state
+reviewed_by
+INT UNSIGNED
+YES
+Human who reviewed it
+reviewed_at
+TIMESTAMP
+YES
+Review time
+review_comment
+TEXT
+YES
+Human's review comment
+created_at
+TIMESTAMP
+NO
+Recommendation creation
+Status
+I'd use:
+pending
+approved
+rejected
+overridden
+Example AI output
+Payment:
+₹1,00,000
+Sender: ABC Technologies
+Reference: LN-2026-001 AUG
+AI produces:
+Recommendation #9001
+Company:
+ABC Technologies
+Loan:
+LN-2026-001
+Installment:
+August 2026
+Confidence:
+96.50%
+Reasoning:
+"Sender name matches the registered borrower.
+The transaction reference contains the active loan
+number and the payment amount matches the scheduled
+August installment."
+Status:
+pending
+Then the accountant sees:
+┌────────────────────────────────────┐
+│ AI MATCH RECOMMENDATION             │
+│                                    │
+│ Company: ABC Technologies          │
+│ Loan: LN-2026-001                  │
+│ Installment: August 2026           │
+│ Amount: ₹1,00,000                  │
+│ Confidence: 96.5%                  │
+│                                    │
+│ [ APPROVE ] [ REJECT ] [ OVERRIDE ]│
+└────────────────────────────────────┘
+🔥 Now see how these 4 tables work together
+This is the part you should memorize for your mentor:
+             PAYMENT API
+                  │
+                  ▼
+             payments
+         "Actual money arrived"
+                  │
+                  ▼
+        reconciliation_cases
+         "Needs investigation"
+                  │
+                  ▼
+        ai_recommendations
+        "AI suggests a match"
+                  │
+                  ▼
+            HUMAN REVIEW
+                  │
+          ┌───────┼────────┐
+          ▼       ▼        ▼
+       REJECT   PENDING  APPROVE
+                           │
+                           ▼
+                 payment_allocations
+                           │
+                           ▼
+                 repayment_schedules
+                  "Expected money"
+And the distinction is:
+Table
+Simple meaning
+repayment_schedules
+What we expect to receive
+payments
+What we actually received
+reconciliation_cases
+What needs to be investigated
+ai_recommendations
+What AI thinks the payment belongs to
+9. 
+payment_allocations
+This is the 
+most important table after 
+payments
+.
+What is it?
+It records the 
+official decision about where a received payment is allocated
+.
+Remember:
+AI Recommendation
+      ↓
+Human reviews
+      ↓
+APPROVED
+      ↓
+Payment Allocation
+So this table should 
+not be created merely because AI made a recommendation
+.
+It represents the approved financial mapping.
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+INT UNSIGNED
+NO
+Allocation ID
+payment_id
+INT UNSIGNED
+NO
+Payment being allocated
+repayment_schedule_id
+INT UNSIGNED
+NO
+Installment receiving the money
+allocated_amount
+DECIMAL(15,2)
+NO
+Amount allocated to this installment
+approved_by
+INT UNSIGNED
+NO
+Accountant who approved it
+allocation_type
+ENUM(...)
+NO
+How allocation was decided
+created_at
+TIMESTAMP
+NO
+Allocation time
+allocation_type
+ai_approved
+manual
+ai_overridden
+This is useful because later we can answer:
+How many allocations were done automatically through AI recommendations versus manually?
+Important business rule
+A payment 
+can be allocated to multiple installments
+.
+Example:
+Payment = ₹1,50,000
+Could become:
+payment_allocations
+Payment #1001
+      │
+      ├── Installment #101 → ₹1,00,000
+      │
+      └── Installment #102 → ₹50,000
+So:
+payments
+   │
+   │ 1:N
+   ▼
+payment_allocations
+   │
+   │ N:1
+   ▼
+repayment_schedules
+This is why we 
+cannot simply put 
+schedule_id
+ inside 
+payments
+.
+That would only allow one payment → one installment.
+Our design supports:
+One payment → multiple installments.
+10. 
+documents
+This handles uploaded files.
+Examples:
+Bank statement
+Payment proof
+Invoice
+Loan agreement
+Company document
+Supporting document
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+INT UNSIGNED
+NO
+Document ID
+company_id
+INT UNSIGNED
+YES
+Related company
+payment_id
+INT UNSIGNED
+YES
+Related payment
+document_type
+ENUM(...)
+NO
+Type of document
+file_name
+VARCHAR(255)
+NO
+Original filename
+file_url
+VARCHAR(500)
+NO
+Storage location
+storage_provider
+ENUM(...)
+NO
+Local/cloud storage
+mime_type
+VARCHAR(100)
+NO
+File type
+file_size
+BIGINT UNSIGNED
+YES
+File size in bytes
+uploaded_by
+INT UNSIGNED
+NO
+User who uploaded it
+approved_by
+INT UNSIGNED
+YES
+User who approved it
+created_at
+TIMESTAMP
+NO
+Upload time
+updated_at
+TIMESTAMP
+NO
+Last update
+document_type
+For MVP:
+bank_statement
+payment_proof
+invoice
+loan_agreement
+company_document
+other
+Why 
+file_url
+?
+We should 
+not store the actual PDF/image inside MySQL
+.
+Instead:
+User uploads PDF
+     ↓
+Backend
+     ↓
+Cloud/local storage
+     ↓
+URL
+     ↓
+documents.file_url
+For your Week 7 requirement, this gives us the required 
+file upload functionality
+.
+11. 
+audit_logs
+This is extremely important for a 
+finance application
+.
+Why?
+Imagine your mentor asks:
+"An accountant changed an AI recommendation. How do you know who changed it and when?"
+That's what 
+audit_logs
+ solves.
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+BIGINT UNSIGNED
+NO
+Log ID
+user_id
+INT UNSIGNED
+YES
+User who performed action
+action
+VARCHAR(100)
+NO
+Action performed
+entity_type
+VARCHAR(50)
+NO
+Table/resource affected
+entity_id
+BIGINT UNSIGNED
+YES
+ID of affected record
+old_values
+JSON
+YES
+Previous data
+new_values
+JSON
+YES
+New data
+ip_address
+VARCHAR(45)
+YES
+User IP
+created_at
+TIMESTAMP
+NO
+When action occurred
+Example
+Accountant rejects an AI recommendation.
+We could store:
+action:
+REJECT_AI_RECOMMENDATION
+entity_type:
+ai_recommendations
+entity_id:
+9001
+old_values:
+{
+   "status": "pending"
+}
+new_values:
+{
+   "status": "rejected"
+}
+Now we have a history of what happened.
+Another example
+Accountant overrides AI:
+AI:
+ABC Technologies
+Loan: LN-001
+Confidence: 92%
+Accountant:
+Actually this belongs to XYZ Ltd.
+Audit log:
+action:
+AI_RECOMMENDATION_OVERRIDDEN
+This is very valuable for your 
+Agentic AI + Finance
+ project.
+12. 
+notifications
+This handles alerts to users.
+Examples:
+🔔 New payment requires review
+🔔 AI recommendation ready
+🔔 Payment allocation approved
+🔔 Payment rejected
+🔔 Installment overdue
+🔔 High-value payment detected
+Proposed structure
+Column
+Type
+Null?
+Purpose
+id
+BIGINT UNSIGNED
+NO
+Notification ID
+user_id
+INT UNSIGNED
+NO
+User receiving notification
+type
+VARCHAR(50)
+NO
+Notification category
+title
+VARCHAR(150)
+NO
+Notification title
+message
+TEXT
+NO
+Notification content
+entity_type
+VARCHAR(50)
+YES
+Related resource
+entity_id
+BIGINT UNSIGNED
+YES
+Related resource ID
+is_read
+BOOLEAN
+NO
+Whether user read it
+created_at
+TIMESTAMP
+NO
+Creation time
+read_at
+TIMESTAMP
+YES
+When it was read
+🔥 Now the complete 12-table architecture makes sense
+                        ROLES
+                          │
+                          ▼
+                        USERS
+                   ┌──────┼───────────┐
+                   │      │           │
+                   ▼      ▼           ▼
+               DOCUMENTS AUDIT_LOGS NOTIFICATIONS
+                   │
+                   │
+                   ▼
+                COMPANIES
+                   │
+                   ▼
+                 LOANS
+                   │
+                   ▼
+          REPAYMENT_SCHEDULES
+                   ▲
+                   │
+                   │
+            PAYMENT_ALLOCATIONS
+                   ▲
+                   │
+                   │
+                PAYMENTS
+                   │
+                   ▼
+         RECONCILIATION_CASES
+                   │
+                   ▼
+          AI_RECOMMENDATIONS
+                   │
+                   ▼
+          HUMAN VERIFICATION
+                   │
+                   ▼
+            APPROVAL / REJECTION
+                   │
+                   ▼
+          PAYMENT_ALLOCATIONS
+⭐ The complete business flow
+Let's connect 
+everything
+ now.
+Step 1 — Loan is created
+Company
+  ↓
+Loan
+  ↓
+Repayment Schedule
+We know:
+"ABC Ltd needs to pay ₹1,00,000 on August 5."
+Step 2 — Payment arrives
+Payment API
+    ↓
+payments
+Example:
+₹1,00,000
+ABC Technologies
+Transaction: TXN10025
+Step 3 — Reconciliation case
+payments
+   ↓
+reconciliation_cases
+The system says:
+"I received this money, but I need to determine where it belongs."
+Step 4 — AI Agent analyzes it
+reconciliation_case
+       ↓
+AI Agent
+       ↓
+Search:
+Companies
+Loans
+Repayment schedules
+Previous payment patterns
+       ↓
+AI Recommendation
+Step 5 — AI gives recommendation
+ABC Technologies
+Loan: LN-001
+August installment
+Amount: ₹1,00,000
+Confidence: 96%
+Step 6 — Human reviews
+Accountant sees:
+AI Recommendation
+Confidence: 96%
+[ APPROVE ]
+[ REJECT ]
+[ OVERRIDE ]
+Step 7 — Approved
+AI Recommendation
+       ↓
+Human Approval
+       ↓
+payment_allocations
+       ↓
+repayment_schedules
+Then:
+scheduled_amount = ₹1,00,000
+paid_amount      = ₹1,00,000
+status           = paid
+Step 8 — Everything is recorded
+                   APPROVAL
+                      │
+         ┌────────────┼────────────┐
+         ▼            ▼            ▼
+  payment_alloc.   audit_logs   notification
+So we know:
+Who approved it, what they approved, when they approved it, and what changed.
+🟢 Final database review
+We've now reviewed all 12:
+1.  roles                  ✅
+2.  users                  ✅
+3.  companies              ✅
+4.  loans                  ✅
+5.  repayment_schedules    ✅
+6.  payments               ✅
+7.  reconciliation_cases   ✅
+8.  ai_recommendations     ✅
+9.  payment_allocations    ✅
+10. documents              ✅
+11. audit_logs             ✅
+12. notifications         ✅
+One important rule before SQL
+There is one thing I want us to enforce when we create the actual schema:
+Financial records should never be physically deleted casually.
+For example, we shouldn't allow an accountant to simply:
+DELETE FROM payments;
+because this destroys financial history.
+Instead, we should use appropriate statuses / audit records for operational changes.

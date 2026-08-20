@@ -1,0 +1,428 @@
+FinanceFlow AI - Business Rules
+I recommend the following rules for FinanceFlow AI.
+1. Can one payment be allocated to multiple installments?
+✅ Yes.
+This is important in real-world payments.
+Suppose:
+Payment received =
+ ₹1,50,000
+The system finds:
+August installment =
+ ₹1,00,000
+September installment =
+ ₹50,000
+We can allocate:
+₹1,00,000 → August
+₹50,000   → September
+Our existing design supports this:
+PAYMENT
+   │
+   ├── PAYMENT ALLOCATION → August
+   │
+   └── PAYMENT ALLOCATION → September
+Another example
+Expected:
+August =
+ ₹1,00,000
+Received:
+Payment 1 =
+ ₹40,000
+Payment 2 =
+ ₹60,000
+Both payments can be allocated to the same installment.
+August installment
+       ↑
+       │
+   ┌───┴────┐
+   │        │
+₹40,000   
+                  
+₹60,000
+Business rule
+A payment may be split across multiple repayment schedules, and a repayment schedule may receive multiple payments.
+This is one of the strongest reasons we need payment_allocations.
+2. What happens with overpayment?
+Suppose:
+Expected =
+ ₹1,00,000
+Received =
+ ₹1,20,000
+There is:
+₹20,000 OVERPAYMENT
+We should not automatically assign the extra ₹20,000 somewhere.
+Instead:
+Payment
+₹1,20,000
+    ↓
+₹1,00,000 → Current installment
+₹20,000   → Excess amount
+The system should mark:
+allocation_type =
+ overpayment
+and create an alert:
+"Payment exceeds the scheduled amount by ₹20,000."
+Then the accountant decides what to do.
+Possible actions:
+1. Apply excess to next installment
+2. Keep as customer credit
+3. Refund
+4. Investigate
+For our MVP, I recommend:
+Accountant approval required for overpayments.
+AI can recommend, but shouldn't automatically decide where excess money goes.
+3. What happens when AI confidence is low?
+This is very important for our Agentic AI architecture.
+Suppose AI receives:
+Payment =
+ ₹80,000
+Possible companies:
+ABC Technologies → 94%
+XYZ Technologies → 52%
+ABC Trading      → 47%
+That's dangerous.
+We should establish thresholds.
+Example:
+Confidence >=
+ 90%
+        ↓
+High confidence
+        ↓
+Recommend to accountant
+70% - 89%
+        ↓
+Medium confidence
+        ↓
+Accountant must review carefully
+< 70%
+        ↓
+Low confidence
+        ↓
+DO NOT automatically recommend a match
+        ↓
+Manual investigation
+For our project:
+AI confidence
+Action
+≥ 90%
+Strong recommendation
+70–89%
+Review required
+< 70%
+Manual investigation
+Important:
+Confidence should never mean "AI is authorized to approve."
+It only represents how strongly the AI believes the candidate matches.
+4. What if two companies have similar names?
+This will definitely happen.
+For example:
+ABC Technologies Pvt Ltd
+ABC Technology Solutions Pvt Ltd
+The AI should not rely only on company name.
+It should compare multiple signals.
+Matching signals
+Payment
+ │
+ ├── Sender name
+ ├── Bank account
+ ├── Transaction reference
+ ├── Payment amount
+ ├── Historical payment pattern
+ ├── Company details
+ └── Active repayment schedules
+Example:
+Sender:
+ABC Technologies Pvt Ltd
+Bank Account:
+XXXX1234
+Database:
+ABC Technologies
+Bank Account: XXXX1234
+        ↓
+Strong match
+Even if another company has a similar name, the bank account provides a stronger signal.
+Our AI agent can return:
+Candidate 1
+ABC Technologies
+Confidence: 94%
+Candidate 2
+ABC Technology Solutions
+Confidence: 41%
+Then the accountant sees the candidates.
+Rule:
+AI must use multiple matching attributes, not company name alone.
+5. Who can approve an AI recommendation?
+We should use our RBAC system.
+I recommend:
+Admin
+   ✅ Approve
+   ✅ Reject
+   ✅ Override
+Manager
+   ✅ Approve
+   ✅ Reject
+   ✅ Override
+Accountant
+   ✅ Review
+   ✅ Approve
+   ✅ Reject
+   ⚠️ Override with reason
+Viewer
+   ❌ Approve
+   ❌ Reject
+   👁️ View only
+However, for a simple/intermediate implementation, we can simplify this.
+MVP:
+Admin       → Full control
+Manager     → Approve / Reject / Override
+Accountant  → Review / Approve / Reject
+Viewer      → Read only
+This gives us a meaningful RBAC implementation for your mentor review.
+6. Can an accountant manually override AI?
+✅ Absolutely yes.
+This is actually an important feature.
+Suppose AI says:
+ABC Technologies
+Confidence: 92%
+But the accountant knows:
+"No, this payment came from XYZ Technologies."
+The accountant can choose:
+[ Override AI Match ]
+Then:
+AI Recommendation
+       ↓
+REJECT
+       ↓
+Manual Company Selection
+       ↓
+XYZ Technologies
+       ↓
+Accountant enters reason
+       ↓
+APPROVE
+We should require a reason:
+override_reason =
+"Payment reference confirmed with bank statement."
+And store it in audit_logs.
+This is excellent for explaining human-in-the-loop AI to your mentor.
+7. What happens when a payment is rejected?
+There are two different types of rejection.
+Case 1 — AI recommendation rejected
+Example:
+AI:
+ABC Technologies → 94%
+Accountant:
+❌ Wrong match
+We don't delete the payment.
+Instead:
+AI recommendation
+       ↓
+REJECTED
+       ↓
+Payment remains
+       ↓
+status = under_review
+Then the accountant can manually investigate.
+Case 2 — Actual payment rejected
+Suppose the bank transaction is invalid, fraudulent, duplicated, or cannot be verified.
+Then:
+payments.status = rejected
+The payment cannot be allocated.
+The audit log records:
+Who rejected?
+Why?
+When?
+Example:
+Reason:
+Duplicate bank transaction detected.
+8. How do we handle duplicate bank transactions?
+This is another very important real-world problem.
+Imagine the bank sends:
+TXN12345
+₹75,000
+Then accidentally sends the same transaction again:
+TXN12345
+₹75,000
+We don't want:
+₹75,000
++
+₹75,000
+=
+₹1,50,000
+when the company actually paid only ₹75,000.
+First protection
+We already have:
+transaction_reference VARCHAR(150) UNIQUE
+So:
+TXN12345
+cannot normally be inserted twice.
+9. But what if the bank doesn't provide a transaction reference?
+Then we need a duplicate detection strategy.
+We can compare:
+sender
++
+amount
++
+payment date
++
+bank reference
++
+transaction reference
+For example:
+Payment A
+Sender:
+ABC Technologies
+Amount:
+₹75,000
+Date:
+2026-08-05
+Bank reference:
+HDFC123
+If another payment arrives with the same details, our system can flag:
+⚠️ Possible duplicate payment
+Then:
+Payment
+   ↓
+Duplicate Detection
+   ↓
+Possible duplicate?
+   ↓
+YES
+   ↓
+Reconciliation Case
+   ↓
+Accountant Review
+Important:
+AI can detect and recommend, but the accountant should make the final decision.
+10. Let's combine everything into one real scenario
+Now imagine this actually happens on the 5th of the month, when hundreds of payments arrive.
+Bank sends:
+Payment 1 → ₹75,000 → ABC Technologies
+Payment 2 → ₹1,20,000 → XYZ Industries
+Payment 3 → ₹50,000 → Unknown
+Payment 4 → ₹1,00,000 → ABC Technology Solutions
+Payment 5 → duplicate
+...
+Payment 200 → ...
+Our system processes them.
+              BANK PAYMENTS
+                    ↓
+              Import Payments
+                    ↓
+             Duplicate Check
+                    ↓
+          ┌─────────┴─────────┐
+          │                   │
+       Duplicate           Valid
+          │                   │
+          ↓                   ↓
+       Flag              Reconciliation
+                              ↓
+                           AI Agent
+                              ↓
+                  Search candidate companies
+                              ↓
+                    Check loans/schedules
+                              ↓
+                     Calculate confidence
+                              ↓
+              ┌───────────────┼───────────────┐
+              ↓               ↓               ↓
+           ≥90%            70–89%            <70%
+              ↓               ↓               ↓
+          Strong          Review           Manual
+        recommendation     required        investigation
+              │               │               │
+              └───────────────┼───────────────┘
+                              ↓
+                       ACCOUNTANT DASHBOARD
+                              ↓
+                    Approve / Reject / Override
+                              ↓
+                       Payment Allocation
+                              ↓
+                    Repayment Schedule Update
+                              ↓
+                       Audit Log
+                              ↓
+                     Real-time Dashboard
+Now we have a genuine business workflow.
+11. Final business rules
+Let's freeze these rules:
+#
+Business Rule
+Decision
+1
+Payment → multiple installments
+✅ Allowed
+2
+Multiple payments → one installment
+✅ Allowed
+3
+Overpayment
+⚠️ Accountant approval
+4
+AI ≥90%
+Strong recommendation
+5
+AI 70–89%
+Manual review required
+6
+AI <70%
+Manual investigation
+7
+Similar company names
+Use multiple matching signals
+8
+Accountant approval
+✅ Allowed
+9
+Manager approval
+✅ Allowed
+10
+Admin approval
+✅ Allowed
+11
+Viewer approval
+❌ Not allowed
+12
+Accountant AI override
+✅ Allowed + reason required
+13
+Rejected AI recommendation
+Payment stays under review
+14
+Invalid payment
+Mark rejected
+15
+Duplicate transaction reference
+Block with UNIQUE
+16
+Possible duplicate without reference
+Flag for human review
+17
+AI automatically moves money
+❌ Never
+18
+Human approval before final allocation
+✅ Required
+19
+Important financial action
+Audit log required
+12. One principle I want you to remember
+This is the most important architecture concept for the whole project:
+AI recommends. Humans approve. The database records the final financial decision.
+So our system is not:
+AI → Database
+It is:
+AI
+ ↓
+Recommendation
+ ↓
+Human Review
+ ↓
+Approval
+ ↓
+Database
+ ↓
+Audit Log
+That gives us a much safer and more realistic Agentic AI financial application.

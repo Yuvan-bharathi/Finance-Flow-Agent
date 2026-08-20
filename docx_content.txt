@@ -1,0 +1,453 @@
+FINANCEFLOW AI
+Agentic AI-Powered Financial Operations Platform
+Week 7 – Full Stack Application Development
+Project Requirement & Mentor Review Document
+Document Item
+Details
+Project Name
+FinanceFlow AI
+Project Type
+Agentic AI-driven Full Stack Application
+Primary AI Platform
+Groq API
+Database
+MySQL
+Frontend
+React
+Backend
+Node.js + Express.js
+Authentication
+JWT + HTTP-only Cookies + RBAC
+Real-time
+WebSocket-based chat / live updates
+Status
+Proposed – Mentor Approval Required
+1. Project Overview
+FinanceFlow AI is an Agentic AI-powered financial operations platform designed to help businesses manage company loans, repayment schedules, incoming payments and outstanding amounts. It goes beyond normal CRUD operations by using AI agents to analyze financial information, investigate payment matches, identify repayment risks, detect unusual transactions, process uploaded financial documents and recommend follow-up actions.
+The main business problem is that finance teams may receive many repayments around the same due date. An accountant must identify which company made each payment, which loan it belongs to, whether it is full or partial, and whether anything unusual happened. FinanceFlow AI reduces this manual effort through an AI-powered reconciliation workflow with backend tools and human approval.
+2. Problem Statement
+Businesses that lend money to other companies need to continuously track loans and repayments. When many repayments arrive at the same time, finance teams manually reconcile payments with companies and repayment schedules. This creates repetitive work and can lead to incorrect mappings, delayed follow-ups, missed overdue payments and poor visibility into repayment risk.
+A traditional application can store this information, but it does not actively investigate the data or recommend what the finance team should do next. FinanceFlow AI addresses this gap by combining a full-stack financial management system with Agentic AI.
+3. Proposed Solution
+FinanceFlow AI provides a centralized platform where authorized finance users manage companies, loans, repayment schedules, payments and documents. An AI Agent Layer powered by Groq interacts with controlled backend tools to retrieve relevant business information, reason over available data and produce structured recommendations.
+The system follows a Human-in-the-Loop approach. AI investigates and recommends; important financial records are changed only after backend validation and appropriate user approval.
+4. Core Business Scenario
+Companies have active loans with scheduled repayments.
+Many repayments can arrive around the 5th of each month.
+The accountant receives payment information and identifies the correct company and repayment installment.
+The system checks payment reference, sender information, amount, expected repayment, payment history and due date.
+The AI Reconciliation Agent produces a possible match and confidence level.
+High-confidence cases are suggested for quick confirmation; uncertain cases go to an accountant for review.
+After confirmation, the payment is allocated to the correct repayment and the outstanding amount is recalculated.
+Important actions are recorded in an audit trail.
+5. Agentic AI Concept
+The project will not treat AI as only a chatbot. Agents follow an Observe → Reason → Use Tools → Recommend → Human Approval → Action workflow.
+Stage
+What Happens
+Observe
+Agent receives a business task or identifies an event requiring attention.
+Reason
+Agent analyzes available financial context.
+Use Tools
+Agent requests controlled backend functions such as searching companies, loans, repayments or payment history.
+Recommend
+Agent returns a structured recommendation and reasons.
+Human-in-the-Loop
+Finance user reviews and approves sensitive actions.
+Act
+Backend validates authorization and business rules, then updates the database.
+Audit
+Important actions are recorded for traceability.
+6. AI Agents
+6.1 Payment Reconciliation Agent – Primary Agent
+This is the main AI feature. It investigates incoming payments and identifies the most likely company and repayment installment.
+Tool / Input
+Purpose
+getPayment(paymentId)
+Retrieve payment details.
+searchCompany(query)
+Find possible company records.
+getActiveLoans(companyId)
+Find active loans.
+getRepaymentSchedule(loanId)
+Check expected installments.
+getPaymentHistory(companyId)
+Compare historical payment behavior.
+getBankAccountDetails(companyId)
+Compare registered payment-source information 
+where available.
+Example: ABC Technologies | Loan LN-102 | Expected ₹1,00,000 | Received ₹75,000 | Recommendation: Partial Payment | Confidence: 94%.
+The AI recommendation is not treated as a final financial update. Backend validation and accountant confirmation are used when required.
+6.2 Repayment Risk Agent
+Analyzes repayment behavior to identify companies whose repayment pattern is becoming risky.
+Repeated late payments
+Missed installments
+Increasing outstanding amounts
+Repeated partial payments
+Changes in repayment behavior
+6.3 Collection / Follow-up Agent
+Identifies overdue accounts and prepares professional follow-up messages for review. The accountant can review, edit, approve or cancel the message.
+6.4 Financial Analyst Agent
+Answers business questions using approved backend tools and financial data.
+How much repayment is expected this month?
+How much has been received?
+Which companies are overdue?
+Which companies have high repayment risk?
+Which payments require accountant attention?
+6.5 Document Intelligence Agent
+Analyzes uploaded financial documents such as loan agreements and extracts information for comparison with system records.
+Loan amount
+Repayment amount
+Due date
+Interest information
+Tenure
+Company details
+Potential mismatch between document and database
+6.6 Exception / Anomaly Agent
+Identifies unusual payment situations such as significantly higher or lower amounts, unexpected payment sources or other unusual patterns that require review.
+7. Payment Reconciliation Workflow
+                                    
+Incoming Payment
+     
+                                           
+ ↓
+                             
+Import / API / Manual Entry
+     
+                                           
+ ↓
+                           
+Payment Reconciliation Agent
+      
+                                           
+↓
+                   
+Analyze Payment + Use Backend Tools
+     
+                                           
+ ↓
+                   
+Find Company + Loan + Repayment
+    
+                                           
+  ↓
+                   
+AI Match Recommendation + Confidence
+    
+                                           
+  ↓
+ ┌────────────
+────
+──┬───────────────┬──────────────┐
+ ↓             
+                       
+ 
+          
+↓               
+                        
+↓
+High 
+Confidence        
+     
+Review
+ 
+ 
+Required             
+Unmatched
+/ Unknown
+ ↓              
+                                 
+↓
+ 
+               
+                        
+↓
+Quick          
+                       
+Accountant      
+                 
+Manual
+Confirmation   
+                      
+Review          
+               
+Investigation
+ └──────────────
+────
+┬──────
+─
+─────────┘
+                
+                                  
+↓
+                     
+Backend Validation + Authorization
+               
+                                  
+ ↓
+                                   
+Payment Allocation
+                
+                                  
+↓
+                              
+Repayment Status Update
+                
+                                 
+↓
+                           
+Audit Log + Dashboard Update
+8. AI Confidence and Human Review
+Confidence
+System Behavior
+90–100%
+High-confidence recommendation; suitable for quick confirmation and optional automated suggestion.
+70–89%
+Possible match; accountant review required.
+Below 70%
+Low-confidence / unmatched; manual investigation required.
+These thresholds are configurable project rules, not a claim that AI confidence is mathematically guaranteed.
+9. Example: High-Volume Repayment Day
+Suppose 200 payments arrive around the 5th of the month.
+Category
+Example Outcome
+High confidence
+150 payments receive strong matching recommendations.
+Needs review
+35 payments require accountant confirmation.
+Unmatched
+15 payments require manual investigation.
+The objective is not to remove the accountant. It is to reduce repetitive investigation so the accountant can focus on exceptions and approvals.
+10. Application Modules / Screens
+Module
+Main Purpose
+Executive Dashboard
+Expected, received, outstanding, overdue, collection rate and AI alerts.
+Company Management
+Company profile, loans, repayment history, documents and AI insights.
+Loan Management
+Loan details, repayment schedule, outstanding amount and agreement.
+Payment Reconciliation
+Incoming payments, AI suggestions, confidence and matching status.
+Payment Investigation
+Detailed payment investigation and possible company/loan matches.
+AI Command Center
+Ask FinanceFlow AI business questions and receive tool-based answers.
+Risk & Collections
+Risk companies, overdue accounts and recommended follow-ups.
+Document Center
+Uploaded agreements, extracted information and mismatches.
+AI Action Center
+Review and approve/reject AI recommendations.
+Audit & Activity
+User actions, important changes and AI approval history.
+Real-time Chat
+WebSocket-based communication / live updates for finance users.
+Authentication & User Management
+Login, roles, permissions and account management.
+11. Technical Architecture
+React Frontend
+       ↓
+Node.js + Express API
+       ↓
+Authentication / RBAC / Validation / Business Services
+       ↓
+AI Agent Layer
+(Reconciliation | Risk | Collection | Analyst | Documents)
+       ↓
+Groq API
+       ↓
+Controlled Tool Calling
+       ↓
+Backend Financial Tools
+       ↓
+MySQL
+       ↓
+Companies | Loans | Repayments | Payments | Documents | AI Recommendations | Audit Logs
+12. Groq AI Integration
+Groq will be used as the AI inference layer. The Node.js backend will expose controlled application functions/tools to the agents. The AI can request relevant tools, the backend executes them, returns the results, and the agent uses those results to produce a recommendation.
+Important design rule: the AI agent will not directly execute unrestricted SQL or directly modify financial database records. Financial actions pass through application services, validation, authentication/authorization and human approval where required.
+13. Example Agent Tool Set
+Tool
+Purpose
+getPayment(paymentId)
+Retrieve payment details.
+searchCompany(query)
+Find possible companies.
+getActiveLoans(companyId)
+Retrieve active loans.
+getRepaymentSchedule(loanId)
+Retrieve expected installments.
+getPaymentHistory(companyId)
+Retrieve historical behavior.
+getOutstandingBalance(loanId)
+Calculate outstanding amount.
+getRiskIndicators(companyId)
+Retrieve repayment-risk signals.
+createFollowUpDraft(companyId)
+Prepare follow-up message for review.
+getMonthlySummary(month)
+Retrieve financial summary metrics.
+getDocumentMetadata(documentId)
+Retrieve uploaded document information.
+14. Human-in-the-Loop Safety Model
+AI investigates and recommends.
+Backend checks whether the operation is valid.
+Authentication and RBAC determine whether the user can approve it.
+Sensitive financial changes require confirmation where defined.
+Database updates are performed by backend services, not by the LLM.
+Important actions are recorded in audit logs.
+15. Database Scope
+Entity
+Purpose
+users
+Application users and roles.
+companies
+Borrowing companies.
+loans
+Loan information.
+repayments
+Expected repayment installments.
+payments
+Incoming payment records.
+payment_allocations
+Mapping payments to repayment installments.
+documents
+Uploaded financial documents.
+ai_recommendations
+AI recommendations and status.
+audit_logs
+Important user and system actions.
+notifications
+Alerts and follow-up items.
+16. File Upload and Document Flow
+Upload → Storage → Document metadata → Document Agent → Extract information → Compare with loan record → Show findings/mismatches → Human review.
+For the student project, bank/payment data can be simulated or imported using CSV. Direct bank integration is outside the initial scope.
+17. Security Requirements
+JWT authentication using HTTP-only cookies
+Role-based access control
+Bcrypt password hashing
+Input validation and sanitization
+CORS configuration
+Secure environment variables
+Protected financial APIs
+Audit logging
+AI tool access limited to approved backend functions
+18. Real-Time Feature
+WebSocket will be used for real-time chat and/or live operational updates, such as notifying accountants when new payments arrive, when an AI recommendation is ready for review, or when another finance user changes a reconciliation item.
+19. API Documentation and Testing
+Swagger/OpenAPI documentation
+Unit tests for important business services
+API/integration tests for authentication, payments and reconciliation
+Validation and error-response testing
+Testing of AI tool workflows with controlled sample data
+Testing of approval and RBAC rules
+20. Environment Configuration
+Separate configuration will be maintained for development, staging and production. Environment variables will contain database settings, JWT configuration, Groq API key, storage configuration and application URLs. Secrets will not be hard-coded.
+21. Error Handling and Logging
+Centralized Express error middleware
+Consistent API error responses
+Database error handling
+File upload validation
+AI API timeout/failure handling
+Audit logs for important financial and approval operations
+22. Project Scope
+MVP Scope
+Authentication and RBAC
+Company, loan, repayment and payment CRUD
+Payment reconciliation workflow
+Groq-powered Payment Reconciliation Agent
+AI recommendation and confidence output
+Human approval workflow
+Basic repayment risk analysis
+File upload
+Basic Document Intelligence
+AI Command Center
+WebSocket feature
+Swagger
+Testing
+Deployment preparation
+Enhancement Scope
+Direct bank API integration
+Automated email/WhatsApp sending
+Advanced anomaly detection
+Advanced document extraction
+Scheduled autonomous agent runs
+Additional external financial integrations
+23. Constraints
+The project must remain achievable within Week 7 development time.
+AI recommendations may be incorrect and require validation.
+No direct bank integration is required for the MVP.
+Payment data can be simulated or imported.
+AI actions are restricted through backend tools and business rules.
+24. Success Metrics
+Metric
+Expected Outcome
+Reconciliation efficiency
+Reduce manual investigation for high-confidence payment matches.
+Recommendation quality
+Useful company/loan/repayment suggestions with clear reasons.
+Exception visibility
+Surface uncertain, overdue and unusual payments clearly.
+Security
+Protected APIs with authentication, RBAC and audit logging.
+Application completeness
+End-to-end workflow from payment entry to reconciliation.
+AI usefulness
+Agents perform business analysis through controlled tools rather than only generating text.
+Technical quality
+Clean structure, validation, error handling, documentation and tests.
+25. Week 7 Deliverables Mapping
+Training Requirement
+FinanceFlow AI Implementation
+Production-ready full stack application
+React + Node.js/Express + MySQL
+Authentication and authorization
+JWT + HTTP-only cookies + RBAC
+Complete CRUD
+Companies, loans, repayments, payments and users
+Database integration
+MySQL
+File upload
+Loan agreements and financial documents
+Responsive UI
+Finance dashboards and operational screens
+API documentation
+Swagger/OpenAPI
+Error handling and validation
+Centralized errors + input validation
+Real-time chat
+WebSocket
+Technical documentation
+Architecture, API, database, AI tools and deployment guide
+Agentic AI
+Groq-powered agents with controlled backend tool calling
+26. Development Plan
+Phase
+Focus
+1
+Setup, architecture, authentication and RBAC
+2
+Companies, loans, repayments and payment CRUD
+3
+Payment reconciliation dashboard and allocation
+4
+Groq integration and Payment Reconciliation Agent
+5
+AI tools, confidence recommendations and human approval
+6
+Risk, Analyst, Collection and Document Intelligence enhancements
+7
+WebSocket, file uploads, Swagger, testing, error handling and deployment
+27. Final Project Value
+FinanceFlow AI demonstrates more than CRUD development. It combines full-stack engineering, secure API design, database management, file handling, real-time communication, API documentation, testing and Agentic AI. The key innovation is using AI agents as operational assistants that investigate financial records through controlled backend tools and recommend actions while keeping humans in control of sensitive financial decisions.
+28. Mentor Review / Approval
+Mentor Feedback:
+________________________________________________________________________________
+________________________________________________________________________________
+________________________________________________________________________________
+________________________________________________________________________________
+________________________________________________________________________________
+Approval Status:   ☐ Approved     ☐ Changes Required     ☐ Rework
+Mentor Name: ______________________________    Date: __________________
+Student: _________________________________    Signature: _______________

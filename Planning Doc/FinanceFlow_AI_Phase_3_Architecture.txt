@@ -1,0 +1,424 @@
+Phase 3 — Final FinanceFlow AI Database Architecture
+1. The complete database picture
+                           ┌──────────────┐
+                           │    roles     │
+                           └──────┬───────┘
+                                  │
+                                  │ 1:N
+                                  ▼
+                           ┌──────────────┐
+                           │    users     │
+                           └──────┬───────┘
+                                  │
+                    ┌─────────────┼──────────────┐
+                    │             │              │
+                    ▼             ▼              ▼
+              audit_logs     documents      notifications
+┌────────────────┐
+│   companies    │
+└───────┬────────┘
+        │
+        │ 1:N
+        ▼
+┌────────────────┐
+│     loans      │
+└───────┬────────┘
+        │
+        │ 1:N
+        ▼
+┌────────────────────────┐
+│ repayment_schedules    │
+└────────────┬───────────┘
+             │
+             │
+             │ receives money
+             │
+             ▼
+      ┌──────────────┐
+      │   payments   │
+      └──────┬───────┘
+             │
+             │
+             ▼
+ ┌────────────────────────┐
+ │ reconciliation_cases   │
+ └────────────┬───────────┘
+              │
+              │ 1:N
+              ▼
+ ┌────────────────────────┐
+ │  ai_recommendations    │
+ └────────────┬───────────┘
+              │
+              │
+              ▼
+       ACCOUNTANT
+          REVIEW
+              │
+       ┌──────┴──────┐
+       │             │
+     REJECT        APPROVE
+       │             │
+       │             ▼
+       │    ┌────────────────────┐
+       │    │ payment_allocations│
+       │    └─────────┬──────────┘
+       │              │
+       │              ▼
+       │       repayment_schedule
+       │
+       ▼
+   Investigation
+2. The most important separation
+We have three different concepts.
+Expected money
+Stored in:
+repayment_schedules
+Example:
+Due:
+₹1,00,000
+Actual money
+Stored in:
+payments
+Example:
+Received:
+₹75,000
+Final accounting decision
+Stored in:
+payment_allocations
+Example:
+₹75,000
+allocated to
+ABC Technologies
+Loan #LN001
+Installment #5
+This separation is very important.
+3. Real-world example
+Let's follow one payment completely.
+Step 1 — Loan exists
+Company:
+ABC Technologies
+Loan:
+LN-1001
+Total Loan:
+₹10,00,000
+Step 2 — Repayment schedule generated
+Installment 1
+Due:
+ ₹1,00,000
+Date:
+ 05-Aug
+Installment 2
+Due:
+ ₹1,00,000
+Date:
+ 05-Sep
+Installment 3
+Due:
+ ₹1,00,000
+Date:
+ 05-Oct
+Step 3 — Bank payment arrives
+On August 5:
+Transaction:
+TXN98765
+Amount:
+₹1,00,000
+Sender:
+ABC Technologies
+The system creates:
+payments
+----------------
+status =
+ unmatched
+amount =
+ 100000
+It does not immediately mark the installment as paid.
+4. AI Agent starts working
+Our future PaymentReconciliationAgent receives the payment.
+It looks at:
+Payment information
+        +
+Company information
+        +
+Loan information
+        +
+Repayment schedules
+        +
+Historical payments
+        +
+Transaction references
+Then it might produce:
+Candidate:
+ABC Technologies
+Loan:
+ LN-1001
+Installment:
+ #1
+Confidence:
+ 96%
+Reason:
+• Sender matches company
+• Amount matches installment
+• Transaction pattern matches history
+• Due date matches
+That gets stored in:
+ai_recommendations
+5. Accountant dashboard
+The accountant sees:
+┌─────────────────────────────────────────────┐
+│ Payment Reconciliation                      │
+├─────────────────────────────────────────────┤
+│                                             │
+│ Amount              ₹1,00,000               │
+│ Sender              ABC Technologies       │
+│ Transaction         TXN98765                │
+│                                             │
+│ AI Recommendation                          │
+│                                             │
+│ Company             ABC Technologies       │
+│ Loan                LN-1001                │
+│ Installment         #1                     │
+│ Confidence          96%                    │
+│                                             │
+│ Reason                                      │
+│ Amount and sender match historical data.   │
+│                                             │
+│       [ Approve ]   [ Reject ]              │
+│                                             │
+└─────────────────────────────────────────────┘
+6. Accountant approves
+Now we create:
+payment_allocations
+payment
+   ↓
+₹1,00,000
+   ↓
+ABC Technologies
+   ↓
+LN-1001
+   ↓
+Installment #1
+Then the repayment schedule becomes:
+total_due     =
+ ₹1,00,000
+amount_paid   =
+ ₹1,00,000
+amount_pending =
+ ₹0
+status        =
+ paid
+And the payment becomes:
+status =
+ fully_allocated
+7. Audit trail
+At the same time:
+audit_logs
+records something like:
+User:
+Accountant ID 15
+Action:
+APPROVE_PAYMENT_ALLOCATION
+Entity:
+payment_allocations
+Entity ID:
+1001
+Timestamp:
+2026-08-05 10:
+32:15
+So later your mentor can ask:
+"How do you know who approved the payment?"
+Answer:
+"Every financial action is recorded in the audit log with the user, action, affected entity and timestamp."
+8. What happens with low AI confidence?
+Example:
+Payment:
+₹80,000
+Sender:
+ABC Trading
+AI finds:
+ABC Trading Pvt Ltd       63%
+ABC Trading Solutions     58%
+ABC Technologies          42%
+Because the highest confidence is below our threshold:
+< 70%
+the system does:
+AI
+ ↓
+LOW CONFIDENCE
+ ↓
+Manual Investigation
+The accountant sees:
+⚠️ AI could not confidently identify
+the payment.
+Please review manually.
+This is safer than allowing AI to make a financial decision.
+9. What makes this "Agentic AI"?
+This is something your mentor may ask.
+We're not simply doing:
+User → Prompt → AI → Answer
+Our agent will have a goal and tools.
+Conceptually:
+PaymentReconciliationAgent
+          │
+          ▼
+      New Payment
+          │
+          ├── Search company
+          │
+          ├── Search active loans
+          │
+          ├── Search repayment schedules
+          │
+          ├── Check historical payments
+          │
+          ├── Detect possible duplicate
+          │
+          ├── Calculate candidates
+          │
+          └── Generate recommendation
+                    │
+                    ▼
+              Human Approval
+So the AI agent is taking multiple steps to solve a business task, rather than simply generating text.
+We'll implement the actual agent workflow later using Groq API.
+10. Database → Backend → AI → Frontend
+Our complete architecture will eventually look like:
+                    FRONTEND
+                 React Application
+                       │
+                       │ REST API
+                       ▼
+                  EXPRESS API
+                       │
+          ┌────────────┼────────────┐
+          │            │            │
+          ▼            ▼            ▼
+      Auth/RBAC     Business     File
+                    Logic       Upload
+          │            │
+          │            ▼
+          │        MySQL Database
+          │
+          │
+          └──────────────┐
+                         ▼
+                    AI SERVICE
+                         │
+                    Groq API
+                         │
+                         ▼
+                Payment Agent
+                         │
+                         ▼
+                Recommendation
+                         │
+                         ▼
+                  Human Review
+11. Final tables — frozen
+At this point our database has:
+01. roles
+02. users
+03. companies
+04. loans
+05. repayment_schedules
+06. payments
+07. payment_allocations
+08. reconciliation_cases
+09. ai_recommendations
+10. documents
+11. audit_logs
+12. notifications
+Core business tables
+companies
+loans
+repayment_schedules
+payments
+payment_allocations
+AI tables
+reconciliation_cases
+ai_recommendations
+Security/system tables
+roles
+users
+audit_logs
+notifications
+File management
+documents
+12. One small improvement before SQL
+I recommend adding one more concept to the schema:
+payment_sources
+Why?
+Because eventually your application may receive payments from:
+Bank CSV
+Bank API
+Manual entry
+UPI statement
+Excel upload
+Instead of hardcoding the source into different places, we can track:
+source =
+ bank_import
+or
+source =
+ manual
+This will make your payment ingestion module more realistic.
+However, we do not need another table for this. We can simply add:
+source ENUM(
+    'bank_import',
+    'manual',
+    'api',
+    'excel_upload'
+)
+to payments.
+Phase 3 Decision
+I would now freeze this architecture:
+12 tables
++
+payment source
++
+RBAC
++
+AI recommendation history
++
+human approval
++
+payment allocation
++
+audit trail
++
+duplicate detection
++
+partial payments
++
+overpayments
+Next phase: schema.sql
+We'll now create one complete MySQL script that you can run directly:
+database creation
+       ↓
+roles
+       ↓
+users
+       ↓
+companies
+       ↓
+loans
+       ↓
+repayment schedules
+       ↓
+payments
+       ↓
+reconciliation
+       ↓
+AI recommendations
+       ↓
+payment allocations
+       ↓
+documents
+       ↓
+audit logs
+       ↓
+notifications
+       ↓
+indexes
+       ↓
+sample data
