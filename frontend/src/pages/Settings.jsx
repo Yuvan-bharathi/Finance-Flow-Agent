@@ -27,7 +27,12 @@ import {
   Copy,
   Mail,
   X,
-  Crown
+  Crown,
+  Coins,
+  Cpu,
+  CreditCard,
+  ArrowRightLeft,
+  Gauge
 } from 'lucide-react';
 
 /**
@@ -158,8 +163,62 @@ export const Settings = () => {
     }
   };
 
+  // SECTION 1: AI TOKEN USAGE & GOVERNANCE STATE
+  const [tokenStats, setTokenStats] = useState({
+    grand_total_tokens: 0,
+    today_tokens: 0,
+    today_runs: 0,
+    total_runs: 0,
+    tpd_limit: 200000,
+    tpd_used_pct: 0,
+    estimated_cost_inr: '0.00',
+    today_cost_inr: '0.00',
+    active_model: 'qwen/qwen3.6-27b',
+    available_models: [],
+    agent_breakdown: []
+  });
+  const [loadingTokenStats, setLoadingTokenStats] = useState(false);
+  const [switchingModel, setSwitchingModel] = useState(false);
+  const [modelSwitchSuccess, setModelSwitchSuccess] = useState('');
+
+  const fetchTokenUsage = async () => {
+    try {
+      setLoadingTokenStats(true);
+      const res = await api.get('/settings/token-usage');
+      if (res.data?.data) {
+        setTokenStats(res.data.data);
+        if (res.data.data.active_model) {
+          setActiveModel(res.data.data.active_model);
+        }
+      }
+    } catch (err) {
+      console.warn('[Settings] Failed to load token usage:', err.message);
+    } finally {
+      setLoadingTokenStats(false);
+    }
+  };
+
+  const handleSwitchModel = async (newModel) => {
+    try {
+      setSwitchingModel(true);
+      setModelSwitchSuccess('');
+      const res = await api.put('/settings/active-model', { model: newModel });
+      if (res.data?.success) {
+        setActiveModel(newModel);
+        setModelSwitchSuccess(`Active model switched to ${newModel}`);
+        fetchTokenUsage();
+        setTimeout(() => setModelSwitchSuccess(''), 3500);
+      }
+    } catch (err) {
+      console.error('[Settings] Model switch error:', err.message);
+    } finally {
+      setSwitchingModel(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchTokenUsage();
   }, []);
 
   // handleSaveSettings is defined above with MySQL persistence via settingsService.js
@@ -376,61 +435,242 @@ export const Settings = () => {
             </div>
           </div>
 
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Zap size={20} color="#6366f1" /> LLM Configuration & Hyperparameters
-              </h2>
-              <span style={{ fontSize: '0.7rem', fontWeight: '800', background: '#fef3c7', color: '#92400e', padding: '3px 8px', borderRadius: '6px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Lock size={12} /> SYSTEM ADMIN ONLY
-              </span>
+          {/* AI TOKEN USAGE & BILLING GOVERNANCE DASHBOARD */}
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Coins size={20} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2 }}>
+                    AI Token Consumption & Infrastructure Billing
+                  </h2>
+                  <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                    Live token usage telemetry across Agent 1–6, daily free-tier quota limits, and dynamic model switching.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={fetchTokenUsage}
+                  disabled={loadingTokenStats}
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    fontSize: '0.75rem',
+                    fontWeight: '700',
+                    color: '#475569',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <RefreshCw size={12} className={loadingTokenStats ? 'animate-spin' : ''} /> Refresh Telemetry
+                </button>
+                <span style={{ fontSize: '0.7rem', fontWeight: '800', background: '#fef3c7', color: '#92400e', padding: '4px 8px', borderRadius: '6px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Lock size={12} /> ADMIN / OWNER VISIBILITY
+                </span>
+              </div>
             </div>
 
-            {!isUserAdmin ? (
-              <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
-                  <Lock size={18} />
+            {/* Token Usage KPI Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>Today's Token Quota</span>
+                  <Gauge size={16} color="#4f46e5" />
                 </div>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a' }}>LLM Hyperparameter Controls Restricted</h3>
-                <p style={{ fontSize: '0.775rem', color: '#64748b', marginTop: '4px', maxWidth: '440px', margin: '4px auto 0', lineHeight: 1.4 }}>
-                  LLM Model selection and temperature controls are restricted to <strong>System Administrators</strong>. Authenticated as <strong>{user?.name || 'Senior Accountant'}</strong> (<code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: '4px' }}>{userRole.toUpperCase()}</code>).
-                </p>
+                <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a' }}>
+                  {tokenStats.today_tokens.toLocaleString()} <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#94a3b8' }}>/ {tokenStats.tpd_limit.toLocaleString()} TPD</span>
+                </div>
+                <div style={{ marginTop: '8px', width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${Math.min(tokenStats.tpd_used_pct, 100)}%`,
+                    height: '100%',
+                    background: tokenStats.tpd_used_pct > 80 ? '#ef4444' : tokenStats.tpd_used_pct > 50 ? '#f59e0b' : '#10b981',
+                    borderRadius: '3px',
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#64748b', marginTop: '4px' }}>
+                  <span>{tokenStats.tpd_used_pct}% consumed</span>
+                  <span>{tokenStats.today_runs} runs today</span>
+                </div>
               </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div>
-                  <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Active Groq Model</label>
-                  <select
-                    value={activeModel}
-                    onChange={e => setActiveModel(e.target.value)}
-                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '10px 12px', borderRadius: '8px', marginTop: '6px', fontWeight: '600' }}
-                  >
-                    <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b (Recommended - Precision Financial Reasoning)</option>
-                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (High Capacity)</option>
-                    <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 (Speed Optimized)</option>
-                  </select>
-                </div>
 
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>
-                    <span>Temperature</span>
-                    <span style={{ color: '#4f46e5' }}>{temperature}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="0.5"
-                    step="0.05"
-                    value={temperature}
-                    onChange={e => setTemperature(parseFloat(e.target.value))}
-                    style={{ width: '100%', accentColor: '#4f46e5', marginTop: '14px', cursor: 'pointer' }}
-                  />
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '6px' }}>
-                    Recommended: <strong>0.1</strong> for financial analysis, <strong>0.3</strong> for general reasoning, <strong>0.4</strong> for collection emails.
-                  </div>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>Grand Total Tokens</span>
+                  <Cpu size={16} color="#059669" />
                 </div>
+                <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a' }}>
+                  {tokenStats.grand_total_tokens.toLocaleString()}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: '700', marginTop: '6px' }}>
+                  Across {tokenStats.total_runs} platform executions
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>Estimated Infrastructure Cost</span>
+                  <CreditCard size={16} color="#d97706" />
+                </div>
+                <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0f172a' }}>
+                  ₹{tokenStats.estimated_cost_inr}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '6px' }}>
+                  ₹{tokenStats.today_cost_inr} estimated today
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>Active Production Model</span>
+                  <Zap size={16} color="#8b5cf6" />
+                </div>
+                <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#4338ca', wordBreak: 'break-all' }}>
+                  {activeModel}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: '700', marginTop: '6px' }}>
+                  ● Multi-Model Failover Active
+                </div>
+              </div>
+            </div>
+
+            {/* Model Switcher Banner & Success Alert */}
+            {modelSwitchSuccess && (
+              <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.8rem', color: '#166534', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={16} /> {modelSwitchSuccess}
               </div>
             )}
+
+            {/* Available Model Selection Cards */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1e293b', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <ArrowRightLeft size={16} color="#4f46e5" /> Dynamic AI Model Switcher (1-Click Switch)
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+                {(tokenStats.available_models || [
+                  { id: 'qwen/qwen3.6-27b', name: 'Qwen 3.6 27B (Reasoning & Tool Call)', provider: 'Groq Cloud', tier: 'Fast / High Quota', status: 'Active' },
+                  { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (Enterprise Financial)', provider: 'Groq Cloud', tier: 'High Precision', status: 'Active' },
+                  { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B (Compact & Fast)', provider: 'Groq Cloud', tier: 'Lightweight', status: 'Active' },
+                  { id: 'groq/compound-mini', name: 'Groq Compound Mini (MoE Router)', provider: 'Groq Cloud', tier: 'Fast', status: 'Standby' }
+                ]).map((m) => {
+                  const isCurrent = activeModel === m.id;
+                  return (
+                    <div
+                      key={m.id}
+                      style={{
+                        background: isCurrent ? '#f0f4ff' : '#ffffff',
+                        border: `1.5px solid ${isCurrent ? '#6366f1' : '#e2e8f0'}`,
+                        borderRadius: '12px',
+                        padding: '14px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        boxShadow: isCurrent ? '0 4px 12px rgba(99, 102, 241, 0.12)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', background: isCurrent ? '#e0e7ff' : '#f1f5f9', color: isCurrent ? '#4338ca' : '#64748b' }}>
+                            {m.provider}
+                          </span>
+                          {isCurrent && (
+                            <span style={{ fontSize: '0.65rem', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', background: '#dcfce7', color: '#166534', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              ● ACTIVE MODEL
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.3 }}>
+                          {m.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '4px' }}>
+                          <code>{m.id}</code> · {m.tier}
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                          {isCurrent ? 'Current Default' : 'Ready to Deploy'}
+                        </span>
+                        {isCurrent ? (
+                          <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#4f46e5' }}>In Use</span>
+                        ) : (
+                          <button
+                            onClick={() => handleSwitchModel(m.id)}
+                            disabled={switchingModel || !isUserAdmin}
+                            style={{
+                              background: '#4f46e5',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '5px 12px',
+                              borderRadius: '6px',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              cursor: (!isUserAdmin || switchingModel) ? 'not-allowed' : 'pointer',
+                              opacity: (!isUserAdmin || switchingModel) ? 0.6 : 1
+                            }}
+                          >
+                            {switchingModel ? 'Switching...' : 'Switch Model'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Agent-by-Agent Token Usage Table */}
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#1e293b', marginBottom: '8px' }}>
+                📊 Per-Agent Token Consumption Breakdown (Last 30 Days)
+              </div>
+              <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #cbd5e1' }}>
+                      <th style={{ padding: '8px 12px', fontWeight: '700', color: '#1e293b' }}>Agent Name</th>
+                      <th style={{ padding: '8px 12px', fontWeight: '700', color: '#1e293b' }}>Total Executions</th>
+                      <th style={{ padding: '8px 12px', fontWeight: '700', color: '#1e293b' }}>Total Tokens</th>
+                      <th style={{ padding: '8px 12px', fontWeight: '700', color: '#1e293b' }}>Avg Tokens / Run</th>
+                      <th style={{ padding: '8px 12px', fontWeight: '700', color: '#1e293b' }}>LLM API Calls</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(tokenStats.agent_breakdown && tokenStats.agent_breakdown.length > 0) ? (
+                      tokenStats.agent_breakdown.map((ag, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 1 ? '#f8fafc' : '#ffffff' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: '700', color: '#0f172a' }}>
+                            {ag.agent_name || ag.agent_id}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: '#334155' }}>{ag.total_runs}</td>
+                          <td style={{ padding: '8px 12px', fontWeight: '700', color: '#4f46e5' }}>{Number(ag.total_tokens || 0).toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: '#334155' }}>{Number(ag.avg_tokens_per_run || 0).toLocaleString()}</td>
+                          <td style={{ padding: '8px 12px', color: '#059669', fontWeight: '600' }}>{ag.groq_calls} calls</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>
+                          No agent token executions recorded in this billing cycle.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
           </div>
 
         </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, Zap, RefreshCw, CheckSquare, Square, AlertCircle, Play } from 'lucide-react';
+import { Eye, Zap, RefreshCw, CheckSquare, Square, AlertCircle, Play, Bot, ArrowRight } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { ConfidenceBar } from './ConfidenceBar';
@@ -9,9 +9,9 @@ import { analyzeCase } from '../../services/reconciliationService';
 
 /**
  * Large White Table Component: Recent Reconciliation Cases
- * Supports multi-select, bulk analysis triggers, NEW case indicators, and confirmation dialogs.
+ * Displays the latest 5 reconciliation transactions on the dashboard with a link to full Payment Ingestion.
  */
-export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, onRefresh }) => {
+export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, onRefresh, onAskAI, onViewAll }) => {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [selectedCaseIds, setSelectedCaseIds] = useState([]);
@@ -26,6 +26,9 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
     return true;
   });
 
+  // Limit display to the latest 5 transactions on the dashboard
+  const displayedCases = filteredCases.slice(0, 5);
+
   const newCasesCount = cases.filter(c => (c.status || '').toLowerCase() === 'new').length;
 
   const toggleSelectCase = (id, e) => {
@@ -36,10 +39,10 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
   };
 
   const toggleSelectAll = () => {
-    if (selectedCaseIds.length === filteredCases.length) {
+    if (selectedCaseIds.length === displayedCases.length) {
       setSelectedCaseIds([]);
     } else {
-      setSelectedCaseIds(filteredCases.map(c => c.id));
+      setSelectedCaseIds(displayedCases.map(c => c.id));
     }
   };
 
@@ -129,11 +132,11 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
           <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a' }}>
             Recent Reconciliation Cases
           </h3>
-          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6366f1', background: '#e0e7ff', padding: '2px 8px', borderRadius: '10px' }}>
-            {filteredCases.length} Cases
+          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#4f46e5', background: '#e0e7ff', padding: '3px 10px', borderRadius: '12px' }}>
+            Latest 5 of {filteredCases.length} Transactions
           </span>
           {newCasesCount > 0 && (
-            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569', background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '2px 8px', borderRadius: '10px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', padding: '3px 10px', borderRadius: '12px' }}>
               {newCasesCount} NEW Waiting Analysis
             </span>
           )}
@@ -187,14 +190,14 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
       </div>
 
       {/* Main Table Structure */}
-      <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+      <div style={{ overflowX: 'auto', borderRadius: '12px 12px 0 0', border: '1px solid #e2e8f0' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               <th style={{ padding: '14px 12px', width: '40px', textAlign: 'center' }}>
                 <input
                   type="checkbox"
-                  checked={filteredCases.length > 0 && selectedCaseIds.length === filteredCases.length}
+                  checked={displayedCases.length > 0 && selectedCaseIds.length === displayedCases.length}
                   onChange={toggleSelectAll}
                   style={{ cursor: 'pointer' }}
                 />
@@ -215,14 +218,14 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
                   Loading reconciliation cases from server...
                 </td>
               </tr>
-            ) : filteredCases.length === 0 ? (
+            ) : displayedCases.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
                   No reconciliation cases match the selected filters.
                 </td>
               </tr>
             ) : (
-              filteredCases.map(item => {
+              displayedCases.map(item => {
                 const rec = item.latest_recommendation;
                 const score = rec ? parseFloat(rec.confidence_score) : null;
                 const isSelected = selectedCaseIds.includes(item.id);
@@ -337,7 +340,7 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
                           style={{
                             background: '#ffffff',
                             border: '1px solid #cbd5e1',
-                            color: '#4f46e5',
+                            color: '#475569',
                             borderRadius: '8px',
                             padding: '5px 10px',
                             fontSize: '0.75rem',
@@ -351,6 +354,32 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
                           <Eye size={12} />
                           <span>Review</span>
                         </button>
+
+                        {/* Investigate Case with AI */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onAskAI) onAskAI('reconciliation_case', item.id);
+                          }}
+                          title="Ask AI to investigate this reconciliation case"
+                          style={{
+                            background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '5px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+                          }}
+                        >
+                          <Bot size={12} />
+                          <span>Investigate</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -359,6 +388,50 @@ export const RecentCasesTable = ({ cases = [], loading = false, onSelectCase, on
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Footer view-all bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '10px',
+        padding: '12px 18px',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderTop: 'none',
+        borderRadius: '0 0 12px 12px',
+        fontSize: '0.825rem',
+        color: '#64748b'
+      }}>
+        <div>
+          Showing <strong>{displayedCases.length}</strong> latest transactions &middot; <strong>{filteredCases.length}</strong> total cases available
+        </div>
+        {onViewAll && (
+          <button
+            onClick={onViewAll}
+            style={{
+              background: '#e0e7ff',
+              color: '#4338ca',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '6px 14px',
+              fontWeight: '700',
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#c7d2fe'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#e0e7ff'}
+          >
+            <span>View All Transactions in Payment Ingestion</span>
+            <ArrowRight size={14} />
+          </button>
+        )}
       </div>
 
       {/* Confirmation Modal for "Analyze All NEW" */}

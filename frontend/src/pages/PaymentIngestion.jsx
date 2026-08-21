@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play, RefreshCw, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play, RefreshCw, AlertTriangle, ShieldCheck, Bot } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
 import { getCases, analyzeCase } from '../services/reconciliationService';
@@ -13,7 +13,7 @@ import { analyzeBulk, analyzeAllPending } from '../services/agentService';
  * Called by:
  * - Dashboard.jsx / App.jsx
  */
-export const PaymentIngestion = () => {
+export const PaymentIngestion = ({ onAskAI }) => {
   const [payments, setPayments] = useState([]);
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -558,6 +558,32 @@ export const PaymentIngestion = () => {
                             <Eye size={12} /> View Case
                           </button>
                         )}
+
+                        {/* Ask AI / Investigate button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onAskAI) onAskAI('payment', p.id);
+                          }}
+                          title="Ask AI to investigate this payment"
+                          style={{
+                            background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '5px 10px',
+                            borderRadius: '6px',
+                            fontSize: '0.72rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+                          }}
+                        >
+                          <Bot size={11} />
+                          Ask AI
+                        </button>
 
                       </div>
                     </td>

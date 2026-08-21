@@ -8,7 +8,7 @@ import { AIPerformanceCard } from './AIPerformanceCard';
 import { RecentCasesTable } from './RecentCasesTable';
 import { ActionCenterDrawer } from '../ActionCenterDrawer';
 import { LiveToastNotifications } from '../LiveToastNotifications';
-import { AiAssistantModal } from '../AiAssistantModal';
+import AiCopilotPanel from '../AiCopilotPanel';
 import { PaymentIngestion } from '../../pages/PaymentIngestion';
 import { CompanyList } from '../../pages/CompanyList';
 import { LoanList } from '../../pages/LoanList';
@@ -16,6 +16,7 @@ import { AuditLogs } from '../../pages/AuditLogs';
 import { DocumentList } from '../../pages/DocumentList';
 import { ReportsAnalytics } from '../../pages/ReportsAnalytics';
 import { AgentControlCenter } from '../../pages/AgentControlCenter';
+import { Notifications } from '../../pages/Notifications';
 import { Settings } from '../../pages/Settings';
 import { getCases, getStats } from '../../services/reconciliationService';
 import { AlertCircle, RefreshCw, Construction } from 'lucide-react';
@@ -33,9 +34,11 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
   const [stats, setStats] = useState({ kpis: {}, status_breakdown: [], ai_performance: {} });
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
-  const [selectedCase, setSelectedCase] = useState(null);
+  const [selectedCase, setSelectedCase]   = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
+  const [showAiModal, setShowAiModal]     = useState(false);
+  // AI Copilot: tracks what page/record the user is currently viewing
+  const [copilotContext, setCopilotContext] = useState({ page: 'reconciliations', recordType: null, recordId: null });
 
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
   const setActiveTab = externalSetActiveTab || setInternalActiveTab;
@@ -44,12 +47,12 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
     try {
       setLoading(true);
       setErrorMsg('');
-      const [casesRes, statsRes] = await Promise.all([
+      const [casesData, statsData] = await Promise.all([
         getCases(),
         getStats()
       ]);
-      setCases(casesRes.data || []);
-      const raw = statsRes.data || {};
+      setCases(Array.isArray(casesData) ? casesData : (casesData?.data || []));
+      const raw = (statsData && statsData.kpis) ? statsData : (statsData?.data || {});
       setStats({
         kpis: raw.kpis || {},
         status_breakdown: Array.isArray(raw.status_breakdown) ? raw.status_breakdown : [],
@@ -67,6 +70,11 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
     fetchDashboardData();
   }, []);
 
+  const handleAskAI = (recordType, recordId, page = activeTab) => {
+    setCopilotContext({ page, recordType, recordId });
+    setShowAiModal(true);
+  };
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
       
@@ -78,6 +86,13 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         onOpenAiAssistant={() => setShowAiModal(true)}
+      />
+
+      {/* AI Copilot Panel — slide-in from right when open */}
+      <AiCopilotPanel
+        isOpen={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        contextPayload={copilotContext}
       />
 
       {/* Main Content Area */}
@@ -128,24 +143,38 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
                 <AIPerformanceCard aiPerformance={stats.ai_performance} loading={loading} />
               </div>
 
-              {/* Bottom Large Table: Recent Reconciliation Cases */}
+              {/* Bottom Large Table: Recent Reconciliation Cases (Latest 5 Transactions) */}
               <RecentCasesTable
                 cases={cases}
                 loading={loading}
                 onSelectCase={(item) => setSelectedCase(item)}
                 onRefresh={fetchDashboardData}
+                onAskAI={(recordType, recordId) => handleAskAI(recordType, recordId, 'reconciliations')}
+                onViewAll={() => setActiveTab('payments')}
               />
             </>
           )}
 
           {/* TAB 2: Payment Manual Ingestion */}
-          {activeTab === 'payments' && <PaymentIngestion />}
+          {activeTab === 'payments' && (
+            <PaymentIngestion
+              onAskAI={(recordType, recordId) => handleAskAI(recordType, recordId, 'payments')}
+            />
+          )}
 
           {/* TAB 3: Borrowing Companies Directory */}
-          {activeTab === 'companies' && <CompanyList />}
+          {activeTab === 'companies' && (
+            <CompanyList
+              onAskAI={(recordType, recordId) => handleAskAI(recordType, recordId, 'companies')}
+            />
+          )}
 
           {/* TAB 4: Loans & Schedules Breakdown */}
-          {activeTab === 'loans' && <LoanList />}
+          {activeTab === 'loans' && (
+            <LoanList
+              onAskAI={(recordType, recordId) => handleAskAI(recordType, recordId, 'loans')}
+            />
+          )}
 
           {/* TAB 5: Audit Compliance Log */}
           {activeTab === 'audit-logs' && <AuditLogs />}
@@ -159,35 +188,16 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
           {/* TAB 8: AI Agent Control Center */}
           {activeTab === 'agents' && <AgentControlCenter />}
 
-          {/* TAB 9: Enterprise Settings */}
-          {activeTab === 'settings' && <Settings />}
-
-          {/* Fallback Placeholder for Notifications */}
-          {['notifications'].includes(activeTab) && (
-            <div style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '16px',
-              padding: '48px',
-              textAlign: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '12px'
-            }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Construction size={24} />
-              </div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a' }}>Module Under Active Development</h3>
-              <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '400px', lineHeight: 1.4 }}>
-                The <strong>{activeTab.toUpperCase()}</strong> view is being configured for real-time AI streaming updates.
-              </p>
-              <button onClick={() => setActiveTab('reconciliations')} className="btn-primary" style={{ marginTop: '8px' }}>
-                Return to Action Center AI
-              </button>
-            </div>
+          {/* TAB 9: Real-Time Notification & Escalation Center (Agent 6) */}
+          {activeTab === 'notifications' && (
+            <Notifications
+              onSelectCase={(item) => setSelectedCase(item)}
+              onAskAI={(recordType, recordId) => handleAskAI(recordType, recordId, 'notifications')}
+            />
           )}
+
+          {/* TAB 10: Enterprise Settings */}
+          {activeTab === 'settings' && <Settings />}
 
         </main>
       </div>
@@ -198,14 +208,12 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
           caseItem={selectedCase}
           onClose={() => setSelectedCase(null)}
           onRefresh={fetchDashboardData}
+          onAskAI={(recordType, recordId) => handleAskAI(recordType, recordId, 'reconciliations')}
         />
       )}
 
       {/* Real-Time WebSocket Toast Notifications */}
       <LiveToastNotifications onRealtimeUpdate={fetchDashboardData} />
-
-      {/* AI Assistant Coming Soon Modal */}
-      <AiAssistantModal isOpen={showAiModal} onClose={() => setShowAiModal(false)} />
 
     </div>
   );

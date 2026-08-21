@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { getUserSettings, updateUserSettings } from '../controllers/settings.controller.js';
+import {
+  getUserSettings,
+  updateUserSettings,
+  getAiTokenUsage,
+  setActiveAiModel
+} from '../controllers/settings.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 
 /**
@@ -26,7 +31,9 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/',  getUserSettings);
-router.put('/',  updateUserSettings);
+router.get('/', getUserSettings);
+router.put('/', updateUserSettings);
+router.get('/token-usage', getAiTokenUsage);
+router.put('/active-model', setActiveAiModel);
 
 export default router;

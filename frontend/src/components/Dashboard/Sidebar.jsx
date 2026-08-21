@@ -94,20 +94,25 @@ export const Sidebar = ({
             width: '42px',
             height: '42px',
             borderRadius: '12px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#ffffff',
-            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
             flexShrink: 0,
-            transition: 'box-shadow 0.2s ease',
-            position: 'relative'
+            transition: 'all 0.2s ease',
+            position: 'relative',
+            overflow: 'hidden'
           }}>
             {collapsed && logoHovered ? (
-              <PanelLeftOpen size={22} />
+              <PanelLeftOpen size={22} color="#4f46e5" />
             ) : (
-              <Activity size={24} />
+              <img
+                src="/FinanceFlow AI Logo-favicon.png"
+                alt="FinanceFlow AI Logo"
+                style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+              />
             )}
           </div>
 

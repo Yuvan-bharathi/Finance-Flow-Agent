@@ -1,0 +1,80 @@
+# ✅ Development Walkthrough — Phase 2: Multi-Entity AI Financial Copilot
+
+## 1. Overview of Phase 2 Enhancements
+
+Phase 2 transitions the FinanceFlow AI Copilot from a single-entity payment explainer into an enterprise-grade **Multi-Entity Financial Operations & Cross-Tool Reasoning Copilot**.
+
+```
+                        FINANCEFLOW AI COPILOT
+                                  │
+         ┌────────────────┬───────┴────────┬────────────────┐
+         ▼                ▼                ▼                ▼
+   💳 Payments     🏢 Companies      💰 Loans       📋 Cases
+  (Deposits &     (Profiles, Risk,  (Facilities &    (Agent Runs,
+  Reconciliation)   Overdues)        Schedules)     Recommendations)
+```
+
+---
+
+## 2. Key Capabilities Implemented
+
+### 🌐 Multi-Page [Ask AI] & [Investigate] Entry Points
+- **Borrowing Companies (`/companies`)**:
+  - `[Ask AI]` button on every company table row.
+  - `[Ask AI]` button inside the Company slide-over drawer alongside Risk Health and Collection notices.
+- **Loans & Facilities (`/loans`)**:
+  - `[Ask AI]` button on every loan facility table row.
+  - `[Ask AI]` button inside the selected loan schedule breakdown card.
+- **Reconciliation Action Center (`/`)**:
+  - `[Investigate]` button on every reconciliation case row in the Recent Cases table.
+  - `[Ask AI to Explain]` button in the top action header of `ActionCenterDrawer`.
+- **Payment Ingestion (`/payments`)**:
+  - `[Ask AI]` button on every deposited payment row.
+
+### 🛠️ 18 Controlled Read-Only Database Tools (`assistantTools.js`)
+Phase 2 expanded the tool suite with 7 new natural language, loan, and cross-agent investigation tools:
+1. `getLoanDetails(loanId)` — Complete loan structure, schedule installments, paid amounts, and overdue counts.
+2. `searchCompanyByName(query)` — Natural language fuzzy search for companies by name, registration number, or contact person.
+3. `getAgentRunsByCase(caseId)` — Fetches all agent runs (Agent 1, Agent 2, etc.) and AI recommendations for a specific case.
+4. `queryOverdueCompanies(minAmount, minDays)` — Filters companies exceeding overdue amount or delinquency duration thresholds.
+5. `getHighRiskBorrowers()` — Computes and ranks high-risk borrowers by active exposure and overdue amounts.
+6. `getMonthlyCollectionSummary(year, month)` — Monthly collection efficiency and total scheduled vs collected amounts.
+7. `getDocumentSummary(documentId)` — OCR document intelligence summary for uploaded loan agreements, invoices, and bank statements.
+
+### 🧠 5 Internal Investigation Modes & Cross-Tool Reasoning (`assistant.prompt.js`)
+1. **🔎 INVESTIGATION (Deep Dive)**: Combines `getCompanyProfile` + `getActiveLoan` + `getRepaymentHistory` + `getAgentRunsByCase` to synthesize holistic borrower assessments.
+2. **📊 ANALYTICS (Portfolio & Trend Queries)**: Uses `queryOverdueCompanies`, `getHighRiskBorrowers`, and `getMonthlyCollectionSummary`.
+3. **💡 EXPLANATION (Agent Explainability)**: Traces agent run steps and confidence weightings for mentor-ready demos.
+4. **⚖️ COMPARISON (Side-by-Side Evaluation)**: Evaluates two companies or loans side-by-side on active exposure, overdue debt, delinquency history, and collection rate.
+5. **🧭 GUIDANCE (Workflow Action Steps)**: Suggests clear next steps for ambiguous or unmatched payments without independently modifying financial records.
+
+### 🎯 Confidence Indicators & Fact Tagging
+- **Confidence Rating**: Indicates `Confidence: HIGH`, `MEDIUM`, or `LOW` based on record availability.
+- **Visual Fact Tags**:
+  - 🗄️ **DB Fact** — Direct from database queries
+  - 🤖 **Agent Finding** — From Agent 1–6 runs, step logs, or recommendations
+  - 💡 **AI Interpretation** — Financial reasoning and next-step recommendations
+
+---
+
+## 3. Files Modified
+
+| File | Changes Made |
+|------|--------------|
+| [`assistantTools.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/tools/assistantTools.js) | Added 7 new tools, schemas, and execution handlers (18 tools total) |
+| [`assistant.prompt.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/prompts/assistant.prompt.js) | Added 5 modes, cross-tool reasoning, confidence guidelines, and tool catalog |
+| [`assistant.controller.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/controllers/assistant.controller.js) | Updated `wakeContext` to route `loan` and `document` entity types |
+| [`CompanyList.jsx`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/pages/CompanyList.jsx) | Added `[Ask AI]` buttons on table rows and in Company drawer |
+| [`LoanList.jsx`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/pages/LoanList.jsx) | Added `[Ask AI]` buttons on loan rows and in Loan Schedule card |
+| [`RecentCasesTable.jsx`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/components/Dashboard/RecentCasesTable.jsx) | Added `[Investigate]` buttons on case rows |
+| [`ActionCenterDrawer.jsx`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/components/ActionCenterDrawer.jsx) | Added `[Ask AI to Explain]` in drawer header |
+| [`Dashboard.jsx`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/components/Dashboard/Dashboard.jsx) | Centralized `handleAskAI` context dispatcher across all tabs and drawers |
+| [`AiCopilotPanel.jsx`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/components/AiCopilotPanel.jsx) | Tailored entity chips for Company, Loan, Case, and Payment contexts |
+
+---
+
+## 4. Verification Results
+
+- **Frontend Compilation**: `vite build` completed in 7.04s (`exit code 0`, 0 errors).
+- **Backend Health**: `http://localhost:5000/api/health` returned `status: UP`.
+- **RBAC & Security**: All tools remain read-only; no unauthenticated or autonomous financial transactions permitted.

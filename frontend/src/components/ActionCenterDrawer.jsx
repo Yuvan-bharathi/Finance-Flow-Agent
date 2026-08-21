@@ -11,7 +11,8 @@ import {
   Sparkles,
   ArrowRight,
   RefreshCw,
-  ShieldAlert
+  ShieldAlert,
+  Bot
 } from 'lucide-react';
 import { analyzeCase, approveRecommendation, rejectRecommendation, overrideRecommendation } from '../services/reconciliationService';
 import { StatusBadge } from './Dashboard/StatusBadge';
@@ -28,8 +29,9 @@ import { StatusBadge } from './Dashboard/StatusBadge';
  * @param {Object} caseItem - Selected reconciliation case object.
  * @param {Function} onClose - Drawer close callback.
  * @param {Function} onRefresh - Callback to refresh parent dashboard data.
+ * @param {Function} onAskAI - Callback to launch AI Assistant with case context.
  */
-export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
+export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) => {
   const [activeCase, setActiveCase] = useState(caseItem);
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -217,23 +219,49 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh }) => {
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '10px',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#64748b',
-              cursor: 'pointer'
-            }}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => {
+                if (onAskAI) onAskAI('reconciliation_case', caseItem.id);
+              }}
+              title="Ask AI Copilot to investigate and explain this case"
+              style={{
+                background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '7px 12px',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+              }}
+            >
+              <Bot size={14} />
+              <span>Ask AI to Explain</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#64748b',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Content Body */}

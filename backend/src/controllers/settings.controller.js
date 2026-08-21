@@ -196,3 +196,128 @@ export const updateUserSettings = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to save settings.' });
   }
 };
+
+/**
+ * getAiTokenUsage
+ *
+ * Purpose:
+ *   Retrieves platform-wide AI token consumption analytics for Admins & Owners.
+ *   Calculates today's usage, total historical usage, agent breakdowns, and estimated costs.
+ */
+export const getAiTokenUsage = async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 30;
+
+    // 1. Overall stats
+    const [summaryRows] = await pool.query(`
+      SELECT
+        COALESCE(SUM(total_tokens), 0) AS grand_total_tokens,
+        COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN total_tokens ELSE 0 END), 0) AS today_tokens,
+        COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END), 0) AS today_runs,
+        COALESCE(COUNT(*), 0) AS total_runs
+      FROM agent_runs
+    `);
+
+    // 2. Per-agent breakdown
+    const [agentRows] = await pool.query(`
+      SELECT
+        agent_id,
+        agent_name,
+        COUNT(*) AS total_runs,
+        COALESCE(SUM(total_tokens), 0) AS total_tokens,
+        ROUND(AVG(total_tokens), 0) AS avg_tokens_per_run,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS successful_runs,
+        SUM(CASE WHEN groq_called = 1 THEN 1 ELSE 0 END) AS groq_calls
+      FROM agent_runs
+      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+      GROUP BY agent_id, agent_name
+      ORDER BY total_tokens DESC
+    `, [days]);
+
+    // 3. Active model from settings or env
+    const [modelSetting] = await pool.query(`
+      SELECT setting_value FROM user_settings WHERE setting_key = 'ai_active_model' LIMIT 1
+    `);
+    const activeModel = modelSetting[0]?.setting_value || process.env.GROQ_MODEL || 'qwen/qwen3.6-27b';
+
+    const grandTotal = parseInt(summaryRows[0]?.grand_total_tokens || 0, 10);
+    const todayTokens = parseInt(summaryRows[0]?.today_tokens || 0, 10);
+    // Estimated cost: ~₹0.005 per 1,000 tokens (Groq / Enterprise LLM scale)
+    const estimatedCostInr = ((grandTotal / 1000) * 0.005).toFixed(2);
+    const todayCostInr = ((todayTokens / 1000) * 0.005).toFixed(2);
+
+    const availableModels = [
+      { id: 'qwen/qwen3.6-27b', name: 'Qwen 3.6 27B (Reasoning & Tool Call)', provider: 'Groq Cloud', tier: 'Fast / High Quota', status: 'Active' },
+      { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B (Enterprise Financial)', provider: 'Groq Cloud', tier: 'High Precision', status: 'Active' },
+      { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B (Compact & Fast)', provider: 'Groq Cloud', tier: 'Lightweight', status: 'Active' },
+      { id: 'groq/compound-mini', name: 'Groq Compound Mini (MoE Router)', provider: 'Groq Cloud', tier: 'Fast', status: 'Standby' },
+      { id: 'allam-2-7b', name: 'Allam 2 7B (Multilingual)', provider: 'Groq Cloud', tier: 'Fast', status: 'Standby' }
+    ];
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        grand_total_tokens: grandTotal,
+        today_tokens: todayTokens,
+        today_runs: parseInt(summaryRows[0]?.today_runs || 0, 10),
+        total_runs: parseInt(summaryRows[0]?.total_runs || 0, 10),
+        tpd_limit: 200000,
+        tpd_used_pct: Math.min(Math.round((todayTokens / 200000) * 100), 100),
+        estimated_cost_inr: estimatedCostInr,
+        today_cost_inr: todayCostInr,
+        active_model: activeModel,
+        available_models: availableModels,
+        agent_breakdown: agentRows
+      }
+    });
+  } catch (err) {
+    console.error('[Settings getAiTokenUsage Error]', err.message);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve AI token usage.' });
+  }
+};
+
+/**
+ * setActiveAiModel
+ *
+ * Purpose:
+ *   Allows Admins and Owners to change the active LLM model dynamically.
+ */
+export const setActiveAiModel = async (req, res) => {
+  try {
+    const { model } = req.body;
+    const userRole = req.user.role;
+
+    if (!['admin', 'super_admin', 'owner'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Administrators and Owners can switch the platform AI model.'
+      });
+    }
+
+    if (!model) {
+      return res.status(400).json({ success: false, message: 'Model ID is required.' });
+    }
+
+    // Save to user_settings as system setting
+    await pool.execute(`
+      INSERT INTO user_settings (user_id, setting_key, setting_value, setting_scope)
+      VALUES (?, 'ai_active_model', ?, 'system')
+      ON DUPLICATE KEY UPDATE
+        setting_value = VALUES(setting_value),
+        updated_at = NOW()
+    `, [req.user.id, model]);
+
+    // Update runtime env
+    process.env.GROQ_MODEL = model;
+
+    return res.status(200).json({
+      success: true,
+      message: `Active AI model successfully switched to ${model}.`,
+      active_model: model
+    });
+  } catch (err) {
+    console.error('[Settings setActiveAiModel Error]', err.message);
+    return res.status(500).json({ success: false, message: 'Failed to switch AI model.' });
+  }
+};
+
