@@ -19,11 +19,13 @@ export const getAgentStatus = async (req, res, next) => {
   try {
     const overview = await getAllAgentsOverview();
 
-    // Stats for active agents 1 to 4
+    // Stats for all 6 active agents
     const agent1Stats = await getAgentStats('agent_1_reconciliation');
     const agent2Stats = await getAgentStats('agent_2_risk');
     const agent3Stats = await getAgentStats('agent_3_collection');
     const agent4Stats = await getAgentStats('agent_4_document');
+    const agent5Stats = await getAgentStats('agent_5_portfolio');
+    const agent6Stats = await getAgentStats('agent_6_notification');
 
     const agents = [
       {
@@ -57,18 +59,16 @@ export const getAgentStatus = async (req, res, next) => {
       {
         id: 'agent_5_portfolio',
         name: 'Portfolio Analytics Agent',
-        status: 'COMING_SOON',
-        is_active: false,
-        metrics: null,
-        description: 'Advanced portfolio health analysis, collection efficiency, and revenue vs budget forecasting.'
+        status: 'READY',
+        is_active: true,
+        metrics: agent5Stats
       },
       {
         id: 'agent_6_notification',
         name: 'Notification & Escalation Agent',
-        status: 'COMING_SOON',
-        is_active: false,
-        metrics: null,
-        description: 'Automated early warning notifications for upcoming installment defaults and SLA breaches.'
+        status: 'READY',
+        is_active: true,
+        metrics: agent6Stats
       }
     ];
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { fetchSettings, saveSettings } from '../services/settingsService';
 import {
   Settings as SettingsIcon,
   Bot,
@@ -37,8 +38,52 @@ export const Settings = () => {
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('ai');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
   const [testingGroq, setTestingGroq] = useState(false);
   const [groqStatus, setGroqStatus] = useState(null);
+
+  // Load settings from MySQL on component mount.
+  // fetchSettings() calls GET /api/settings which returns { user: {...}, system: {...} }
+  // We apply each value to its corresponding state variable.
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetchSettings();
+        const { user: userPrefs = {}, system: sysPrefs = {} } = res.data?.data || {};
+
+        // Apply user preferences from MySQL
+        if (userPrefs.notification_email !== undefined)
+          setEmailAlerts(userPrefs.notification_email === 'true');
+
+        // Apply system settings from MySQL
+        if (sysPrefs.confidence_threshold !== undefined)
+          setPreCheckThreshold(parseInt(sysPrefs.confidence_threshold, 10));
+        if (sysPrefs.agent_1_enabled !== undefined)
+          setAutoPaymentAnalysis(sysPrefs.agent_1_enabled === 'true');
+      } catch (err) {
+        console.warn('[Settings] Could not load settings from MySQL:', err.message);
+      } finally {
+        setSettingsLoading(false);
+      }
+    };
+    loadSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persists current settings to MySQL via PUT /api/settings
+  const handleSaveSettings = async () => {
+    try {
+      await saveSettings([
+        { key: 'confidence_threshold', value: String(preCheckThreshold), scope: 'system' },
+        { key: 'agent_1_enabled',      value: String(autoPaymentAnalysis), scope: 'system' },
+        { key: 'notification_email',   value: String(emailAlerts), scope: 'user' }
+      ]);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    } catch (err) {
+      console.error('[Settings] Save failed:', err.message);
+    }
+  };
 
   // USER MANAGEMENT STATE
   const [usersList, setUsersList] = useState([]);
@@ -117,10 +162,7 @@ export const Settings = () => {
     fetchUsers();
   }, []);
 
-  const handleSaveSettings = () => {
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
-  };
+  // handleSaveSettings is defined above with MySQL persistence via settingsService.js
 
   const handleTestGroq = async () => {
     setTestingGroq(true);
