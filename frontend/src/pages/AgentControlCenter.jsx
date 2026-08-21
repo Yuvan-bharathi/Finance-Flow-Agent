@@ -4,6 +4,8 @@ import { getAgentStatus, getRecentActivity } from '../services/agentService';
 import { triggerPortfolioAnalysis, getLatestPortfolioSnapshot } from '../services/portfolioService';
 import { triggerEscalationScan, getAlerts, approveAlert, dismissAlert } from '../services/notificationService';
 import { AgentRunHistoryDrawer } from '../components/AgentRunHistoryDrawer';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { triggerHaptic } from '../utils/haptics';
 import {
   Bot,
   Zap,
@@ -28,6 +30,7 @@ import {
  * Central command center for monitoring, triggering, and auditing all 6 FinanceFlow AI operational agents.
  */
 export const AgentControlCenter = () => {
+  const { isOnline } = useOnlineStatus();
   const [agents, setAgents] = useState([]);
   const [overview, setOverview] = useState({});
   const [activity, setActivity] = useState([]);
@@ -75,7 +78,14 @@ export const AgentControlCenter = () => {
   }, []);
 
   const handleTriggerAgent = async (agentIdStr) => {
+    if (!isOnline) {
+      triggerHaptic('warning');
+      alert('AI Agent execution requires an active backend connection. Action blocked while offline.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setTriggeringAgentId(agentIdStr);
 
       if (agentIdStr === 'agent_1_reconciliation') {
@@ -98,8 +108,10 @@ export const AgentControlCenter = () => {
         if (res.data?.data?.alerts) setEscalationAlerts(res.data.data.alerts.filter(a => a.notification_status === 'pending'));
       }
 
+      triggerHaptic('success');
       await fetchControlCenterData();
     } catch (err) {
+      triggerHaptic('error');
       console.error(`Error triggering Agent ${agentIdStr}:`, err);
     } finally {
       setTriggeringAgentId(null);
@@ -108,11 +120,20 @@ export const AgentControlCenter = () => {
 
   // Handle human approval actions for Agent 6 alerts
   const handleApproveAlert = async (alertId) => {
+    if (!isOnline) {
+      triggerHaptic('warning');
+      alert('Cannot approve alerts while offline. Active online backend connection required.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setActioningAlertId(alertId);
       await approveAlert(alertId);
       setEscalationAlerts(prev => prev.filter(a => a.id !== alertId));
+      triggerHaptic('success');
     } catch (err) {
+      triggerHaptic('error');
       console.error('Failed to approve alert:', err);
     } finally {
       setActioningAlertId(null);
@@ -120,7 +141,14 @@ export const AgentControlCenter = () => {
   };
 
   const handleDismissAlert = async (alertId) => {
+    if (!isOnline) {
+      triggerHaptic('warning');
+      alert('Cannot dismiss alerts while offline. Active online backend connection required.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setActioningAlertId(alertId);
       await dismissAlert(alertId);
       setEscalationAlerts(prev => prev.filter(a => a.id !== alertId));
@@ -213,10 +241,10 @@ export const AgentControlCenter = () => {
         </div>
       </div>
 
-      {/* 6 Agent Cards Grid (3 Columns x 2 Rows) */}
+      {/* 6 Agent Cards Grid (Responsive 1-3 Columns) */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '20px'
       }}>
         {agents.map(agentItem => {

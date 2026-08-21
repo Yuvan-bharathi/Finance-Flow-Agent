@@ -9,6 +9,9 @@ import { RecentCasesTable } from './RecentCasesTable';
 import { ActionCenterDrawer } from '../ActionCenterDrawer';
 import { LiveToastNotifications } from '../LiveToastNotifications';
 import AiCopilotPanel from '../AiCopilotPanel';
+import { OfflineBanner } from '../mobile/OfflineBanner';
+import { MobileAIBottomNav } from '../mobile/MobileAIBottomNav';
+import { AIAssistant } from '../../pages/AIAssistant';
 import { PaymentIngestion } from '../../pages/PaymentIngestion';
 import { CompanyList } from '../../pages/CompanyList';
 import { LoanList } from '../../pages/LoanList';
@@ -19,14 +22,15 @@ import { AgentControlCenter } from '../../pages/AgentControlCenter';
 import { Notifications } from '../../pages/Notifications';
 import { Settings } from '../../pages/Settings';
 import { getCases, getStats } from '../../services/reconciliationService';
-import { AlertCircle, RefreshCw, Construction } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 /**
  * Master Enterprise Fintech Dashboard Component
- * Assembles bright SaaS layout, sidebar, top header, KPI summary row, analytics charts, and recent cases table.
- * 
- * Called by:
- * - App.jsx
+ * Assembles SaaS desktop layout & mobile command center:
+ * - Offline banner for zero-network detection
+ * - Collapsible desktop sidebar & mobile slide-in drawer
+ * - AI Copilot with Voice input & 23 backend tools
+ * - Mobile bottom navigation bar
  */
 export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', setActiveTab: externalSetActiveTab }) => {
   const [internalActiveTab, setInternalActiveTab] = useState('reconciliations');
@@ -36,6 +40,7 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedCase, setSelectedCase]   = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showAiModal, setShowAiModal]     = useState(false);
   // AI Copilot: tracks what page/record the user is currently viewing
   const [copilotContext, setCopilotContext] = useState({ page: 'reconciliations', recordType: null, recordId: null });
@@ -76,9 +81,9 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', position: 'relative' }}>
       
-      {/* Collapsible Left Navigation Sidebar */}
+      {/* Collapsible Left Navigation Sidebar & Mobile Drawer */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -86,9 +91,11 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         onOpenAiAssistant={() => setShowAiModal(true)}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
-      {/* AI Copilot Panel — slide-in from right when open */}
+      {/* AI Copilot Panel — slide-in from right or full-screen on mobile */}
       <AiCopilotPanel
         isOpen={showAiModal}
         onClose={() => setShowAiModal(false)}
@@ -98,11 +105,25 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
       {/* Main Content Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowX: 'hidden' }}>
         
+        {/* Offline Alert Banner */}
+        <OfflineBanner />
+
         {/* Top Floating Header */}
-        <Header />
+        <Header
+          onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
+        />
 
         {/* Dynamic Body View */}
-        <main style={{ padding: '24px 32px 40px', flex: 1, display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <main
+          className="dashboard-main-content"
+          style={{
+            padding: '24px 32px 40px',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px'
+          }}
+        >
           
           {errorMsg && (
             <div style={{
@@ -126,6 +147,17 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
             </div>
           )}
 
+          {/* TAB 0: Mobile AI Command Center */}
+          {activeTab === 'assistant' && (
+            <AIAssistant
+              onOpenCopilotWithPrompt={(prompt) => {
+                setCopilotContext({ page: 'assistant', recordType: null, recordId: null, initialPrompt: prompt });
+                setShowAiModal(true);
+              }}
+              onInvestigateEntity={(recordType, recordId) => handleAskAI(recordType, recordId, 'assistant')}
+            />
+          )}
+
           {/* TAB 1: Action Center AI Dashboard */}
           {activeTab === 'reconciliations' && (
             <>
@@ -133,9 +165,9 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
               <KPISection kpis={stats.kpis} loading={loading} />
 
               {/* Middle Grid: Case Status Donut, Cases Over Time, AI Performance */}
-              <div style={{
+              <div className="dashboard-charts-grid" style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
                 gap: '20px'
               }}>
                 <CaseStatusChart statusBreakdown={Array.isArray(stats.status_breakdown) ? stats.status_breakdown : []} loading={loading} />
@@ -215,6 +247,17 @@ export const Dashboard = ({ activeTab: externalActiveTab = 'reconciliations', se
       {/* Real-Time WebSocket Toast Notifications */}
       <LiveToastNotifications onRealtimeUpdate={fetchDashboardData} />
 
+      {/* Mobile-First Bottom Navigation Bar */}
+      <MobileAIBottomNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenMobileMenu={() => setMobileSidebarOpen(true)}
+        onOpenAiCopilot={() => setShowAiModal(true)}
+        alertCount={stats?.kpis?.pending_review || 0}
+      />
+
     </div>
   );
 };
+
+export default Dashboard;

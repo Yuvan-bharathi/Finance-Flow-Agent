@@ -43,9 +43,22 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 1. CORS Configuration
+// 1. CORS Configuration (Supports local dev ports 5173, 5174, PWA localhost)
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (origin === config.cors.clientUrl) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+};
+
 app.use(cors({
-  origin: config.cors.clientUrl,
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy blocked access from origin: ${origin}`));
+    }
+  },
   credentials: true, // Allows HTTP-only cookies to pass cross-origin
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

@@ -1,23 +1,28 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { sendMessage, confirmProposal, dismissProposal } from '../services/assistantService';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { useVoiceInput } from '../hooks/useVoiceInput';
+import { triggerHaptic } from '../utils/haptics';
 import {
   Bot, X, Minus, Send, Loader2, Database, Brain,
   Lightbulb, ExternalLink, ChevronDown, ChevronUp,
   Zap, Building2, FileText, Activity, BarChart3, AlertCircle,
-  CheckCircle2, XCircle, ShieldCheck, Clock, Flag, MessageSquare, RotateCcw, BellRing
+  CheckCircle2, XCircle, ShieldCheck, Clock, Flag, MessageSquare, RotateCcw, BellRing,
+  Mic, MicOff, Wifi, WifiOff
 } from 'lucide-react';
 
 /**
  * Component: AiCopilotPanel
  *
  * Purpose:
- *   The FinanceFlow AI Financial Operations Copilot — a right-side slide-in panel
+ *   The FinanceFlow AI Financial Operations Copilot — a right-side slide-in panel (or full-screen on mobile)
  *   that provides context-aware, role-aware AI assistance backed by real MySQL data.
- *   Supports Phase 3 Human-in-the-Loop Action Confirmation Protocols.
+ *   Supports Phase 3 Human-in-the-Loop Action Confirmation Protocols, Voice AI input, and strict offline gating.
  */
 const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
   const { user } = useAuth();
+  const { isOnline } = useOnlineStatus();
 
   // ─── Conversation State ──────────────────────────────────────────────────
   const [messages, setMessages]           = useState([]);
@@ -29,6 +34,7 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
 
   // ─── Horizontal Drag-to-Resize State ─────────────────────────────────────
   const [panelWidth, setPanelWidth] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return window.innerWidth;
     const saved = localStorage.getItem('ff_copilot_width');
     return saved ? Math.min(Math.max(parseInt(saved, 10), 380), 900) : 460;
   });
@@ -38,8 +44,36 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
   const messagesEndRef  = useRef(null);
   const inputRef        = useRef(null);
 
+  // ─── Voice Input Hook ────────────────────────────────────────────────────
+  const {
+    isListening,
+    isSupported: isVoiceSupported,
+    startListening,
+    stopListening
+  } = useVoiceInput({
+    onTranscriptComplete: (transcriptText) => {
+      setInputValue(transcriptText);
+      triggerHaptic('success');
+      handleSend(transcriptText);
+    }
+  });
+
+  const handleVoiceToggle = () => {
+    if (!isOnline) {
+      triggerHaptic('warning');
+      alert('Voice AI requires an active internet connection.');
+      return;
+    }
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
   // ─── Resize Handlers ─────────────────────────────────────────────────────
   const startResizing = useCallback((e) => {
+    if (window.innerWidth < 768) return;
     e.preventDefault();
     setIsResizing(true);
   }, []);
@@ -105,9 +139,27 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
     const text = (typeof messageText === 'string' ? messageText : inputValue).trim();
     if (!text || isSendingRef.current || isLoading) return;
 
+    if (!isOnline) {
+      triggerHaptic('warning');
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: text, timestamp: new Date() },
+        {
+          role: 'assistant',
+          content: '🔴 **AI temporarily unavailable while offline.**\n\nFinanceFlow AI requires a live backend connection to access current financial records and execute tools. Please check your internet connection.',
+          sources: [],
+          suggestedActions: [],
+          timestamp: new Date()
+        }
+      ]);
+      setInputValue('');
+      return;
+    }
+
     isSendingRef.current = true;
     setIsLoading(true);
     setInputValue('');
+    triggerHaptic('light');
 
     // Append user message immediately for instant feedback
     const userMsg = { role: 'user', content: text, timestamp: new Date() };
@@ -133,7 +185,7 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
     } catch (err) {
       setMessages(prev => [...prev, {
         role:      'assistant',
-        content:   `I encountered an error. Please try again.\n\n_${err.message}_`,
+        content:   `I encountered an error connecting to the AI backend. Please verify that the Express backend is running.\n\n_${err.message}_`,
         sources:   [],
         suggestedActions: [],
         timestamp: new Date()
@@ -142,7 +194,7 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
       isSendingRef.current = false;
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, messages, contextPayload]);
+  }, [inputValue, isLoading, messages, contextPayload, isOnline]);
 
   // ─── Keyboard: Enter to send ─────────────────────────────────────────────
   const handleKeyDown = (e) => {
@@ -159,7 +211,14 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
 
   // ─── Phase 3 Action Proposal Handlers ────────────────────────────────────
   const handleConfirmProposal = async (proposalId) => {
+    if (!isOnline) {
+      triggerHaptic('warning');
+      alert('Cannot confirm action proposals while offline. An active backend connection is required.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setProposalStatuses(prev => ({ ...prev, [proposalId]: { status: 'loading' } }));
       const res = await confirmProposal(proposalId);
       const data = res.data?.data || {};
@@ -171,6 +230,7 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
           executedAt: data.executed_at || new Date().toISOString()
         }
       }));
+      triggerHaptic('success');
     } catch (err) {
       setProposalStatuses(prev => ({
         ...prev,
@@ -179,11 +239,13 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
           error: err.response?.data?.message || 'Failed to execute action proposal.'
         }
       }));
+      triggerHaptic('error');
     }
   };
 
   const handleDismissProposal = async (proposalId) => {
     try {
+      triggerHaptic('light');
       setProposalStatuses(prev => ({ ...prev, [proposalId]: { status: 'loading' } }));
       await dismissProposal(proposalId);
       setProposalStatuses(prev => ({
@@ -201,6 +263,7 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
   if (!isOpen) return null;
 
   const contextLabel = getContextLabel(contextPayload);
+  const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
 
   return (
     <>
@@ -210,9 +273,9 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
           onClick={onClose}
           style={{
             position: 'fixed', inset: 0,
-            background: 'rgba(15,23,42,0.15)',
+            background: 'rgba(15,23,42,0.3)',
             zIndex: 900,
-            backdropFilter: 'blur(1px)'
+            backdropFilter: 'blur(2px)'
           }}
         />
       )}
@@ -222,21 +285,21 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
         position:       'fixed',
         top:            0,
         right:          0,
-        width:          isMinimized ? '420px' : `${panelWidth}px`,
-        maxWidth:       '92vw',
+        width:          isMobileScreen ? '100vw' : (isMinimized ? '420px' : `${panelWidth}px`),
+        maxWidth:       isMobileScreen ? '100vw' : '92vw',
         height:         '100vh',
         zIndex:         901,
         display:        'flex',
         flexDirection:  'column',
         background:     '#f8fafc',
-        borderLeft:     '1px solid #e2e8f0',
+        borderLeft:     isMobileScreen ? 'none' : '1px solid #e2e8f0',
         boxShadow:      isMinimized ? '-4px -4px 20px rgba(15,23,42,0.15)' : '-8px 0 32px rgba(15,23,42,0.12)',
         transform:      isMinimized ? 'translateY(calc(100% - 56px))' : 'translateY(0)',
         transition:     isResizing ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
       }}>
 
-        {/* ── Left Drag-to-Resize Grip Handle ─────────────────────────────── */}
-        {!isMinimized && (
+        {/* ── Left Drag-to-Resize Grip Handle (Desktop Only) ──────────────── */}
+        {!isMinimized && !isMobileScreen && (
           <div
             onMouseDown={startResizing}
             style={{
@@ -294,10 +357,37 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
               />
             </div>
             <div>
-              <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#ffffff' }}>
-                FinanceFlow AI Copilot
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#ffffff' }}>
+                  FinanceFlow AI Copilot
+                </span>
+                {/* Live Connection Pill */}
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: isOnline ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.3)',
+                  border: isOnline ? '1px solid rgba(74, 222, 128, 0.5)' : '1px solid rgba(248, 113, 113, 0.5)',
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
+                  fontSize: '0.62rem',
+                  fontWeight: '700',
+                  color: isOnline ? '#bbf7d0' : '#fecaca'
+                }}>
+                  {isOnline ? (
+                    <>
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#4ade80' }} />
+                      Live
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#f87171' }} />
+                      Offline
+                    </>
+                  )}
+                </span>
               </div>
-              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)', fontWeight: '600' }}>
+              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.75)', fontWeight: '600' }}>
                 {user?.name || 'User'} · {formatRole(user?.role)} {isMinimized && '· (Click to Expand)'}
               </div>
             </div>
@@ -723,17 +813,41 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
                 boxSizing:      'border-box'
               }}
             />
+            {isVoiceSupported && (
+              <button
+                onClick={handleVoiceToggle}
+                disabled={isLoading || !isOnline}
+                title={isListening ? 'Stop Recording' : 'Start Voice Input'}
+                style={{
+                  width:        '32px',
+                  height:       '32px',
+                  borderRadius: '10px',
+                  border:       'none',
+                  background:   isListening ? '#ef4444' : '#eef2ff',
+                  color:        isListening ? '#ffffff' : '#4f46e5',
+                  cursor:       (!isOnline || isLoading) ? 'not-allowed' : 'pointer',
+                  display:      'flex',
+                  alignItems:   'center',
+                  justifyContent: 'center',
+                  flexShrink:   0,
+                  transition:   'all 0.15s ease'
+                }}
+              >
+                {isListening ? <MicOff size={14} className="animate-pulse" /> : <Mic size={14} />}
+              </button>
+            )}
+
             <button
               onClick={() => handleSend()}
-              disabled={!inputValue.trim() || isLoading}
+              disabled={!inputValue.trim() || isLoading || !isOnline}
               style={{
                 width:        '32px',
                 height:       '32px',
                 borderRadius: '10px',
                 border:       'none',
-                background:   (!inputValue.trim() || isLoading) ? '#e2e8f0' : 'linear-gradient(135deg, #4f46e5, #6366f1)',
-                color:        (!inputValue.trim() || isLoading) ? '#94a3b8' : '#ffffff',
-                cursor:       (!inputValue.trim() || isLoading) ? 'not-allowed' : 'pointer',
+                background:   (!inputValue.trim() || isLoading || !isOnline) ? '#e2e8f0' : 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                color:        (!inputValue.trim() || isLoading || !isOnline) ? '#94a3b8' : '#ffffff',
+                cursor:       (!inputValue.trim() || isLoading || !isOnline) ? 'not-allowed' : 'pointer',
                 display:      'flex',
                 alignItems:   'center',
                 justifyContent: 'center',

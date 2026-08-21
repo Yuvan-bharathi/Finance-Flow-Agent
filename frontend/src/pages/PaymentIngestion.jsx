@@ -5,6 +5,8 @@ import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
 import { getCases, analyzeCase } from '../services/reconciliationService';
 import { analyzeBulk, analyzeAllPending } from '../services/agentService';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { triggerHaptic } from '../utils/haptics';
 
 /**
  * Section 17 Payment Ingestion & Deposit Inspection Page
@@ -14,6 +16,7 @@ import { analyzeBulk, analyzeAllPending } from '../services/agentService';
  * - Dashboard.jsx / App.jsx
  */
 export const PaymentIngestion = ({ onAskAI }) => {
+  const { isOnline } = useOnlineStatus();
   const [payments, setPayments] = useState([]);
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,12 +133,19 @@ export const PaymentIngestion = ({ onAskAI }) => {
     setErrorMsg('');
     setSuccessMsg('');
 
+    if (!isOnline) {
+      triggerHaptic('warning');
+      setErrorMsg('Payment ingestion requires an active backend connection. Cannot ingest while offline.');
+      return;
+    }
+
     if (!transactionId || !amount || !paymentDate) {
       setErrorMsg('Transaction ID, Amount, and Date are required.');
       return;
     }
 
     try {
+      triggerHaptic('light');
       setSubmitting(true);
       const response = await api.post('/payments/ingest', {
         transactionId,
@@ -148,6 +158,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
       });
 
       setSuccessMsg(`Payment '${transactionId}' ingested successfully! Opened Reconciliation Case #${response.data.data.case.id}.`);
+      triggerHaptic('success');
       setTransactionId('');
       setAmount('');
       setSenderName('');
@@ -155,6 +166,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
       setReference('');
       fetchPaymentsAndCases();
     } catch (err) {
+      triggerHaptic('error');
       setErrorMsg(err.response?.data?.message || 'Ingestion failed');
     } finally {
       setSubmitting(false);
@@ -163,7 +175,14 @@ export const PaymentIngestion = ({ onAskAI }) => {
 
   // Mock Bank Simulator Trigger
   const handleSimulateBankDeposit = async () => {
+    if (!isOnline) {
+      triggerHaptic('warning');
+      setErrorMsg('Bank simulation requires an active online backend connection.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setSubmitting(true);
       setErrorMsg('');
       setSuccessMsg('');
@@ -175,6 +194,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
         senderAccount: senderAccount || undefined,
         reference: reference || undefined
       });
+      triggerHaptic('success');
       const data = res.data.data || {};
       setSuccessMsg(`🏦 [Dummy Bank API] Payment deposit ingested successfully! Case #${data.case?.id} created in state NEW.`);
       setTransactionId('');

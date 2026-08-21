@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import { Login } from './pages/Login';
+import { SetPassword } from './pages/SetPassword';
 
 /**
  * Main App Layout with Clean HTML5 History Routing (No # hashes)
  * 
- * Synchronizes activeTab with window.location.pathname (/agents, /payments, /companies, /reconciliations, etc.)
+ * Synchronizes activeTab with window.location.pathname (/assistant, /ai, /agents, /payments, /companies, etc.)
  * Direct URL navigation, bookmarks, and browser Back/Forward controls work seamlessly.
  */
 const MainLayout = () => {
@@ -14,8 +15,9 @@ const MainLayout = () => {
 
   const getTabFromPath = () => {
     const path = window.location.pathname.replace(/^\//, '').trim().toLowerCase();
+    if (path === 'ai' || path === 'assistant') return 'assistant';
     const validTabs = [
-      'reconciliations', 'payments', 'companies', 'loans', 
+      'reconciliations', 'assistant', 'payments', 'companies', 'loans', 
       'audit-logs', 'reports', 'documents', 'agents', 
       'notifications', 'settings'
     ];
@@ -43,8 +45,9 @@ const MainLayout = () => {
     if (window.location.hash) {
       const hashTab = window.location.hash.replace('#/', '').replace('#', '').trim();
       if (hashTab) {
-        window.history.replaceState({ tab: hashTab }, '', hashTab === 'reconciliations' ? '/' : `/${hashTab}`);
-        setActiveTabState(hashTab);
+        const resolved = (hashTab === 'ai' || hashTab === 'assistant') ? 'assistant' : hashTab;
+        window.history.replaceState({ tab: resolved }, '', resolved === 'reconciliations' ? '/' : `/${resolved}`);
+        setActiveTabState(resolved);
       }
     }
 

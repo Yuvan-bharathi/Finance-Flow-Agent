@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { analyzeCase, approveRecommendation, rejectRecommendation, overrideRecommendation } from '../services/reconciliationService';
 import { StatusBadge } from './Dashboard/StatusBadge';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { triggerHaptic } from '../utils/haptics';
 
 /**
  * Slide-over Action Center AI Review Drawer
@@ -32,6 +34,7 @@ import { StatusBadge } from './Dashboard/StatusBadge';
  * @param {Function} onAskAI - Callback to launch AI Assistant with case context.
  */
 export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) => {
+  const { isOnline } = useOnlineStatus();
   const [activeCase, setActiveCase] = useState(caseItem);
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -71,11 +74,19 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
   // Trigger Groq AI Analysis for unanalyzed case
   const handleRunAnalysis = async () => {
+    if (!isOnline) {
+      triggerHaptic('warning');
+      setErrorMsg('AI Reconciliation Analysis requires an active backend connection.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setAnalyzing(true);
       setErrorMsg('');
       const res = await analyzeCase(currentCase.id);
       setSuccessMsg('AI Payment Reconciliation Analysis completed successfully!');
+      triggerHaptic('success');
 
       if (res) {
         const updated = {
@@ -88,6 +99,7 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
       if (onRefresh) onRefresh();
     } catch (err) {
+      triggerHaptic('error');
       console.error(err);
       setErrorMsg(err.response?.data?.message || 'AI Analysis failed.');
     } finally {
@@ -98,16 +110,25 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
   // 1-Click Approve AI Match
   const handleApprove = async () => {
     if (!rec) return;
+    if (!isOnline) {
+      triggerHaptic('warning');
+      setErrorMsg('Financial approval requires an active online backend connection. Action blocked while offline.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setSubmitting(true);
       setErrorMsg('');
       await approveRecommendation(rec.id, 'Approved by accountant via Action Center UI');
       setSuccessMsg('Payment successfully allocated to ledger! Installment marked PAID.');
+      triggerHaptic('success');
       setTimeout(() => {
         if (onRefresh) onRefresh();
         onClose();
       }, 1200);
     } catch (err) {
+      triggerHaptic('error');
       console.error(err);
       setErrorMsg(err.response?.data?.message || 'Approval failed.');
     } finally {
@@ -119,16 +140,25 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
   const handleReject = async (e) => {
     e.preventDefault();
     if (!rec || !rejectReason.trim()) return;
+    if (!isOnline) {
+      triggerHaptic('warning');
+      setErrorMsg('Financial rejection requires an active online backend connection. Action blocked while offline.');
+      return;
+    }
+
     try {
+      triggerHaptic('light');
       setSubmitting(true);
       setErrorMsg('');
       await rejectRecommendation(rec.id, rejectReason);
       setSuccessMsg('Recommendation rejected. Case flagged for manual review.');
+      triggerHaptic('success');
       setTimeout(() => {
         if (onRefresh) onRefresh();
         onClose();
       }, 1200);
     } catch (err) {
+      triggerHaptic('error');
       console.error(err);
       setErrorMsg(err.response?.data?.message || 'Rejection failed.');
     } finally {

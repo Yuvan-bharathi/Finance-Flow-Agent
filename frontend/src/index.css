@@ -243,3 +243,98 @@ h1, h2, h3, h4, h5, h6 {
 aside {
   overflow: hidden;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PWA & Responsive Layout Adaptations (Mobile, Tablet, Desktop)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Mobile Bottom Nav is hidden by default on Desktop */
+.mobile-bottom-nav {
+  display: none !important;
+}
+
+.mobile-hamburger-btn {
+  display: none !important;
+}
+
+/* Tablet & Mobile Screens (<= 1024px) */
+@media (max-width: 1024px) {
+  .mobile-hamburger-btn {
+    display: flex !important;
+  }
+
+  .header-date-badge {
+    display: none !important;
+  }
+
+  .header-subtitle {
+    display: none !important;
+  }
+
+  .header-search-box input {
+    width: 180px !important;
+  }
+
+  /* Sidebar becomes a sliding drawer */
+  .app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 95 !important;
+    transform: translateX(-100%) !important;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  .app-sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  .desktop-collapse-btn {
+    display: none !important;
+  }
+
+  .dashboard-main-content {
+    padding: 20px 20px 32px !important;
+  }
+}
+
+/* Mobile Screens (<= 768px) */
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+
+  .dashboard-main-content {
+    padding: 16px 14px 84px !important; /* Extra bottom padding for mobile nav bar */
+  }
+
+  .header-user-info {
+    display: none !important;
+  }
+
+  .header-search-box input {
+    width: 140px !important;
+    padding-left: 32px !important;
+  }
+
+  .install-btn-text {
+    display: none !important;
+  }
+
+  /* Grids collapse to single column */
+  .dashboard-charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Standalone PWA Safe-Area Support (iOS & Android) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    height: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}

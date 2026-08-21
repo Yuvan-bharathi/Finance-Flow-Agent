@@ -6,7 +6,13 @@ let ioInstance = null;
 export const initSocket = (httpServer) => {
   ioInstance = new Server(httpServer, {
     cors: {
-      origin: config.cors.clientUrl || 'http://localhost:5173',
+      origin: (origin, callback) => {
+        if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+          callback(null, true);
+        } else {
+          callback(null, true);
+        }
+      },
       credentials: true
     }
   });
