@@ -7,7 +7,7 @@ import pool from '../config/db.js';
 
 /**
  * Creates a new agent run record.
- * @param {Object} data - { agent_id, agent_name, case_id, triggered_by, trigger_type }
+ * @param {Object} data - { agent_id, agent_name, case_id, company_id, triggered_by, trigger_type }
  * @returns {Promise<number>} Inserted run ID
  */
 export const createAgentRun = async (data) => {
@@ -15,21 +15,23 @@ export const createAgentRun = async (data) => {
     agent_id,
     agent_name,
     case_id = null,
+    company_id = null,
     triggered_by = null,
     trigger_type = 'manual'
   } = data;
 
   const query = `
     INSERT INTO agent_runs (
-      agent_id, agent_name, case_id, triggered_by, trigger_type, 
-      status, started_at
-    ) VALUES (?, ?, ?, ?, ?, 'processing', NOW());
+      agent_id, agent_name, case_id, company_id, triggered_by, trigger_type, 
+      status
+    ) VALUES (?, ?, ?, ?, ?, ?, 'running');
   `;
 
   const [result] = await pool.execute(query, [
     agent_id,
     agent_name,
     case_id,
+    company_id,
     triggered_by,
     trigger_type
   ]);
@@ -40,37 +42,32 @@ export const createAgentRun = async (data) => {
 /**
  * Updates an agent run record on completion or failure.
  * @param {number} runId - Primary key ID of agent_runs
- * @param {Object} updates - { status, pre_check_result, groq_called, duration_ms, model, input_tokens, output_tokens, total_tokens, tools_called, confidence_score, result_summary, error_message }
+ * @param {Object} updates - { status, groq_called, duration_ms, input_tokens, output_tokens, total_tokens, confidence_score, result_summary, error_message }
  */
 export const updateAgentRun = async (runId, updates) => {
   const fields = [];
   const values = [];
 
-  const updateableKeys = [
-    'status', 'pre_check_result', 'groq_called', 'completed_at',
-    'duration_ms', 'model', 'input_tokens', 'output_tokens',
-    'total_tokens', 'tools_called', 'confidence_score',
-    'result_summary', 'error_message'
-  ];
+  const updateMap = {
+    status: updates.status,
+    groq_called: updates.groq_called !== undefined ? (updates.groq_called ? 1 : 0) : undefined,
+    prompt_tokens: updates.prompt_tokens !== undefined ? updates.prompt_tokens : updates.input_tokens,
+    completion_tokens: updates.completion_tokens !== undefined ? updates.completion_tokens : updates.output_tokens,
+    total_tokens: updates.total_tokens,
+    confidence_score: updates.confidence_score,
+    result_summary: updates.result_summary,
+    error_message: updates.error_message,
+    duration_ms: updates.duration_ms
+  };
 
-  for (const key of updateableKeys) {
-    if (updates[key] !== undefined) {
+  for (const [key, val] of Object.entries(updateMap)) {
+    if (val !== undefined) {
       fields.push(`${key} = ?`);
-      let val = updates[key];
-      if (key === 'tools_called' && typeof val === 'object') {
-        val = JSON.stringify(val);
-      }
       values.push(val);
     }
   }
 
   if (fields.length === 0) return;
-
-  if (updates.status === 'completed' || updates.status === 'failed') {
-    if (!updates.completed_at) {
-      fields.push(`completed_at = NOW()`);
-    }
-  }
 
   values.push(runId);
   const query = `UPDATE agent_runs SET ${fields.join(', ')} WHERE id = ?;`;
@@ -147,7 +144,7 @@ export const getAllAgentsOverview = async () => {
     SELECT 
       COUNT(*) AS total_runs,
       COALESCE(SUM(total_tokens), 0) AS total_tokens_used,
-      SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS active_runs
+      SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS active_runs
     FROM agent_runs;
   `;
   const [rows] = await pool.execute(query);

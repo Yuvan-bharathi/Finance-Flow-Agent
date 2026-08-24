@@ -331,8 +331,8 @@ export const runReconciliationAgent = async (caseId, triggeredBy = null, trigger
   } catch (error) {
     console.error(`[Reconciliation Agent Error] Case #${caseId} failed:`, error.message);
 
-    // Update case status to ai_failed
-    await pool.execute(`UPDATE reconciliation_cases SET status = 'ai_failed' WHERE id = ?;`, [caseId]);
+    // Revert case status to open
+    await pool.execute(`UPDATE reconciliation_cases SET status = 'open' WHERE id = ?;`, [caseId]);
 
     // Update agent_runs record to failed
     await updateAgentRun(runId, {
