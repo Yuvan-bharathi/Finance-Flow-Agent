@@ -80,10 +80,11 @@ export const analyzeCase = async (caseId) => {
  * 
  * @param {number} recommendationId - AI Recommendation ID.
  * @param {string|null} notes - Optional reviewer notes.
+ * @param {number|null} caseId - Optional Case ID fallback.
  * @returns {Promise<Object>} Created allocation result.
  */
-export const approveRecommendation = async (recommendationId, notes = null) => {
-  const response = await api.post('/reconciliations/approve', { recommendationId, notes });
+export const approveRecommendation = async (recommendationId, notes = null, caseId = null) => {
+  const response = await api.post('/reconciliations/approve', { recommendationId, caseId, notes });
   return response.data?.data || null;
 };
 
@@ -95,10 +96,11 @@ export const approveRecommendation = async (recommendationId, notes = null) => {
  * 
  * @param {number} recommendationId - AI Recommendation ID.
  * @param {string} reason - Rejection reason.
+ * @param {number|null} caseId - Optional Case ID fallback.
  * @returns {Promise<Object>} Rejection result.
  */
-export const rejectRecommendation = async (recommendationId, reason) => {
-  const response = await api.post('/reconciliations/reject', { recommendationId, reason });
+export const rejectRecommendation = async (recommendationId, reason, caseId = null) => {
+  const response = await api.post('/reconciliations/reject', { recommendationId, caseId, reason });
   return response.data?.data || null;
 };
 

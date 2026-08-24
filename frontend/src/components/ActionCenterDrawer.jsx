@@ -66,7 +66,7 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
   const currentCase = activeCase || caseItem;
   const normStatus = (currentCase.status || '').toLowerCase();
-  const rec = currentCase.latest_recommendation;
+  const rec = currentCase.latest_recommendation || (currentCase.recommendations && currentCase.recommendations[0]);
   const confidenceScore = rec ? parseFloat(rec.confidence_score) : null;
 
   // Trigger Groq AI Analysis for unanalyzed case
@@ -97,11 +97,10 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
   // 1-Click Approve AI Match
   const handleApprove = async () => {
-    if (!rec) return;
     try {
       setSubmitting(true);
       setErrorMsg('');
-      await approveRecommendation(rec.id, 'Approved by accountant via Action Center UI');
+      await approveRecommendation(rec?.id, 'Approved by accountant via Action Center UI', currentCase?.id);
       setSuccessMsg('Payment successfully allocated to ledger! Installment marked PAID.');
       setTimeout(() => {
         if (onRefresh) onRefresh();
@@ -118,11 +117,11 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
   // Reject AI Match
   const handleReject = async (e) => {
     e.preventDefault();
-    if (!rec || !rejectReason.trim()) return;
+    if (!rejectReason.trim()) return;
     try {
       setSubmitting(true);
       setErrorMsg('');
-      await rejectRecommendation(rec.id, rejectReason);
+      await rejectRecommendation(rec?.id, rejectReason, currentCase?.id);
       setSuccessMsg('Recommendation rejected. Case flagged for manual review.');
       setTimeout(() => {
         if (onRefresh) onRefresh();
