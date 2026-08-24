@@ -20,13 +20,7 @@ export const Login = () => {
           setDemoUsers(res.data.data.users);
         }
       } catch (err) {
-        // Fallback default list if backend is loading
-        setDemoUsers([
-          { id: 1, name: 'System Admin', email: 'admin@financeflow.com', role: 'admin' },
-          { id: 2, name: 'Finance Manager', email: 'manager@financeflow.com', role: 'manager' },
-          { id: 3, name: 'Senior Accountant', email: 'accountant@financeflow.com', role: 'accountant' },
-          { id: 4, name: 'Audit Viewer', email: 'viewer@financeflow.com', role: 'viewer' }
-        ]);
+        setDemoUsers([]);
       }
     };
     fetchDemoUsers();
@@ -232,41 +226,43 @@ export const Login = () => {
           </button>
         </form>
 
-        {/* Quick Demo Switcher */}
-        <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <span style={{ fontSize: '0.725rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Quick Demo Accounts
-            </span>
-            <span style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <Sparkles size={11} /> 1-Click
-            </span>
-          </div>
+        {/* Quick Demo Switcher - Loaded dynamically from Database */}
+        {demoUsers.length > 0 && (
+          <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ fontSize: '0.725rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Quick Demo Accounts
+              </span>
+              <span style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <Sparkles size={11} /> 1-Click
+              </span>
+            </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '6px' }}>
-            {demoUsers.map((u) => (
-              <button
-                key={u.id || u.email}
-                type="button"
-                onClick={() => handleQuickFill(u.email)}
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  padding: '6px 8px',
-                  fontSize: '0.725rem',
-                  fontWeight: '700',
-                  color: '#334155',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  textTransform: 'capitalize'
-                }}
-              >
-                {u.role || u.name}
-              </button>
-            ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '6px' }}>
+              {demoUsers.map((u) => (
+                <button
+                  key={u.id || u.email}
+                  type="button"
+                  onClick={() => handleQuickFill(u.email)}
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '6px 8px',
+                    fontSize: '0.725rem',
+                    fontWeight: '700',
+                    color: '#334155',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    textTransform: 'capitalize'
+                  }}
+                >
+                  {u.role || u.name}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>
