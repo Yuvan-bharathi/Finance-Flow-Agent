@@ -48,8 +48,8 @@ export const setAuthCookie = (res, token) => {
   
   res.cookie('token', token, {
     httpOnly: true, // Prevents XSS attacks by restricting JavaScript access
-    secure: isProduction, // HTTPS only in production
-    sameSite: 'lax', // CSRF protection
+    secure: isProduction, // HTTPS only in production (required for SameSite=None)
+    sameSite: isProduction ? 'none' : 'lax', // Supports cross-origin Vercel -> Render in production
     maxAge: 24 * 60 * 60 * 1000 // 1 day in milliseconds
   });
 };

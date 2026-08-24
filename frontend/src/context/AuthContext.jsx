@@ -30,6 +30,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
     if (response.data && response.data.data) {
+      if (response.data.data.token) {
+        localStorage.setItem('ff_auth_token', response.data.data.token);
+      }
       setUser(response.data.data.user);
       return response.data.data.user;
     }
@@ -41,6 +44,7 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       // ignore
     }
+    localStorage.removeItem('ff_auth_token');
     setUser(null);
   };
 

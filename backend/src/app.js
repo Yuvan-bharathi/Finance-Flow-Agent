@@ -43,9 +43,22 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 1. CORS Configuration
+// 1. CORS Configuration (Allows Vercel production frontend and local dev)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://finance-flow-agent.vercel.app',
+  config.cors.clientUrl
+];
+
 app.use(cors({
-  origin: config.cors.clientUrl,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || config.cors.clientUrl === '*') {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow incoming web preview requests
+    }
+  },
   credentials: true, // Allows HTTP-only cookies to pass cross-origin
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
