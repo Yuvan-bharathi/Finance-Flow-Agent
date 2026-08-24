@@ -63,7 +63,7 @@ export const executeRiskTool = async (name, args) => {
       JOIN companies c ON l.company_id = c.id
       LEFT JOIN repayment_schedules rs ON l.id = rs.loan_id
       WHERE l.company_id = ?
-      GROUP BY l.id;
+      GROUP BY l.id, c.company_name;
     `, [args.companyId]);
 
     const [overdueItems] = await pool.query(`

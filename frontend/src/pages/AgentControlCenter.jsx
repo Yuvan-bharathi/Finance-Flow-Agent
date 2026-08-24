@@ -16,6 +16,7 @@ import {
   Activity,
   CheckCircle2,
   AlertCircle,
+  ShieldAlert,
   Clock,
   RefreshCw,
   Cpu,
@@ -44,6 +45,7 @@ export const AgentControlCenter = () => {
   const [actioningAlertId, setActioningAlertId] = useState(null);
   const [expandedAlertId, setExpandedAlertId] = useState(null);
   const [mailSuccessToast, setMailSuccessToast] = useState(null);
+  const [authErrorToast, setAuthErrorToast] = useState(null);
 
   // Activity filter state
   const [agentFilter, setAgentFilter] = useState('');
@@ -75,6 +77,14 @@ export const AgentControlCenter = () => {
 
   useEffect(() => {
     fetchControlCenterData();
+
+    const handleAuthErr = (e) => {
+      const { status, message } = e.detail || {};
+      setAuthErrorToast(`⛔ Authorization Permission Error (${status}): ${message}`);
+      setTimeout(() => setAuthErrorToast(null), 8000);
+    };
+    window.addEventListener('ff-auth-permission-error', handleAuthErr);
+    return () => window.removeEventListener('ff-auth-permission-error', handleAuthErr);
   }, []);
 
   const handleTriggerAgent = async (agentIdStr) => {
@@ -104,6 +114,14 @@ export const AgentControlCenter = () => {
       await fetchControlCenterData();
     } catch (err) {
       console.error(`Error triggering Agent ${agentIdStr}:`, err);
+      const status = err.response?.status;
+      const message = err.response?.data?.message || err.message || 'Execution failed';
+      if (status === 403 || status === 401) {
+        setAuthErrorToast(`⛔ Authorization Error (${status}): Access denied. Your current user role is not authorized to trigger ${agentIdStr}.`);
+      } else {
+        setAuthErrorToast(`❌ Agent Execution Error (${status || 500}): ${message}`);
+      }
+      setTimeout(() => setAuthErrorToast(null), 8000);
     } finally {
       setTriggeringAgentId(null);
     }
@@ -125,6 +143,14 @@ export const AgentControlCenter = () => {
       setTimeout(() => setMailSuccessToast(null), 6000);
     } catch (err) {
       console.error('Failed to approve alert:', err);
+      const status = err.response?.status;
+      const message = err.response?.data?.message || 'Operation failed';
+      if (status === 403 || status === 401) {
+        setAuthErrorToast(`⛔ Authorization Permission Error (${status}): Access denied. Your current role is not authorized to approve escalation notices.`);
+      } else {
+        setAuthErrorToast(`❌ Action Error (${status || 500}): ${message}`);
+      }
+      setTimeout(() => setAuthErrorToast(null), 8000);
     } finally {
       setActioningAlertId(null);
     }
@@ -224,6 +250,35 @@ export const AgentControlCenter = () => {
           </button>
         </div>
       </div>
+
+      {/* UI Notification Toast for Authorization & Execution Errors */}
+      {authErrorToast && (
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '12px',
+          padding: '14px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: '#dc2626',
+          fontSize: '0.85rem',
+          fontWeight: '700',
+          boxShadow: '0 4px 12px rgba(220, 38, 38, 0.1)',
+          animation: 'fadeIn 0.25s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ShieldAlert size={20} color="#dc2626" />
+            <span>{authErrorToast}</span>
+          </div>
+          <button
+            onClick={() => setAuthErrorToast(null)}
+            style={{ background: 'transparent', border: 'none', color: '#991b1b', fontWeight: '800', cursor: 'pointer', fontSize: '1.1rem' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* 6 Agent Cards Grid (3 Columns x 2 Rows) */}
       <div style={{

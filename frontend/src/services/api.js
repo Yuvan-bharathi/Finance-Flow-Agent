@@ -23,13 +23,21 @@ api.interceptors.request.use((reqConfig) => {
   return reqConfig;
 });
 
-// Interceptor for handling 401 Unauthorized globally
+// Interceptor for handling 401 & 403 Authorization errors globally
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear token if expired or unauthorized
-      localStorage.removeItem('ff_auth_token');
+    if (error.response) {
+      const status = error.response.status;
+      if (status === 401) {
+        localStorage.removeItem('ff_auth_token');
+      }
+      if (status === 403 || status === 401) {
+        const message = error.response.data?.message || 'Access denied. Your current role is not authorized for this operation.';
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status, message }
+        }));
+      }
     }
     return Promise.reject(error);
   }
