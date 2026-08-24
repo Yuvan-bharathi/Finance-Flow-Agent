@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { FileSpreadsheet, Plus, Calendar, DollarSign, ChevronRight, Eye, Bot } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
+import { useAuth } from '../context/AuthContext';
 
 export const LoanList = ({ onAskAI }) => {
+  const { user } = useAuth();
+  const userRole = (user?.role_name || user?.role || '').toLowerCase();
+  const canCreateLoan = ['owner', 'super_admin', 'admin', 'manager'].includes(userRole);
+
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState([]);
@@ -49,6 +54,12 @@ export const LoanList = ({ onAskAI }) => {
   const handleCreateLoan = async (e) => {
     e.preventDefault();
     if (!companyId || !loanNumber || !principalAmount || !startDate) return;
+    if (!canCreateLoan) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Creating new loan facilities requires Admin or Risk Manager permissions.' }
+      }));
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -64,7 +75,14 @@ export const LoanList = ({ onAskAI }) => {
       fetchLoans();
       setSelectedLoan(res.data.data);
     } catch (err) {
-      alert(err.response?.data?.message || 'Loan creation failed');
+      const status = err.response?.status;
+      if (status === 403 || status === 401) {
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status: status || 403, message: err.response?.data?.message || 'Access denied: You do not have permission to create loans.' }
+        }));
+      } else {
+        alert(err.response?.data?.message || 'Loan creation failed');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -73,7 +91,7 @@ export const LoanList = ({ onAskAI }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <FileSpreadsheet color="#059669" size={26} />
@@ -84,9 +102,35 @@ export const LoanList = ({ onAskAI }) => {
           </p>
         </div>
 
-        <button onClick={() => setShowAddModal(true)} className="btn-primary">
+        <button
+          onClick={() => {
+            if (!canCreateLoan) {
+              window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+                detail: { status: 403, message: 'Creating new loan facilities requires Admin or Risk Manager permissions.' }
+              }));
+              return;
+            }
+            setShowAddModal(true);
+          }}
+          disabled={!canCreateLoan}
+          title={!canCreateLoan ? 'Creating loan facilities requires Admin or Manager permissions' : 'Create Loan Facility'}
+          style={{
+            background: !canCreateLoan ? '#cbd5e1' : 'linear-gradient(135deg, #059669, #10b981)',
+            color: !canCreateLoan ? '#94a3b8' : '#ffffff',
+            border: 'none',
+            padding: '10px 18px',
+            borderRadius: '10px',
+            fontSize: '0.85rem',
+            fontWeight: '700',
+            cursor: !canCreateLoan ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            opacity: !canCreateLoan ? 0.75 : 1
+          }}
+        >
           <Plus size={18} />
-          <span>Create Loan Facility</span>
+          <span>{canCreateLoan ? 'Create Loan Facility' : 'Create Loan (Locked)'}</span>
         </button>
       </div>
 

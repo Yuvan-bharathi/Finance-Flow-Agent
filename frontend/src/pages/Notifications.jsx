@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
  */
 export const Notifications = ({ onAskAI, onSelectCase }) => {
   const { user } = useAuth();
+  const isViewer = (user?.role_name || user?.role || '').toLowerCase() === 'viewer';
 
   const [alerts, setAlerts]             = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -53,6 +54,12 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
 
   // ─── Trigger Manual Escalation Scan (Agent 6) ──────────────────────────────
   const handleRunScan = async () => {
+    if (isViewer) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Your account role (Viewer) is read-only and cannot trigger escalation scans.' }
+      }));
+      return;
+    }
     try {
       setScanning(true);
       setScanResult(null);
@@ -64,10 +71,17 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
       });
       await fetchAlerts();
     } catch (err) {
-      setScanResult({
-        success: false,
-        message: `Escalation scan failed: ${err.message}`
-      });
+      const status = err.response?.status;
+      if (status === 403 || status === 401) {
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status: status || 403, message: err.response?.data?.message || 'Access denied for escalation scan.' }
+        }));
+      } else {
+        setScanResult({
+          success: false,
+          message: `Escalation scan failed: ${err.message}`
+        });
+      }
     } finally {
       setScanning(false);
     }
@@ -75,12 +89,24 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
 
   // ─── Human Action: Approve Alert ───────────────────────────────────────────
   const handleApprove = async (alertId) => {
+    if (isViewer) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Your account role (Viewer) is read-only and cannot approve escalation notices.' }
+      }));
+      return;
+    }
     try {
       setActionLoading(prev => ({ ...prev, [alertId]: 'approving' }));
       await approveAlert(alertId);
       setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, notification_status: 'approved' } : a));
     } catch (err) {
       console.error('Failed to approve alert:', err);
+      const status = err.response?.status;
+      if (status === 403 || status === 401) {
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status: status || 403, message: err.response?.data?.message || 'Access denied: You do not have permission to approve escalation notices.' }
+        }));
+      }
     } finally {
       setActionLoading(prev => ({ ...prev, [alertId]: null }));
     }
@@ -88,12 +114,24 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
 
   // ─── Human Action: Dismiss Alert ───────────────────────────────────────────
   const handleDismiss = async (alertId) => {
+    if (isViewer) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Your account role (Viewer) is read-only and cannot dismiss escalation alerts.' }
+      }));
+      return;
+    }
     try {
       setActionLoading(prev => ({ ...prev, [alertId]: 'dismissing' }));
       await dismissAlert(alertId);
       setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, notification_status: 'dismissed' } : a));
     } catch (err) {
       console.error('Failed to dismiss alert:', err);
+      const status = err.response?.status;
+      if (status === 403 || status === 401) {
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status: status || 403, message: err.response?.data?.message || 'Access denied: You do not have permission to dismiss alerts.' }
+        }));
+      }
     } finally {
       setActionLoading(prev => ({ ...prev, [alertId]: null }));
     }
@@ -556,19 +594,21 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <button
                         onClick={() => handleDismiss(alert.id)}
-                        disabled={actionLoading[alert.id]}
+                        disabled={actionLoading[alert.id] || isViewer}
+                        title={isViewer ? 'Viewer role is read-only — dismiss restricted' : 'Dismiss Alert'}
                         style={{
-                          background:   '#ffffff',
-                          border:       '1px solid #e2e8f0',
+                          background:   isViewer ? '#f1f5f9' : '#ffffff',
+                          border:       '1px solid #cbd5e1',
                           borderRadius: '8px',
                           padding:      '6px 12px',
                           fontSize:     '0.75rem',
                           fontWeight:   '700',
-                          color:        '#64748b',
-                          cursor:       'pointer',
+                          color:        isViewer ? '#cbd5e1' : '#64748b',
+                          cursor:       (actionLoading[alert.id] || isViewer) ? 'not-allowed' : 'pointer',
                           display:      'flex',
                           alignItems:   'center',
-                          gap:          '4px'
+                          gap:          '4px',
+                          opacity:      isViewer ? 0.75 : 1
                         }}
                       >
                         <X size={13} />
@@ -577,24 +617,26 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
 
                       <button
                         onClick={() => handleApprove(alert.id)}
-                        disabled={actionLoading[alert.id]}
+                        disabled={actionLoading[alert.id] || isViewer}
+                        title={isViewer ? 'Viewer role is read-only — approval restricted' : 'Approve & Dispatch Notice'}
                         style={{
-                          background:   '#16a34a',
+                          background:   isViewer ? '#e2e8f0' : '#16a34a',
                           border:       'none',
                           borderRadius: '8px',
                           padding:      '6px 14px',
                           fontSize:     '0.75rem',
                           fontWeight:   '700',
-                          color:        '#ffffff',
-                          cursor:       'pointer',
+                          color:        isViewer ? '#94a3b8' : '#ffffff',
+                          cursor:       (actionLoading[alert.id] || isViewer) ? 'not-allowed' : 'pointer',
                           display:      'flex',
                           alignItems:   'center',
                           gap:          '4px',
-                          boxShadow:    '0 1px 4px rgba(22, 163, 74, 0.3)'
+                          boxShadow:    isViewer ? 'none' : '0 1px 4px rgba(22, 163, 74, 0.3)',
+                          opacity:      isViewer ? 0.75 : 1
                         }}
                       >
                         <Check size={13} />
-                        Approve & Dispatch
+                        {actionLoading[alert.id] === 'approving' ? 'Approving...' : (isViewer ? 'Approve & Dispatch (Locked)' : 'Approve & Dispatch')}
                       </button>
                     </div>
                   )}

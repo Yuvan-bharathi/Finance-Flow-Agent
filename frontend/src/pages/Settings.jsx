@@ -75,8 +75,16 @@ export const Settings = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const isViewer = (user?.role_name || user?.role || '').toLowerCase() === 'viewer';
+
   // Persists current settings to MySQL via PUT /api/settings
   const handleSaveSettings = async () => {
+    if (isViewer) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Your account role (Viewer) is read-only and cannot save configuration settings.' }
+      }));
+      return;
+    }
     try {
       await saveSettings([
         { key: 'confidence_threshold', value: String(preCheckThreshold), scope: 'system' },
@@ -87,6 +95,12 @@ export const Settings = () => {
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch (err) {
       console.error('[Settings] Save failed:', err.message);
+      const status = err.response?.status;
+      if (status === 403 || status === 401) {
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status: status || 403, message: err.response?.data?.message || 'Access denied: Unable to save settings.' }
+        }));
+      }
     }
   };
 

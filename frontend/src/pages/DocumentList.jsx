@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { FileText, Sparkles, Eye, Download, Upload, CheckCircle2, Building2, Calendar, ShieldCheck, X, RefreshCw } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Documents Master Tab Sub-Page & Agent 4: Document Intelligence Inspector
@@ -9,6 +10,9 @@ import { FileText, Sparkles, Eye, Download, Upload, CheckCircle2, Building2, Cal
  * - Dashboard.jsx
  */
 export const DocumentList = () => {
+  const { user } = useAuth();
+  const isViewer = (user?.role_name || user?.role || '').toLowerCase() === 'viewer';
+
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -34,12 +38,24 @@ export const DocumentList = () => {
   const handleInspectDocument = async (doc) => {
     setSelectedDoc(doc);
     setExtractedData(null);
+    if (isViewer) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Your account role (Viewer) is read-only and cannot trigger Document Intelligence extraction.' }
+      }));
+      return;
+    }
     try {
       setExtracting(true);
       const res = await api.post(`/documents/extract/${doc.id}`);
       setExtractedData(res.data.data);
     } catch (err) {
-      console.error('Error extracting terms:', err);
+      console.error('Extraction error:', err);
+      const status = err.response?.status;
+      if (status === 403 || status === 401) {
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status: status || 403, message: err.response?.data?.message || 'Access denied: Document extraction restricted.' }
+        }));
+      }
     } finally {
       setExtracting(false);
     }

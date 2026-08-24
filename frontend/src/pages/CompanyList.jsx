@@ -25,8 +25,13 @@ import {
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { RiskAssessmentDrawer } from '../components/RiskAssessmentDrawer';
 import { CollectionReminderModal } from '../components/CollectionReminderModal';
+import { useAuth } from '../context/AuthContext';
 
 export const CompanyList = ({ onAskAI }) => {
+  const { user } = useAuth();
+  const userRole = (user?.role_name || user?.role || '').toLowerCase();
+  const isViewer = userRole === 'viewer';
+  const canCreateCompany = ['owner', 'super_admin', 'admin', 'manager'].includes(userRole);
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -81,6 +86,12 @@ export const CompanyList = ({ onAskAI }) => {
   const handleCreateCompany = async (e) => {
     e.preventDefault();
     if (!companyName.trim()) return;
+    if (!canCreateCompany) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Adding new corporate borrower profiles requires Admin or Risk Manager permissions.' }
+      }));
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -103,7 +114,14 @@ export const CompanyList = ({ onAskAI }) => {
       setContactPhone('');
       fetchCompanies();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to create company');
+      const status = err.response?.status;
+      if (status === 403 || status === 401) {
+        window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+          detail: { status: status || 403, message: err.response?.data?.message || 'Access denied: You do not have permission to create companies.' }
+        }));
+      } else {
+        alert(err.response?.data?.message || 'Failed to create company');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -129,9 +147,35 @@ export const CompanyList = ({ onAskAI }) => {
           </p>
         </div>
 
-        <button onClick={() => setShowAddModal(true)} className="btn-primary">
+        <button
+          onClick={() => {
+            if (!canCreateCompany) {
+              window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+                detail: { status: 403, message: 'Adding new corporate borrower profiles requires Admin or Risk Manager permissions.' }
+              }));
+              return;
+            }
+            setShowAddModal(true);
+          }}
+          disabled={!canCreateCompany}
+          title={!canCreateCompany ? 'Adding borrower profiles requires Admin or Manager permissions' : 'Add Borrower Company'}
+          style={{
+            background: !canCreateCompany ? '#cbd5e1' : 'linear-gradient(135deg, #4f46e5, #6366f1)',
+            color: !canCreateCompany ? '#94a3b8' : '#ffffff',
+            border: 'none',
+            padding: '10px 18px',
+            borderRadius: '10px',
+            fontSize: '0.85rem',
+            fontWeight: '700',
+            cursor: !canCreateCompany ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            opacity: !canCreateCompany ? 0.75 : 1
+          }}
+        >
           <Plus size={18} />
-          <span>Add Borrower Company</span>
+          <span>{canCreateCompany ? 'Add Borrower Company' : 'Add Borrower (Locked)'}</span>
         </button>
       </div>
 
