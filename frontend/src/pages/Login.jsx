@@ -5,7 +5,7 @@ import { ShieldCheck, Lock, Mail, ArrowRight, Sparkles } from 'lucide-react';
 export const Login = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState('accountant@financeflow.com');
-  const [password, setPassword] = useState('Password123!');
+  const [password, setPassword] = useState('Admin@1234');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +24,7 @@ export const Login = () => {
 
   const handleQuickFill = (demoEmail) => {
     setEmail(demoEmail);
-    setPassword('Password123!');
+    setPassword('Admin@1234');
   };
 
   return (
