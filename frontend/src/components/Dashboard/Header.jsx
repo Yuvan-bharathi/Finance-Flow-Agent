@@ -1,16 +1,34 @@
-import React from 'react';
-import { Search, Bell, Calendar, ChevronDown, LogOut } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, Calendar, ChevronDown, LogOut, Mail, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const Header = ({ searchQuery = '', setSearchQuery }) => {
   const { user, logout } = useAuth();
   const userName = (user && user.name && user.name.trim()) ? user.name : 'Senior Accountant';
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handle = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, []);
+
+  // Build avatar initials
+  const initials = userName
+    ? userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'SA';
 
   return (
     <header style={{
       background: '#ffffff',
       borderBottom: '1px solid #e2e8f0',
-      padding: '20px 32px',
+      padding: '18px 32px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -19,7 +37,7 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
       zIndex: 30,
       boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)'
     }}>
-      
+
       {/* Left Greeting */}
       <div>
         <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2 }}>
@@ -30,10 +48,10 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
         </p>
       </div>
 
-      {/* Right Controls Area */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        
-        {/* Search Input Box */}
+      {/* Right Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+
+        {/* Search Input */}
         <div style={{ position: 'relative' }}>
           <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
@@ -42,7 +60,7 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
             value={searchQuery}
             onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
             style={{
-              width: '320px',
+              width: '300px',
               background: '#f8fafc',
               border: '1px solid #e2e8f0',
               color: '#0f172a',
@@ -55,56 +73,122 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
           />
         </div>
 
-        {/* Date Range Selector */}
+        {/* Date Range */}
         <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          padding: '8px 14px',
-          borderRadius: '12px',
-          fontSize: '0.825rem',
-          fontWeight: '600',
-          color: '#334155',
-          cursor: 'pointer'
+          display: 'flex', alignItems: 'center', gap: '8px',
+          background: '#f8fafc', border: '1px solid #e2e8f0',
+          padding: '8px 14px', borderRadius: '12px',
+          fontSize: '0.825rem', fontWeight: '600', color: '#334155', cursor: 'pointer'
         }}>
           <Calendar size={16} color="#6366f1" />
           <span>May 20 – May 27, 2025</span>
           <ChevronDown size={14} color="#94a3b8" />
         </div>
 
-        {/* User Profile Avatar */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          padding: '4px 8px'
-        }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            background: '#4f46e5',
-            color: '#ffffff',
-            fontWeight: '800',
-            fontSize: '0.9rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {userName ? userName.split(' ').map(n => n[0]).join('') : 'SA'}
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0f172a' }}>{userName}</div>
-            <div style={{ fontSize: '0.675rem', fontWeight: '700', color: '#6366f1', textTransform: 'uppercase' }}>
-              {user ? (user.role_name || user.role) : 'ACCOUNTANT'}
+        {/* Profile Avatar — click to open dropdown */}
+        <div ref={dropdownRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setDropdownOpen(prev => !prev)}
+            title={`${userName} — click for profile`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: dropdownOpen ? '#ede9fe' : '#f5f3ff',
+              border: `1.5px solid ${dropdownOpen ? '#8b5cf6' : '#ddd6fe'}`,
+              borderRadius: '50px',
+              padding: '5px 10px 5px 5px',
+              cursor: 'pointer',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            {/* Avatar circle */}
+            <div style={{
+              width: '34px', height: '34px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              color: '#ffffff', fontWeight: '800', fontSize: '0.85rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              {initials}
             </div>
-          </div>
+            <ChevronDown size={13} color="#7c3aed" style={{
+              transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease'
+            }} />
+          </button>
+
+          {/* Profile Dropdown */}
+          {dropdownOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
+              minWidth: '240px',
+              overflow: 'hidden',
+              zIndex: 1000,
+            }}>
+              {/* Identity Block */}
+              <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '44px', height: '44px', borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                    color: '#ffffff', fontWeight: '800', fontSize: '1.1rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    {initials}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {userName}
+                    </div>
+                    <div style={{ fontSize: '0.71rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Mail size={11} color="#94a3b8" />
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {user?.email || '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {/* Role badge */}
+                <div style={{ marginTop: '10px' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '5px',
+                    background: '#ede9fe', border: '1px solid #ddd6fe',
+                    borderRadius: '6px', padding: '3px 10px',
+                    fontSize: '0.7rem', fontWeight: '700', color: '#6d28d9',
+                  }}>
+                    <Shield size={11} />
+                    {user ? (user.role_name || user.role || 'Accountant') : 'Accountant'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Sign Out */}
+              <div style={{ padding: '8px' }}>
+                <button
+                  onClick={() => { logout(); setDropdownOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    width: '100%', padding: '10px 12px', borderRadius: '10px',
+                    background: 'transparent', border: 'none',
+                    color: '#ef4444', fontSize: '0.85rem', fontWeight: '600',
+                    cursor: 'pointer', transition: 'background 0.15s ease',
+                    textAlign: 'left',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <LogOut size={15} /> Sign Out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
-
     </header>
   );
 };
