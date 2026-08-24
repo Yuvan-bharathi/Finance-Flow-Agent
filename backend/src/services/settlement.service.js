@@ -9,23 +9,11 @@ import { insertAuditLog, findAllAuditLogs } from '../models/auditLog.model.js';
 /**
  * Service: Settlement & Human Approval Service
  * Purpose: Business logic for Human-in-the-Loop financial ledger settlement (Approve, Reject, Manual Override).
- * 
- * Called by:
- * - settlement.controller.js
  */
 
 /**
  * Approves an AI Recommendation and executes official financial ledger allocation.
  * Uses a MySQL ACID transaction.
- * 
- * Called by:
- * - settlement.controller.js -> approveRecommendation
- * 
- * @param {number} recommendationId - AI Recommendation ID.
- * @param {number} approvedByUserId - Authenticated user ID approving the recommendation.
- * @param {string|null} notes - Optional reviewer notes.
- * @param {string|null} ipAddress - Client IP address.
- * @returns {Promise<Object>} Created allocation & updated records.
  */
 export const approveRecommendationService = async (recommendationId, approvedByUserId, notes = null, ipAddress = null) => {
   // 1. Retrieve recommendation details
@@ -36,10 +24,15 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     throw error;
   }
 
-  if (rec.status !== 'pending') {
-    const error = new Error(`AI Recommendation #${recommendationId} has already been processed (status: '${rec.status}').`);
-    error.statusCode = 400;
-    throw error;
+  // Idempotency: If already approved, return success safely
+  if (rec.status === 'approved') {
+    return {
+      already_approved: true,
+      recommendation_id: recommendationId,
+      payment_id: rec.payment_id,
+      repayment_schedule_id: rec.recommended_schedule_id,
+      status: 'APPROVED'
+    };
   }
 
   let targetScheduleId = rec.recommended_schedule_id;
@@ -158,15 +151,7 @@ export const approveRecommendationService = async (recommendationId, approvedByU
 };
 
 /**
- * Rejects an AI Recommendation.
- * 
- * Called by:
- * - settlement.controller.js -> rejectRecommendation
- * 
- * @param {number} recommendationId - AI Recommendation ID.
- * @param {number} rejectedByUserId - Authenticated user ID.
- * @param {string} reason - Rejection reason.
- * @param {string|null} ipAddress - Client IP address.
+ * Rejects an AI Recommendation (with full ledger rollback support if previously approved).
  */
 export const rejectRecommendationService = async (recommendationId, rejectedByUserId, reason = 'Rejected by accountant', ipAddress = null) => {
   const rec = await findRecommendationById(recommendationId);
@@ -179,6 +164,32 @@ export const rejectRecommendationService = async (recommendationId, rejectedByUs
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // If recommendation was previously approved, reverse any previous allocations for this payment
+    const [allocations] = await connection.execute(
+      `SELECT * FROM payment_allocations WHERE payment_id = ?;`,
+      [rec.payment_id]
+    );
+
+    for (const alloc of allocations) {
+      const [schedRows] = await connection.execute(
+        `SELECT * FROM repayment_schedules WHERE id = ?;`,
+        [alloc.repayment_schedule_id]
+      );
+      if (schedRows.length > 0) {
+        const sched = schedRows[0];
+        const revPaid = Math.max(0, parseFloat(sched.paid_amount || 0) - parseFloat(alloc.allocated_amount));
+        const revStatus = revPaid >= parseFloat(sched.scheduled_amount) ? 'paid' : (revPaid > 0 ? 'partially_paid' : 'pending');
+        await connection.execute(
+          `UPDATE repayment_schedules SET paid_amount = ?, status = ? WHERE id = ?;`,
+          [revPaid.toFixed(2), revStatus, alloc.repayment_schedule_id]
+        );
+      }
+      await connection.execute(`DELETE FROM payment_allocations WHERE id = ?;`, [alloc.id]);
+    }
+
+    // Reset payment status to unmatched
+    await connection.execute(`UPDATE payments SET status = 'unmatched' WHERE id = ?;`, [rec.payment_id]);
 
     // A. Update AI Recommendation status
     await connection.execute(
@@ -224,15 +235,7 @@ export const rejectRecommendationService = async (recommendationId, rejectedByUs
 
 /**
  * Overrides an AI recommendation and manually maps a payment to a repayment schedule.
- * Requires mandatory override_reason string.
- * 
- * Called by:
- * - settlement.controller.js -> overrideRecommendation
- * 
- * @param {number} caseId - Case ID.
- * @param {Object} overrideData - `{ repayment_schedule_id, allocated_amount, override_reason }`.
- * @param {Object} user - Authenticated user object.
- * @param {string|null} ipAddress - Client IP address.
+ * Automatically reverses any previous allocations if this case was previously allocated.
  */
 export const overrideRecommendationService = async (caseId, overrideData, user, ipAddress = null) => {
   const { repayment_schedule_id, allocated_amount, override_reason } = overrideData;
@@ -264,7 +267,32 @@ export const overrideRecommendationService = async (caseId, overrideData, user, 
   try {
     await connection.beginTransaction();
 
-    // A. Insert payment allocation with allocation_type='ai_overridden'
+    // Reverse any previous allocations for this payment
+    const [previousAllocations] = await connection.execute(
+      `SELECT * FROM payment_allocations WHERE payment_id = ?;`,
+      [caseDetails.payment_id]
+    );
+
+    for (const alloc of previousAllocations) {
+      if (alloc.repayment_schedule_id !== repayment_schedule_id) {
+        const [schedRows] = await connection.execute(
+          `SELECT * FROM repayment_schedules WHERE id = ?;`,
+          [alloc.repayment_schedule_id]
+        );
+        if (schedRows.length > 0) {
+          const s = schedRows[0];
+          const revPaid = Math.max(0, parseFloat(s.paid_amount || 0) - parseFloat(alloc.allocated_amount));
+          const revStatus = revPaid >= parseFloat(s.scheduled_amount) ? 'paid' : (revPaid > 0 ? 'partially_paid' : 'pending');
+          await connection.execute(
+            `UPDATE repayment_schedules SET paid_amount = ?, status = ? WHERE id = ?;`,
+            [revPaid.toFixed(2), revStatus, alloc.repayment_schedule_id]
+          );
+        }
+      }
+      await connection.execute(`DELETE FROM payment_allocations WHERE id = ?;`, [alloc.id]);
+    }
+
+    // A. Insert manual override allocation record
     const allocId = await insertPaymentAllocation({
       payment_id: caseDetails.payment_id,
       repayment_schedule_id,
@@ -273,9 +301,12 @@ export const overrideRecommendationService = async (caseId, overrideData, user, 
       allocation_type: 'ai_overridden'
     }, connection);
 
-    // B. Update schedule
-    const newPaid = parseFloat(schedule.paid_amount) + allocAmount;
-    const newScheduleStatus = newPaid >= parseFloat(schedule.scheduled_amount) ? 'paid' : 'partially_paid';
+    // B. Update target Repayment Schedule
+    const currentPaid = parseFloat(schedule.paid_amount || 0);
+    const newPaid = currentPaid + allocAmount;
+    const scheduledTotal = parseFloat(schedule.scheduled_amount);
+    const newScheduleStatus = newPaid >= scheduledTotal ? 'paid' : 'partially_paid';
+
     await connection.execute(
       `UPDATE repayment_schedules SET paid_amount = ?, status = ? WHERE id = ?;`,
       [newPaid.toFixed(2), newScheduleStatus, repayment_schedule_id]

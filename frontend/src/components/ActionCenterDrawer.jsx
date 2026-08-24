@@ -469,54 +469,79 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
           )}
 
           {/* 3. Action Settlement Controls */}
-          {rec && caseItem.status !== 'resolved' && caseItem.status !== 'completed' && (
+          {rec && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
               <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>
                 Human-in-the-Loop Actions
               </div>
 
+              {/* Status Notice Banners */}
+              {(normStatus === 'approved' || normStatus === 'resolved') && (
+                <div style={{ background: '#ecfdf5', border: '1.5px solid #a7f3d0', borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckCircle size={20} color="#059669" />
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#065f46' }}>Settlement Finalized & Allocated</div>
+                    <div style={{ fontSize: '0.75rem', color: '#047857' }}>Payment is posted in the ledger. You can re-allocate or reverse below.</div>
+                  </div>
+                </div>
+              )}
+
+              {normStatus === 'rejected' && (
+                <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <XCircle size={20} color="#dc2626" />
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#991b1b' }}>Case Status: REJECTED</div>
+                    <div style={{ fontSize: '0.75rem', color: '#b91c1c' }}>{currentCase.resolution_reason || 'Rejected by accountant.'} You can re-approve or apply an override.</div>
+                  </div>
+                </div>
+              )}
+
               {!showRejectForm && !showOverrideForm && (
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    onClick={handleApprove}
-                    disabled={submitting}
-                    style={{
-                      flex: 2,
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '12px 18px',
-                      borderRadius: '12px',
-                      fontSize: '0.9rem',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
-                    }}
-                  >
-                    <CheckCircle size={18} />
-                    <span>Approve Match</span>
-                  </button>
+                  {(normStatus !== 'approved' && normStatus !== 'resolved') && (
+                    <button
+                      onClick={handleApprove}
+                      disabled={submitting}
+                      style={{
+                        flex: 2,
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '12px 18px',
+                        borderRadius: '12px',
+                        fontSize: '0.9rem',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                      }}
+                    >
+                      <CheckCircle size={18} />
+                      <span>Approve Match</span>
+                    </button>
+                  )}
 
-                  <button
-                    onClick={() => setShowRejectForm(true)}
-                    style={{
-                      flex: 1,
-                      background: '#ffffff',
-                      border: '1px solid #fca5a5',
-                      color: '#dc2626',
-                      padding: '12px 14px',
-                      borderRadius: '12px',
-                      fontSize: '0.85rem',
-                      fontWeight: '700',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Reject
-                  </button>
+                  {normStatus !== 'rejected' && (
+                    <button
+                      onClick={() => setShowRejectForm(true)}
+                      style={{
+                        flex: 1,
+                        background: '#ffffff',
+                        border: '1px solid #fca5a5',
+                        color: '#dc2626',
+                        padding: '12px 14px',
+                        borderRadius: '12px',
+                        fontSize: '0.85rem',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {(normStatus === 'approved' || normStatus === 'resolved') ? 'Void / Reject' : 'Reject'}
+                    </button>
+                  )}
 
                   <button
                     onClick={() => setShowOverrideForm(true)}
@@ -540,7 +565,7 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
               {/* Reject Form Input */}
               {showRejectForm && (
                 <form onSubmit={handleReject} style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#fee2e2', padding: '14px', borderRadius: '12px', border: '1px solid #fca5a5' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#dc2626' }}>Reject Recommendation</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#dc2626' }}>Reject Recommendation & Reverse Allocation</div>
                   <input
                     type="text"
                     required
