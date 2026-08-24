@@ -1,13 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 import { ShieldCheck, Lock, Mail, ArrowRight, Sparkles } from 'lucide-react';
 
 export const Login = () => {
   const { login } = useAuth();
-  const [email, setEmail] = useState('accountant@financeflow.com');
-  const [password, setPassword] = useState('Admin@1234');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoUsers, setDemoUsers] = useState([]);
+
+  // Fetch available accounts directly from MySQL database
+  useEffect(() => {
+    const fetchDemoUsers = async () => {
+      try {
+        const res = await api.get('/auth/demo-users');
+        if (res.data?.data?.users) {
+          setDemoUsers(res.data.data.users);
+        }
+      } catch (err) {
+        // Fallback default list if backend is loading
+        setDemoUsers([
+          { id: 1, name: 'System Admin', email: 'admin@financeflow.com', role: 'admin' },
+          { id: 2, name: 'Finance Manager', email: 'manager@financeflow.com', role: 'manager' },
+          { id: 3, name: 'Senior Accountant', email: 'accountant@financeflow.com', role: 'accountant' },
+          { id: 4, name: 'Audit Viewer', email: 'viewer@financeflow.com', role: 'viewer' }
+        ]);
+      }
+    };
+    fetchDemoUsers();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,7 +47,7 @@ export const Login = () => {
 
   const handleQuickFill = (demoEmail) => {
     setEmail(demoEmail);
-    setPassword('Admin@1234');
+    setPassword('Password123!');
   };
 
   return (
@@ -220,58 +243,28 @@ export const Login = () => {
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('accountant@financeflow.com')}
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '6px 8px',
-                fontSize: '0.725rem',
-                fontWeight: '700',
-                color: '#334155',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}
-            >
-              Accountant
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('manager@financeflow.com')}
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '6px 8px',
-                fontSize: '0.725rem',
-                fontWeight: '700',
-                color: '#334155',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}
-            >
-              Manager
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin@financeflow.com')}
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '6px 8px',
-                fontSize: '0.725rem',
-                fontWeight: '700',
-                color: '#334155',
-                cursor: 'pointer',
-                textAlign: 'center'
-              }}
-            >
-              Admin
-            </button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '6px' }}>
+            {demoUsers.map((u) => (
+              <button
+                key={u.id || u.email}
+                type="button"
+                onClick={() => handleQuickFill(u.email)}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  padding: '6px 8px',
+                  fontSize: '0.725rem',
+                  fontWeight: '700',
+                  color: '#334155',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  textTransform: 'capitalize'
+                }}
+              >
+                {u.role || u.name}
+              </button>
+            ))}
           </div>
         </div>
 
