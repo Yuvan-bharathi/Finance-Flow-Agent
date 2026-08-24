@@ -84,17 +84,41 @@ export const AgentControlCenter = () => {
     fetchControlCenterData();
 
     const handleAuthErr = (e) => {
-      const { status, message } = e.detail || {};
-      setAuthErrorToast(`⛔ Authorization Permission Error (${status}): ${message}`);
+      const { message } = e.detail || {};
+      setAuthErrorToast({
+        title: 'Access Restricted',
+        badge: 'Permission Required',
+        message: message || 'Your current account role does not have permission for this operation.',
+        hint: 'Contact your platform administrator or sign in with an authorized role to request access.'
+      });
       setTimeout(() => setAuthErrorToast(null), 8000);
     };
     window.addEventListener('ff-auth-permission-error', handleAuthErr);
     return () => window.removeEventListener('ff-auth-permission-error', handleAuthErr);
   }, []);
 
+  const getAgentDisplayName = (id) => {
+    const map = {
+      'agent_1_reconciliation': 'Payment Reconciliation Agent',
+      'agent_2_risk': 'Repayment Risk Assessment Agent',
+      'agent_3_collection': 'Automated Collection Follow-Up Agent',
+      'agent_4_document': 'Document Intelligence Agent',
+      'agent_5_portfolio': 'Portfolio Analytics Agent',
+      'agent_6_notification': 'Notification & Escalation Agent'
+    };
+    return map[id] || 'AI Operational Agent';
+  };
+
   const handleTriggerAgent = async (agentIdStr) => {
+    const agentName = getAgentDisplayName(agentIdStr);
+
     if (isViewer) {
-      setAuthErrorToast(`⛔ Authorization Permission Error (403): Access denied. Viewer role ('viewer') is read-only and cannot trigger operational AI agents.`);
+      setAuthErrorToast({
+        title: 'Access Restricted',
+        badge: 'Read-Only Account',
+        message: `Your account role (Viewer) is read-only and cannot trigger the ${agentName}.`,
+        hint: 'Sign in with an authorized account (Admin, Manager, or Accountant) to run operational agents.'
+      });
       setTimeout(() => setAuthErrorToast(null), 8000);
       return;
     }
@@ -112,12 +136,10 @@ export const AgentControlCenter = () => {
         await api.post('/documents/extract/1');
       } else if (agentIdStr === 'agent_5_portfolio') {
         // Agent 5: Trigger portfolio analytics
-        // No entity ID needed — portfolio analysis covers the full portfolio
         const res = await triggerPortfolioAnalysis();
         if (res.data?.data) setPortfolioSnapshot(res.data.data);
       } else if (agentIdStr === 'agent_6_notification') {
         // Agent 6: Trigger escalation scan
-        // No entity ID needed — escalation scan covers all companies
         const res = await triggerEscalationScan();
         if (res.data?.data?.alerts) setEscalationAlerts(res.data.data.alerts.filter(a => a.notification_status === 'pending'));
       }
@@ -126,11 +148,22 @@ export const AgentControlCenter = () => {
     } catch (err) {
       console.error(`Error triggering Agent ${agentIdStr}:`, err);
       const status = err.response?.status;
-      const message = err.response?.data?.message || err.message || 'Execution failed';
+      const cleanMessage = err.response?.data?.message || 'Operation could not be completed.';
+      
       if (status === 403 || status === 401) {
-        setAuthErrorToast(`⛔ Authorization Error (${status}): Access denied. Your current user role is not authorized to trigger ${agentIdStr}.`);
+        setAuthErrorToast({
+          title: 'Permission Denied',
+          badge: userRole ? userRole.toUpperCase() : 'RESTRICTED',
+          message: `Your current user role is not authorized to trigger the ${agentName}.`,
+          hint: 'Please contact a system administrator to request elevated permissions.'
+        });
       } else {
-        setAuthErrorToast(`❌ Agent Execution Error (${status || 500}): ${message}`);
+        setAuthErrorToast({
+          title: 'Execution Interrupted',
+          badge: 'System Notice',
+          message: `Unable to run ${agentName}: ${cleanMessage}`,
+          hint: 'Please check database connectivity or try again in a few moments.'
+        });
       }
       setTimeout(() => setAuthErrorToast(null), 8000);
     } finally {
@@ -262,29 +295,72 @@ export const AgentControlCenter = () => {
         </div>
       </div>
 
-      {/* UI Notification Toast for Authorization & Execution Errors */}
+      {/* Premium UI Notification Banner for Access Permission & Execution Errors */}
       {authErrorToast && (
         <div style={{
-          background: '#fef2f2',
-          border: '1px solid #fecaca',
-          borderRadius: '12px',
-          padding: '14px 18px',
+          background: 'linear-gradient(135deg, #fef2f2 0%, #fff5f5 100%)',
+          border: '1.5px solid #fecaca',
+          borderRadius: '16px',
+          padding: '16px 20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          color: '#dc2626',
-          fontSize: '0.85rem',
-          fontWeight: '700',
-          boxShadow: '0 4px 12px rgba(220, 38, 38, 0.1)',
+          gap: '16px',
+          boxShadow: '0 8px 24px -4px rgba(220, 38, 38, 0.12)',
           animation: 'fadeIn 0.25s ease'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <ShieldAlert size={20} color="#dc2626" />
-            <span>{authErrorToast}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              background: '#fee2e2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <ShieldAlert size={22} color="#dc2626" />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#991b1b' }}>
+                  {typeof authErrorToast === 'object' ? authErrorToast.title : 'Access Restricted'}
+                </span>
+                {typeof authErrorToast === 'object' && authErrorToast.badge && (
+                  <span style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', fontSize: '0.65rem', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', textTransform: 'uppercase' }}>
+                    {authErrorToast.badge}
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: '0.85rem', color: '#b91c1c', fontWeight: '600', marginTop: '2px', lineHeight: 1.3 }}>
+                {typeof authErrorToast === 'object' ? authErrorToast.message : authErrorToast}
+              </p>
+              {typeof authErrorToast === 'object' && authErrorToast.hint && (
+                <p style={{ fontSize: '0.75rem', color: '#dc2626', opacity: 0.9, marginTop: '3px', fontWeight: '500' }}>
+                  💡 {authErrorToast.hint}
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={() => setAuthErrorToast(null)}
-            style={{ background: 'transparent', border: 'none', color: '#991b1b', fontWeight: '800', cursor: 'pointer', fontSize: '1.1rem' }}
+            title="Dismiss notification"
+            style={{
+              background: '#fee2e2',
+              border: 'none',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              color: '#991b1b',
+              fontWeight: '800',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'background 0.15s ease'
+            }}
           >
             ✕
           </button>
