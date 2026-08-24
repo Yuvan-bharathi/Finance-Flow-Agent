@@ -137,6 +137,7 @@ export const Settings = () => {
     highRiskDetected: true
   });
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [emailAlerts, setEmailAlerts] = useState(true);
   const [soundFilters, setSoundFilters] = useState({
     criticalRisk: true,
     aiFailure: true,
