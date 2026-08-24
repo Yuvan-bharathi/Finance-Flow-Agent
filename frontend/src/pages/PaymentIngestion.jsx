@@ -6,6 +6,8 @@ import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
 import { getCases, analyzeCase } from '../services/reconciliationService';
 import { analyzeBulk, analyzeAllPending } from '../services/agentService';
 
+import { useAuth } from '../context/AuthContext';
+
 /**
  * Section 17 Payment Ingestion & Deposit Inspection Page
  * Features Case # Column, Exact Date+Time Timestamps, Checkbox Selection, Bulk Execution, and Inline Single-Case AI Execution.
@@ -14,6 +16,8 @@ import { analyzeBulk, analyzeAllPending } from '../services/agentService';
  * - Dashboard.jsx / App.jsx
  */
 export const PaymentIngestion = ({ onAskAI }) => {
+  const { user } = useAuth();
+  const isViewer = (user?.role_name || user?.role || '').toLowerCase() === 'viewer';
   const [payments, setPayments] = useState([]);
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +86,10 @@ export const PaymentIngestion = ({ onAskAI }) => {
   // Single-Case Inline AI Trigger
   const handleSingleAnalyze = async (caseId, e) => {
     if (e) e.stopPropagation();
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot trigger AI analysis.');
+      return;
+    }
     try {
       setProcessingCaseId(caseId);
       setErrorMsg('');
@@ -99,6 +107,10 @@ export const PaymentIngestion = ({ onAskAI }) => {
 
   // Bulk Execution Trigger
   const handleExecuteBulk = async () => {
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot trigger bulk AI analysis.');
+      return;
+    }
     try {
       setBulkProcessing(true);
       setShowConfirmModal(false);
@@ -111,7 +123,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
         setSelectedCaseIds([]);
       } else {
         const result = await analyzeAllPending();
-        setSuccessMsg(`⚡ Bulk AI Execution complete! Processed ${result.casesProcessed || newCases.length} pending NEW cases.`);
+        setSuccessMsg(`⚡ Bulk AI Execution complete! Processed all ${result.casesProcessed || newCases.length} pending new cases.`);
         setSelectedCaseIds([]);
       }
 
@@ -127,6 +139,10 @@ export const PaymentIngestion = ({ onAskAI }) => {
   // Form Submission
   const handleIngest = async (e) => {
     e.preventDefault();
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot ingest new payment deposits.');
+      return;
+    }
     setErrorMsg('');
     setSuccessMsg('');
 
@@ -163,6 +179,10 @@ export const PaymentIngestion = ({ onAskAI }) => {
 
   // Mock Bank Simulator Trigger
   const handleSimulateBankDeposit = async () => {
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot simulate bank statement feeds.');
+      return;
+    }
     try {
       setSubmitting(true);
       setErrorMsg('');

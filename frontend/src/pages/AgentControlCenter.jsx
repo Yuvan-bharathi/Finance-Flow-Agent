@@ -173,6 +173,17 @@ export const AgentControlCenter = () => {
 
   // Handle human approval actions for Agent 6 alerts
   const handleApproveAlert = async (alertOrId) => {
+    if (isViewer) {
+      setAuthErrorToast({
+        title: 'Access Restricted',
+        badge: 'Read-Only Account',
+        message: 'Your account role (Viewer) is read-only and cannot approve escalation notices.',
+        hint: 'Sign in with an authorized account (Admin, Manager, or Senior Accountant) to approve notices.'
+      });
+      setTimeout(() => setAuthErrorToast(null), 8000);
+      return;
+    }
+
     const alertId = typeof alertOrId === 'object' ? alertOrId.id : alertOrId;
     const alertObj = typeof alertOrId === 'object' ? alertOrId : escalationAlerts.find(a => a.id === alertId);
     try {
@@ -190,9 +201,19 @@ export const AgentControlCenter = () => {
       const status = err.response?.status;
       const message = err.response?.data?.message || 'Operation failed';
       if (status === 403 || status === 401) {
-        setAuthErrorToast(`⛔ Authorization Permission Error (${status}): Access denied. Your current role is not authorized to approve escalation notices.`);
+        setAuthErrorToast({
+          title: 'Permission Denied',
+          badge: userRole ? userRole.toUpperCase() : 'RESTRICTED',
+          message: 'Your account role is not authorized to approve escalation notices.',
+          hint: 'Please contact a system administrator to request elevated permissions.'
+        });
       } else {
-        setAuthErrorToast(`❌ Action Error (${status || 500}): ${message}`);
+        setAuthErrorToast({
+          title: 'Action Error',
+          badge: 'System Notice',
+          message: message,
+          hint: 'Please check your connection and try again.'
+        });
       }
       setTimeout(() => setAuthErrorToast(null), 8000);
     } finally {
@@ -201,6 +222,17 @@ export const AgentControlCenter = () => {
   };
 
   const handleDismissAlert = async (alertId) => {
+    if (isViewer) {
+      setAuthErrorToast({
+        title: 'Access Restricted',
+        badge: 'Read-Only Account',
+        message: 'Your account role (Viewer) is read-only and cannot dismiss escalation alerts.',
+        hint: 'Sign in with an authorized account (Admin, Manager, or Senior Accountant) to perform actions.'
+      });
+      setTimeout(() => setAuthErrorToast(null), 8000);
+      return;
+    }
+
     try {
       setActioningAlertId(alertId);
       await dismissAlert(alertId);
@@ -671,23 +703,25 @@ export const AgentControlCenter = () => {
                           e.stopPropagation();
                           handleApproveAlert(alert);
                         }}
-                        disabled={actioningAlertId === alert.id}
+                        disabled={actioningAlertId === alert.id || isViewer}
+                        title={isViewer ? 'Viewer role is read-only — approval restricted' : 'Approve & Trigger Escalation Email'}
                         style={{
-                          background: 'linear-gradient(135deg, #4f46e5, #4338ca)',
-                          color: '#fff',
+                          background: isViewer ? '#e2e8f0' : 'linear-gradient(135deg, #4f46e5, #4338ca)',
+                          color: isViewer ? '#94a3b8' : '#fff',
                           border: 'none',
                           padding: '7px 14px',
                           borderRadius: '8px',
                           fontSize: '0.75rem',
                           fontWeight: '800',
-                          cursor: 'pointer',
+                          cursor: (actioningAlertId === alert.id || isViewer) ? 'not-allowed' : 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '5px',
-                          boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                          boxShadow: isViewer ? 'none' : '0 2px 6px rgba(79, 70, 229, 0.25)',
+                          opacity: isViewer ? 0.75 : 1
                         }}
                       >
-                        {actioningAlertId === alert.id ? 'Sending...' : '✓ Approve & Trigger'}
+                        {actioningAlertId === alert.id ? 'Sending...' : (isViewer ? '✓ Approve (Locked)' : '✓ Approve & Trigger')}
                       </button>
 
                       <button
@@ -695,8 +729,19 @@ export const AgentControlCenter = () => {
                           e.stopPropagation();
                           handleDismissAlert(alert.id);
                         }}
-                        disabled={actioningAlertId === alert.id}
-                        style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '7px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                        disabled={actioningAlertId === alert.id || isViewer}
+                        title={isViewer ? 'Viewer role is read-only — dismiss restricted' : 'Dismiss Alert'}
+                        style={{
+                          background: isViewer ? '#f1f5f9' : '#f1f5f9',
+                          color: isViewer ? '#cbd5e1' : '#475569',
+                          border: '1px solid #cbd5e1',
+                          padding: '7px 12px',
+                          borderRadius: '8px',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          cursor: (actioningAlertId === alert.id || isViewer) ? 'not-allowed' : 'pointer',
+                          opacity: isViewer ? 0.75 : 1
+                        }}
                       >
                         Dismiss
                       </button>
@@ -804,24 +849,26 @@ export const AgentControlCenter = () => {
 
                           <button
                             onClick={() => handleApproveAlert(alert)}
-                            disabled={actioningAlertId === alert.id}
+                            disabled={actioningAlertId === alert.id || isViewer}
+                            title={isViewer ? 'Viewer role is read-only — approval restricted' : 'Approve & Dispatch Email Now'}
                             style={{
-                              background: 'linear-gradient(135deg, #4f46e5, #4338ca)',
-                              color: '#ffffff',
+                              background: isViewer ? '#e2e8f0' : 'linear-gradient(135deg, #4f46e5, #4338ca)',
+                              color: isViewer ? '#94a3b8' : '#ffffff',
                               border: 'none',
                               padding: '8px 18px',
                               borderRadius: '8px',
                               fontSize: '0.825rem',
                               fontWeight: '800',
-                              cursor: 'pointer',
+                              cursor: (actioningAlertId === alert.id || isViewer) ? 'not-allowed' : 'pointer',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '6px',
-                              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+                              boxShadow: isViewer ? 'none' : '0 4px 12px rgba(79, 70, 229, 0.3)',
+                              opacity: isViewer ? 0.75 : 1
                             }}
                           >
                             <Send size={15} />
-                            <span>{actioningAlertId === alert.id ? 'Triggering Email...' : '⚡ Approve & Dispatch Email Now'}</span>
+                            <span>{actioningAlertId === alert.id ? 'Triggering Email...' : (isViewer ? '⚡ Approve (Locked)' : '⚡ Approve & Dispatch Email Now')}</span>
                           </button>
                         </div>
                       </div>

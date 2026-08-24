@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { analyzeCase, approveRecommendation, rejectRecommendation, overrideRecommendation } from '../services/reconciliationService';
 import { StatusBadge } from './Dashboard/StatusBadge';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Slide-over Action Center AI Review Drawer
@@ -32,6 +33,9 @@ import { StatusBadge } from './Dashboard/StatusBadge';
  * @param {Function} onAskAI - Callback to launch AI Assistant with case context.
  */
 export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) => {
+  const { user } = useAuth();
+  const isViewer = (user?.role_name || user?.role || '').toLowerCase() === 'viewer';
+  
   const [activeCase, setActiveCase] = useState(caseItem);
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -71,6 +75,10 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
   // Trigger Groq AI Analysis for unanalyzed case
   const handleRunAnalysis = async () => {
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot trigger AI analysis.');
+      return;
+    }
     try {
       setAnalyzing(true);
       setErrorMsg('');
@@ -97,6 +105,10 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
   // 1-Click Approve AI Match
   const handleApprove = async () => {
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot approve allocations.');
+      return;
+    }
     try {
       setSubmitting(true);
       setErrorMsg('');
@@ -117,6 +129,10 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
   // Reject AI Match
   const handleReject = async (e) => {
     e.preventDefault();
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot reject recommendations.');
+      return;
+    }
     if (!rejectReason.trim()) return;
     try {
       setSubmitting(true);
@@ -138,6 +154,10 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
   // Accountant Manual Override
   const handleOverride = async (e) => {
     e.preventDefault();
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot perform manual overrides.');
+      return;
+    }
     if (!overrideScheduleId || !overrideAmount || !overrideReasonText.trim()) {
       setErrorMsg('Target Schedule ID, Amount, and Override Rationale are required.');
       return;
