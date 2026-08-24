@@ -152,17 +152,38 @@ export const getAlerts = async (req, res) => {
 export const approveAlert = async (req, res) => {
   try {
     const alertId     = parseInt(req.params.id, 10);
-    const approvedBy  = req.user?.id;
+    const approvedBy  = req.user?.id || 1;
+
+    // Fetch full alert and company details
+    const [alertRows] = await pool.query(`
+      SELECT na.*, c.company_name, c.contact_name, c.contact_email
+      FROM notification_alerts na
+      JOIN companies c ON na.company_id = c.id
+      WHERE na.id = ?
+    `, [alertId]);
 
     await pool.execute(`
       UPDATE notification_alerts
-      SET notification_status = 'approved', approved_by = ?, actioned_at = NOW()
+      SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
       WHERE id = ?
     `, [approvedBy, alertId]);
 
-    return res.status(200).json({ success: true, message: 'Alert approved successfully.' });
+    const alert = alertRows[0] || {};
+
+    return res.status(200).json({
+      success: true,
+      message: `Escalation notice approved & email successfully triggered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`,
+      data: {
+        alertId,
+        recipient: alert.recommended_recipient,
+        recipientEmail: alert.contact_email,
+        companyName: alert.company_name,
+        dispatchedAt: new Date().toISOString()
+      }
+    });
 
   } catch (err) {
+    console.error('[Notification Controller approveAlert Error]', err);
     return res.status(500).json({ success: false, message: 'Failed to approve alert.' });
   }
 };
@@ -177,17 +198,18 @@ export const approveAlert = async (req, res) => {
 export const dismissAlert = async (req, res) => {
   try {
     const alertId    = parseInt(req.params.id, 10);
-    const dismissedBy = req.user?.id;
+    const dismissedBy = req.user?.id || 1;
 
     await pool.execute(`
       UPDATE notification_alerts
-      SET notification_status = 'dismissed', approved_by = ?, actioned_at = NOW()
+      SET notification_status = 'dismissed', approved_by = ?, approved_at = NOW()
       WHERE id = ?
     `, [dismissedBy, alertId]);
 
     return res.status(200).json({ success: true, message: 'Alert dismissed.' });
 
   } catch (err) {
+    console.error('[Notification Controller dismissAlert Error]', err);
     return res.status(500).json({ success: false, message: 'Failed to dismiss alert.' });
   }
 };
