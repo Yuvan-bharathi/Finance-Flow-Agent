@@ -62,5 +62,13 @@ export const config = {
     maxBulkCases: parseInt(process.env.MAX_BULK_CASES || '50', 10),
     maxSelectedCases: parseInt(process.env.MAX_SELECTED_CASES || '20', 10),
     maxConcurrentRuns: parseInt(process.env.MAX_CONCURRENT_AGENT_RUNS || '5', 10)
+  },
+  smtp: {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || 'FinanceFlow AI <no-reply@financeflow.com>'
   }
 };

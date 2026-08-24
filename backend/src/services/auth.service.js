@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import pool from '../config/db.js';
+import { config } from '../config/env.js';
 import { findUserByEmail, findUserById, updateLastLogin } from '../models/user.model.js';
 import { generateToken } from '../utils/tokenHelper.js';
+import { sendUserInvitationEmail } from '../utils/emailService.js';
 
 /**
  * Service: Authentication Service
@@ -118,7 +120,16 @@ export const createUserInvitation = async (creatorUser, { name, email, roleName 
     [roleId, name, email, initialDummyHash, resetToken, tokenExpires]
   );
 
-  const invitationUrl = `http://localhost:5173/set-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+  const baseUrl = config.cors.clientUrl || 'http://localhost:5173';
+  const invitationUrl = `${baseUrl}/set-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+
+  // Dispatch Invitation Email via Nodemailer / Email Service
+  const emailResult = await sendUserInvitationEmail({
+    email,
+    name,
+    roleName,
+    invitationUrl
+  });
 
   return {
     id: insertRes.insertId,
@@ -127,7 +138,8 @@ export const createUserInvitation = async (creatorUser, { name, email, roleName 
     role_name: roleName,
     invitation_url: invitationUrl,
     reset_token: resetToken,
-    expires_at: tokenExpires
+    expires_at: tokenExpires,
+    email_delivery: emailResult
   };
 };
 
