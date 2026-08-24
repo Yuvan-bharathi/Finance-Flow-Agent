@@ -42,14 +42,25 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     throw error;
   }
 
-  if (!rec.recommended_schedule_id) {
-    const error = new Error(`Cannot approve AI Recommendation #${recommendationId} because no target repayment schedule was recommended by the AI.`);
+  let targetScheduleId = rec.recommended_schedule_id;
+  if (!targetScheduleId && rec.recommended_loan_id) {
+    const [openSchedules] = await pool.query(
+      `SELECT id FROM repayment_schedules WHERE loan_id = ? ORDER BY CASE WHEN status = 'overdue' THEN 1 WHEN status = 'pending' THEN 2 ELSE 3 END, installment_number ASC LIMIT 1;`,
+      [rec.recommended_loan_id]
+    );
+    if (openSchedules.length > 0) {
+      targetScheduleId = openSchedules[0].id;
+    }
+  }
+
+  if (!targetScheduleId) {
+    const error = new Error(`Cannot approve AI Recommendation #${recommendationId} because no matching repayment schedule exists for this loan.`);
     error.statusCode = 400;
     throw error;
   }
 
   const payment = await findPaymentById(rec.payment_id);
-  const schedule = await findScheduleById(rec.recommended_schedule_id);
+  const schedule = await findScheduleById(targetScheduleId);
 
   if (!payment || !schedule) {
     const error = new Error('Associated payment or repayment schedule record not found.');
@@ -67,21 +78,21 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     // A. Insert official ledger allocation
     const allocId = await insertPaymentAllocation({
       payment_id: rec.payment_id,
-      repayment_schedule_id: rec.recommended_schedule_id,
+      repayment_schedule_id: targetScheduleId,
       allocated_amount: allocatedAmount.toFixed(2),
       approved_by: approvedByUserId,
       allocation_type: 'ai_approved'
     }, connection);
 
     // B. Update Repayment Schedule balance & status
-    const currentPaid = parseFloat(schedule.paid_amount);
+    const currentPaid = parseFloat(schedule.paid_amount || 0);
     const newPaid = currentPaid + allocatedAmount;
     const scheduledTotal = parseFloat(schedule.scheduled_amount);
     const newScheduleStatus = newPaid >= scheduledTotal ? 'paid' : 'partially_paid';
 
     await connection.execute(
       `UPDATE repayment_schedules SET paid_amount = ?, status = ? WHERE id = ?;`,
-      [newPaid.toFixed(2), newScheduleStatus, rec.recommended_schedule_id]
+      [newPaid.toFixed(2), newScheduleStatus, targetScheduleId]
     );
 
     // C. Update Payment status
@@ -94,29 +105,30 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     // D. Update AI Recommendation status
     await connection.execute(
       `UPDATE ai_recommendations 
-       SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, review_comment = ?
+       SET status = 'approved', recommended_schedule_id = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, review_comment = ?
        WHERE id = ?;`,
-      [approvedByUserId, notes || 'Approved by human accountant', recommendationId]
+      [targetScheduleId, approvedByUserId, notes || 'Approved by human accountant', recommendationId]
     );
 
-    // E. Update Reconciliation Case status to resolved
+    // E. Update Reconciliation Case status
     await connection.execute(
       `UPDATE reconciliation_cases 
-       SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP 
+       SET status = 'approved', resolved_at = CURRENT_TIMESTAMP
        WHERE id = ?;`,
       [rec.reconciliation_case_id]
     );
 
-    // F. Create immutable compliance Audit Log
+    // F. Write to audit logs
     await insertAuditLog({
       user_id: approvedByUserId,
-      action: 'APPROVE_PAYMENT_ALLOCATION',
+      action: 'APPROVE_AI_RECOMMENDATION',
       entity_type: 'payment_allocations',
       entity_id: allocId,
       old_values: {
-        payment_status: payment.status,
-        schedule_paid_amount: schedule.paid_amount,
-        schedule_status: schedule.status
+        recommendation_status: rec.status,
+        schedule_paid_amount: currentPaid,
+        schedule_status: schedule.status,
+        payment_status: payment.status
       },
       new_values: {
         allocation_id: allocId,
@@ -134,7 +146,7 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     return {
       allocation_id: allocId,
       payment_id: rec.payment_id,
-      repayment_schedule_id: rec.recommended_schedule_id,
+      repayment_schedule_id: targetScheduleId,
       allocated_amount: allocatedAmount,
       status: 'APPROVED'
     };
@@ -176,10 +188,10 @@ export const rejectRecommendationService = async (recommendationId, rejectedByUs
       [rejectedByUserId, reason, recommendationId]
     );
 
-    // B. Update Reconciliation Case status to 'under_review' for manual investigation
+    // B. Update Reconciliation Case status to 'rejected'
     await connection.execute(
       `UPDATE reconciliation_cases 
-       SET status = 'under_review', resolution_reason = ?
+       SET status = 'rejected', resolution_reason = ?
        WHERE id = ?;`,
       [reason, rec.reconciliation_case_id]
     );
