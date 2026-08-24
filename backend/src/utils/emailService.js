@@ -22,8 +22,8 @@ const createTransporter = () => {
       port: config.smtp.port,
       secure: config.smtp.secure,
       auth: {
-        user: config.smtp.user,
-        pass: config.smtp.pass,
+        user: config.smtp.user.trim(),
+        pass: config.smtp.pass.replace(/\s+/g, ''),
       },
     });
   }
