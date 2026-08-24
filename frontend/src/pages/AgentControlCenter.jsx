@@ -9,6 +9,7 @@ import {
   Zap,
   Shield,
   Mail,
+  Send,
   FileText,
   PieChart,
   Bell,
