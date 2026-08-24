@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { Cpu, ShieldCheck, Lock, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const SetPassword = () => {
   const [email, setEmail] = useState('');
@@ -23,7 +23,7 @@ export const SetPassword = () => {
     setSuccessMsg('');
 
     if (password !== confirmPassword) {
-      setErrorMsg('Passwords do not match.');
+      setErrorMsg('Passwords do not match. Please re-enter.');
       return;
     }
 
@@ -43,9 +43,9 @@ export const SetPassword = () => {
       setSuccessMsg(res.data.message || 'Password set successfully! Redirecting to sign in...');
       setTimeout(() => {
         window.location.href = '/login';
-      }, 2500);
+      }, 2000);
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Failed to set password. Link may be expired.');
+      setErrorMsg(err.response?.data?.message || 'Failed to set password. Link may be expired or invalid.');
     } finally {
       setLoading(false);
     }
@@ -57,79 +57,204 @@ export const SetPassword = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(circle at top left, #1e1b4b 0%, #0b0f17 60%)',
-      padding: '20px'
+      background: 'linear-gradient(135deg, #f0f4ff 0%, #f8fafc 50%, #eef2ff 100%)',
+      padding: '24px',
+      fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+      position: 'relative',
+      overflow: 'hidden'
     }}>
-      <div className="glass-card animate-fade-in" style={{ width: '460px', padding: '36px' }}>
-        
+
+      {/* Decorative ambient blurred background shapes */}
+      <div style={{
+        position: 'absolute',
+        top: '-10%',
+        left: '-5%',
+        width: '400px',
+        height: '400px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
+        filter: 'blur(40px)',
+        pointerEvents: 'none'
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '-10%',
+        right: '-5%',
+        width: '450px',
+        height: '450px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%)',
+        filter: 'blur(50px)',
+        pointerEvents: 'none'
+      }} />
+
+      {/* Main Set Password Card */}
+      <div style={{
+        width: '460px',
+        maxWidth: '100%',
+        background: '#ffffff',
+        border: '1px solid #e2e8f0',
+        borderRadius: '24px',
+        padding: '40px 36px',
+        boxShadow: '0 20px 45px -15px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.02)',
+        position: 'relative',
+        zIndex: 1
+      }}>
+
+        {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 6px 24px rgba(16, 185, 129, 0.4)',
-            marginBottom: '16px'
+            marginBottom: '14px',
+            position: 'relative'
           }}>
-            <ShieldCheck size={32} color="#ffffff" />
+            <img
+              src="/FinanceFlow AI Logo-favicon.png"
+              alt="FinanceFlow AI Logo"
+              style={{
+                width: '76px',
+                height: '76px',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 8px 16px rgba(79, 70, 229, 0.25))'
+              }}
+            />
           </div>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>
-            Set Your Password
+
+          <h1 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+            Set Account Password
           </h1>
-          <p style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: '6px' }}>
-            Create a secure password to activate your FinanceFlow account for <strong style={{ color: '#ffffff' }}>{email}</strong>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500', marginTop: '6px', lineHeight: 1.4 }}>
+            Establish secure credentials to activate your account for <br />
+            <strong style={{ color: '#4f46e5', fontWeight: '700' }}>{email || 'your account'}</strong>
           </p>
         </div>
 
+        {/* Feedback Alerts */}
         {errorMsg && (
-          <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '20px', textAlign: 'center' }}>
-            {errorMsg}
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            color: '#dc2626',
+            padding: '12px 14px',
+            borderRadius: '12px',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <AlertCircle size={18} color="#dc2626" style={{ flexShrink: 0 }} />
+            <span>{errorMsg}</span>
           </div>
         )}
 
         {successMsg && (
-          <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#34d399', padding: '12px 14px', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '20px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            <CheckCircle2 size={18} />
+          <div style={{
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            color: '#059669',
+            padding: '12px 14px',
+            borderRadius: '12px',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <CheckCircle2 size={18} color="#059669" style={{ flexShrink: 0 }} />
             <span>{successMsg}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#9ca3af' }}>New Password</label>
-            <div style={{ position: 'relative', marginTop: '4px' }}>
-              <Lock size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+              New Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={18} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter new password"
-                style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff', padding: '10px 12px 10px 38px', borderRadius: '10px', fontSize: '0.9rem' }}
+                placeholder="Enter new secure password"
+                style={{
+                  width: '100%',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#0f172a',
+                  padding: '12px 14px 12px 42px',
+                  borderRadius: '12px',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  transition: 'all 0.2s ease',
+                  cursor: 'text'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
+                onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
               />
             </div>
           </div>
 
           <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#9ca3af' }}>Confirm New Password</label>
-            <div style={{ position: 'relative', marginTop: '4px' }}>
-              <Lock size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+              Confirm New Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={18} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="password"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password"
-                style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff', padding: '10px 12px 10px 38px', borderRadius: '10px', fontSize: '0.9rem' }}
+                placeholder="Re-enter password to confirm"
+                style={{
+                  width: '100%',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#0f172a',
+                  padding: '12px 14px 12px 42px',
+                  borderRadius: '12px',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  transition: 'all 0.2s ease',
+                  cursor: 'text'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
+                onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
               />
             </div>
           </div>
 
-          <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: '8px', justifyContent: 'center' }}>
-            <ShieldCheck size={18} />
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+              color: '#ffffff',
+              border: 'none',
+              padding: '14px 20px',
+              borderRadius: '12px',
+              fontSize: '0.95rem',
+              fontWeight: '700',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+              marginTop: '6px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <ShieldCheck size={20} />
             <span>{loading ? 'Activating Account...' : 'Set Password & Activate'}</span>
           </button>
         </form>
