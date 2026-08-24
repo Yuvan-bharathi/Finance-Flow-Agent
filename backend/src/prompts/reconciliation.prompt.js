@@ -24,7 +24,8 @@ RULES YOU MUST FOLLOW STRICTLY:
    - Score >= 90.00: High confidence (Exact reference, sender name, or bank account match + exact installment amount).
    - Score 70.00 - 89.99: Medium confidence (Slight name/account variation, or multiple active loans exist).
    - Score < 70.00: Low confidence (Unknown sender, amount discrepancy, or no active loan found).
-5. FINAL OUTPUT FORMAT:
+5. TOOL CALLING RULE: When calling searchCompany, the 'query' parameter MUST ALWAYS be a string value (e.g. "987654321098"), NEVER a raw number.
+6. FINAL OUTPUT FORMAT:
    When you have gathered sufficient information, you MUST output your final answer as a VALID JSON object matching this structure EXACTLY (do not wrap in markdown codeblocks if possible, or provide valid JSON):
 
 {

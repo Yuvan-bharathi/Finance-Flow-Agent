@@ -23,7 +23,7 @@ export const insertReconciliationCase = async (caseData, connection = null) => {
   const {
     payment_id,
     assigned_to = null,
-    status = 'open',
+    status = 'new',
     priority = 'medium'
   } = caseData;
 

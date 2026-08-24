@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { Building2, Plus, Phone, Mail, FileText, CheckCircle, Eye, X, CreditCard, ShieldCheck, ShieldAlert, Send } from 'lucide-react';
+import { Building2, Plus, Phone, Mail, FileText, CheckCircle, Eye, X, CreditCard, ShieldCheck, ShieldAlert, Send, Bot } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { RiskAssessmentDrawer } from '../components/RiskAssessmentDrawer';
 import { CollectionReminderModal } from '../components/CollectionReminderModal';
 
-export const CompanyList = () => {
+export const CompanyList = ({ onAskAI }) => {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -180,6 +180,32 @@ export const CompanyList = () => {
                       <span>Collection (Agent 3)</span>
                     </button>
 
+                    {/* Ask AI / Investigate Company Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onAskAI) onAskAI('company', c.id);
+                      }}
+                      title="Ask AI to investigate this company"
+                      style={{
+                        background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '6px 10px',
+                        fontSize: '0.75rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+                      }}
+                    >
+                      <Bot size={14} />
+                      <span>Ask AI</span>
+                    </button>
+
                   </div>
                 </td>
               </tr>
@@ -242,21 +268,33 @@ export const CompanyList = () => {
               </div>
 
               {/* Multi-Agent Action Buttons inside Drawer */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                 <button
                   onClick={() => { setSelectedCompany(null); setRiskCompany(selectedCompany); }}
-                  style={{ background: '#4f46e5', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '0.825rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  style={{ background: '#4f46e5', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                 >
-                  <ShieldAlert size={16} />
-                  <span>Risk Health (Agent 2)</span>
+                  <ShieldAlert size={14} />
+                  <span>Risk Health</span>
                 </button>
 
                 <button
                   onClick={() => { setSelectedCompany(null); setCollectionCompany(selectedCompany); }}
-                  style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '0.825rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                 >
-                  <Send size={16} />
-                  <span>Send Notice (Agent 3)</span>
+                  <Send size={14} />
+                  <span>Send Notice</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const cid = selectedCompany.id;
+                    setSelectedCompany(null);
+                    if (onAskAI) onAskAI('company', cid);
+                  }}
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                >
+                  <Bot size={14} />
+                  <span>Ask AI</span>
                 </button>
               </div>
 
@@ -285,8 +323,15 @@ export const CompanyList = () => {
 
       {/* Add Company Modal */}
       {showAddModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }} className="animate-fade-in">
+        <div
+          onClick={() => setShowAddModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            className="animate-fade-in"
+          >
             <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', marginBottom: '16px' }}>Add Borrowing Company</h3>
 
             <form onSubmit={handleCreateCompany} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

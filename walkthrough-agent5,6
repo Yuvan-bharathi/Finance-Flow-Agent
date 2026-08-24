@@ -1,0 +1,119 @@
+# ✅ Development Walkthrough — Agent 5, Agent 6 & Settings
+
+## What Was Built
+
+### Phase 1 — Database (3 new tables)
+
+| Table | Purpose |
+|-------|---------|
+| `portfolio_snapshots` | Stores Agent 5 output: health score, metrics, Groq interpretation |
+| `notification_alerts` | Stores Agent 6 output: severity, recipient, reasoning, approval status |
+| `user_settings` | Stores per-user preferences + admin system settings (upsert pattern) |
+
+All tables reference `agent_runs.id` for full audit chain.
+
+---
+
+### Phase 2 — Agent 5: Portfolio Analytics Agent (Hybrid)
+
+**Architecture approved by Mentor:**
+- SQL computes numbers (collection efficiency, delinquency, concentration risk)
+- Groq interprets what those numbers mean for the business
+
+**New files:**
+- [`portfolioTools.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/tools/portfolioTools.js) — 4 controlled DB tool functions
+- [`portfolio.prompt.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/prompts/portfolio.prompt.js) — Groq system prompt
+- [`portfolioAgent.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/agents/portfolioAgent.js) — Main agent (run lock + step logs + Groq + WebSocket)
+- [`portfolioAgent.md`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/agents/portfolioAgent.md) — Full data-flow documentation
+- [`portfolio.controller.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/controllers/portfolio.controller.js) — HTTP handlers
+- [`portfolio.routes.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/routes/portfolio.routes.js) — Express routes
+- [`portfolioService.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/services/portfolioService.js) — Frontend API client
+
+**Execution logs (8 steps):** RUN_STARTED → FETCH_PORTFOLIO_SUMMARY → FETCH_DELINQUENCY → FETCH_COLLECTION_EFFICIENCY → FETCH_CONCENTRATION_RISK → GROQ_ANALYSIS → SNAPSHOT_SAVED → RUN_COMPLETED
+
+---
+
+### Phase 3 — Agent 6: Notification & Escalation Agent (Hybrid + Human Approval)
+
+**Architecture approved by Mentor:**
+- SQL SLA engine detects overdue loans deterministically
+- Groq classifies severity + recommends recipient + writes reasoning
+- Human must Approve or Dismiss — no autonomous emails
+
+**New files:**
+- [`notificationTools.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/tools/notificationTools.js) — 3 controlled DB tools (getOverdueLoans, computeSLABreach, getCompanyRiskProfile)
+- [`notification.prompt.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/prompts/notification.prompt.js) — Groq system prompt
+- [`notificationAgent.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/agents/notificationAgent.js) — Main agent with SLA engine + Groq + WebSocket
+- [`notificationAgent.md`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/agents/notificationAgent.md) — Full data-flow documentation
+- [`notification.controller.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/controllers/notification.controller.js) — Trigger + Approve + Dismiss handlers
+- [`notification.routes.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/routes/notification.routes.js) — Express routes
+- [`notificationService.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/services/notificationService.js) — Frontend API client
+
+**Human-in-the-loop:** Alerts saved as `status='pending'` → Frontend shows **[Approve]** / **[Dismiss]** buttons
+
+**Execution logs (6 steps):** RUN_STARTED → FETCH_OVERDUE_LOANS → SLA_BREACH_DETECTED → GROQ_ESCALATION_ANALYSIS → ALERTS_CREATED → RUN_COMPLETED
+
+---
+
+### Phase 4 — Settings Backend (MySQL persistence)
+
+**New files:**
+- [`settings.controller.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/controllers/settings.controller.js) — GET + PUT with scope-based permission gating
+- [`settings.routes.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/backend/src/routes/settings.routes.js) — Express routes
+- [`settingsService.js`](file:///c:/Users/hemav/OneDrive/Desktop/Yuvan/Week-7/frontend/src/services/settingsService.js) — Frontend API client
+
+**Scope design:**
+| `setting_scope` | Who can update | Examples |
+|----------------|----------------|---------|
+| `user` | Any authenticated user | theme, timezone, notification_email |
+| `system` | admin / super_admin only | confidence_threshold, agent toggles |
+
+**Locked policy:** `human_approval_required = 'ENFORCED'` is never stored as a toggle. The UI shows a locked badge — not a switch.
+
+---
+
+### Phase 5 — Frontend (AgentControlCenter + Settings)
+
+**`AgentControlCenter.jsx` changes:**
+- Agent 5 trigger → `triggerPortfolioAnalysis()` → Portfolio Health panel appears
+- Agent 6 trigger → `triggerEscalationScan()` → Active Escalation Alerts panel appears
+- Portfolio snapshot shows: Collection Efficiency, Delinquency Rate, Top Borrower Concentration, Overdue Amount + Groq AI interpretation
+- Each alert shows severity badge, company, days overdue, recommended recipient + [Approve] / [Dismiss]
+
+**`Settings.jsx` changes:**
+- Added `fetchSettings()` on mount — loads user preferences from MySQL
+- Added `handleSaveSettings()` — persists to MySQL via `saveSettings()`
+- Removed duplicate old stub function
+
+---
+
+## Build Verification
+
+```
+✓ 1914 modules transformed
+✓ Built in 1.02s (zero errors)
+```
+
+---
+
+## How to Test
+
+### Agent 5 (Portfolio Analytics)
+1. Log in → navigate to **AI Agent Control Center**
+2. Click **Test Run** on the **Portfolio Analytics Agent** card
+3. Wait ~3–5 seconds → Portfolio Health panel appears below agent cards
+4. Check `agent_runs` and `portfolio_snapshots` tables — should have new rows
+
+### Agent 6 (Notification & Escalation)
+1. Stay on **AI Agent Control Center**
+2. Click **Test Run** on the **Notification & Escalation Agent** card
+3. If any loans have overdue installments → **Active Escalation Alerts** panel appears
+4. Click **[Approve]** or **[Dismiss]** on any alert → alert disappears from panel
+5. Check `notification_alerts` table — rows should show `notification_status = 'approved'` or `'dismissed'`
+
+### Settings (MySQL persistence)
+1. Navigate to **Settings** page
+2. Change Confidence Threshold slider
+3. Click **Save Configuration**
+4. Check `user_settings` table — should contain the saved key-value row
+5. Refresh the page → value should be restored from MySQL

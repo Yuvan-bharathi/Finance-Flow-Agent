@@ -1,0 +1,144 @@
+# FinanceFlow AI — Human-Controlled Agent Execution System Walkthrough
+
+## Summary of Accomplishments
+
+We have successfully designed, migrated, and implemented the **Human-Controlled Agent Execution System** for FinanceFlow AI.
+
+---
+
+## 1. Key Architectural Upgrades
+
+### 🛡️ Payment Arrival ≠ AI Execution (Token Safeguard)
+- **Payment Ingestion**: When a new payment arrives, a reconciliation case is created in state **`NEW`**. **No Groq LLM tokens are consumed automatically.**
+- **Human Control**: The accountant views cases on the Action Center dashboard and explicitly triggers **`[⚡ Analyze with AI]`** when investigation is needed.
+
+### ⚡ Deterministic Pre-Check Engine (Zero-Token Matcher)
+- Before calling Groq LLM, every case passes through `runPreCheckEngine`:
+  - **Duplicate Check**: Prevents re-analyzing already processed payments.
+  - **Company Bank Account Match**: Matches sender bank account to corporate borrowers (+40 pts).
+  - **Due Repayment Amount Match**: Exact amount match against active loan schedule (+30 pts).
+  - **Reference / Narration Match**: Matches loan number string in reference (+20 pts).
+- **Threshold**: If score $\ge$ `RECONCILIATION_PRECHECK_THRESHOLD` (85), recommendation is created **without calling Groq LLM** (`0 tokens`).
+- If score $< 85$, Agent 1 activates Groq LLM tool-calling (`qwen/qwen3.6-27b`).
+
+### 🔒 Run Locks & Duplicate Protection
+- Concurrent execution of the same case returns HTTP `409 Conflict` ("Case is currently being processed by an agent").
+- Analyzing an already-analyzed case returns existing recommendation without re-running LLM.
+
+### 📊 AI Agent Control Center (Observability & Governance)
+- **New Sidebar Tab**: Added **`AI Agent Control`** tab with `Bot` icon.
+- **6 Agent Cards**:
+  - **Agent 1** (Payment Reconciliation): Live metrics, `● READY`
+  - **Agent 2** (Repayment Risk): Live metrics, `● READY`
+  - **Agent 3** (Collection Follow-Up): Live metrics, `● READY`
+  - **Agent 4** (Document Intelligence): Live metrics, `● READY`
+  - **Agent 5** (Portfolio Analytics): `COMING SOON` (No fake metrics!)
+  - **Agent 6** (Notification & Escalation): `COMING SOON` (No fake metrics!)
+- **Total Token Counter**: Live tracking of aggregate LLM token consumption across all runs.
+- **Recent Agent Activity Timeline Feed**: Filterable by Agent and Trigger type.
+- **Agent Run History & Log Inspector Drawer**: Slide-over drawer with expandable step-by-step execution logs (`agent_execution_logs`).
+
+### ⚡ Bulk Analysis Controls
+- **Multi-Select Checkboxes**: Select multiple cases in the Recent Cases table.
+- **`[⚡ Analyze Selected (N)]`**: Capped at max 20 cases per batch.
+- **`[⚡ Analyze All NEW (N)]`**: Capped at max 50 cases per batch with a confirmation dialog:
+  > *"You are about to analyze N cases using AI. This may consume approximately X AI requests."*
+- **Max Concurrency**: Bulk jobs run in parallel worker batches of max **5 concurrent runs**.
+
+---
+
+## 2. Verification Results
+
+### Backend Migration & Test Script Execution
+```bash
+node scripts/migrateAgentSystem.js
+# Output:
+# 🚀 Starting Agentic System Database Migration...
+# 1️⃣ Updating reconciliation_cases status enum...
+# 2️⃣ Creating agent_runs table...
+# 3️⃣ Creating agent_execution_logs table...
+# ✅ Migration completed successfully!
+```
+
+```bash
+node scripts/testAgentSystemBackend.js
+# Output:
+# 📌 Found 1 NEW case(s) in DB.
+# ⚡ Triggering Agent 1 on Case #1...
+#    Agent 1 Result: {
+#      run_id: 3,
+#      precheck_result: 'ambiguous',
+#      score: 70,
+#      groq_called: true,
+#      tokens: { input: 9459, output: 761, total: 10220 }
+#    }
+# 📊 Agent Runs Overview: { total_runs: 3, total_tokens_used: '10220', active_runs: '0' }
+# ✅ Agentic Execution System Backend Test PASSED!
+```
+
+### Frontend Build Verification
+```bash
+npm run build
+# Output:
+# ✓ 1878 modules transformed.
+# dist/assets/index-BCuE-8u8.js 390.77 kB
+# ✓ built in 1.61s
+```
+
+---
+
+## 3. Database Schema Overview
+
+```sql
+-- agent_runs: Summary record per execution
+CREATE TABLE agent_runs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  agent_id VARCHAR(50) NOT NULL,
+  agent_name VARCHAR(100) NOT NULL,
+  case_id INT UNSIGNED NULL,
+  triggered_by INT UNSIGNED NULL,
+  trigger_type ENUM('manual','bulk_manual','system','retry','scheduled'),
+  status ENUM('queued','processing','completed','failed'),
+  pre_check_result ENUM('clear_match','ambiguous','no_match'),
+  groq_called BOOLEAN DEFAULT FALSE,
+  duration_ms INT UNSIGNED,
+  model VARCHAR(100),
+  input_tokens BIGINT UNSIGNED,
+  output_tokens BIGINT UNSIGNED,
+  total_tokens BIGINT UNSIGNED,
+  tools_called JSON,
+  confidence_score DECIMAL(5,2),
+  result_summary TEXT,
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- agent_execution_logs: Step-by-step execution timeline
+CREATE TABLE agent_execution_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  agent_run_id BIGINT UNSIGNED NOT NULL,
+  agent_id VARCHAR(50) NOT NULL,
+  step_type VARCHAR(50) NOT NULL,
+  step_name VARCHAR(100) NOT NULL,
+  status ENUM('started','completed','failed','skipped'),
+  input_data JSON,
+  output_data JSON,
+  duration_ms INT UNSIGNED,
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## 4. How to Test in the Application
+
+1. Open **[`http://localhost:5173`](http://localhost:5173)** in your browser.
+2. Log in as `accountant@financeflow.com` / `Password123!`.
+3. Ingest a new deposit under **Payment Ingestion** tab → verify case appears in status **`NEW`** (0 tokens consumed).
+4. Click **`[⚡ Analyze]`** on the row OR open drawer → click **`[⚡ Trigger Groq AI Payment Analysis]`**.
+5. Observe pre-check score and token tracking in drawer.
+6. Navigate to **`AI Agent Control`** tab in sidebar:
+   - Review 6 Agent Cards (Agents 1-4 active, Agents 5-6 marked `COMING SOON`).
+   - Check Total Tokens Consumed counter.
+   - Click **`[View Activity]`** on Agent 1 → inspect run history and expand step-by-step logs.

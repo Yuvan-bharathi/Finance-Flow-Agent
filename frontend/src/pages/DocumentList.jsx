@@ -148,24 +148,33 @@ export const DocumentList = () => {
 
       {/* Selected Document Intelligence Slide-Over Drawer */}
       {selectedDoc && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15,23,42,0.4)',
-          backdropFilter: 'blur(4px)',
-          zIndex: 90,
-          display: 'flex',
-          justifyContent: 'flex-end'
-        }}>
-          <div style={{
-            width: '580px',
-            maxWidth: '100vw',
-            background: '#ffffff',
-            height: '100%',
-            boxShadow: '-10px 0 30px rgba(0,0,0,0.12)',
+        <div 
+          onClick={() => setSelectedDoc(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.4)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 90,
             display: 'flex',
-            flexDirection: 'column'
-          }} className="animate-fade-in">
+            justifyContent: 'flex-end',
+            cursor: 'pointer'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '580px',
+              maxWidth: '100vw',
+              background: '#ffffff',
+              height: '100%',
+              boxShadow: '-10px 0 30px rgba(0,0,0,0.12)',
+              display: 'flex',
+              flexDirection: 'column',
+              cursor: 'default'
+            }} 
+            className="animate-fade-in"
+          >
             
             {/* Drawer Header */}
             <div style={{

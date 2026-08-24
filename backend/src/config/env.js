@@ -47,5 +47,11 @@ export const config = {
   },
   cors: {
     clientUrl: process.env.CLIENT_URL || 'http://localhost:5173'
+  },
+  agents: {
+    precheckThreshold: parseInt(process.env.RECONCILIATION_PRECHECK_THRESHOLD || '85', 10),
+    maxBulkCases: parseInt(process.env.MAX_BULK_CASES || '50', 10),
+    maxSelectedCases: parseInt(process.env.MAX_SELECTED_CASES || '20', 10),
+    maxConcurrentRuns: parseInt(process.env.MAX_CONCURRENT_AGENT_RUNS || '5', 10)
   }
 };

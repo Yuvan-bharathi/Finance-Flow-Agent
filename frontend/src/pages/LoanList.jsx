@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { FileSpreadsheet, Plus, Calendar, DollarSign, ChevronRight, Eye } from 'lucide-react';
+import { FileSpreadsheet, Plus, Calendar, DollarSign, ChevronRight, Eye, Bot } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 
-export const LoanList = () => {
+export const LoanList = ({ onAskAI }) => {
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState([]);
@@ -121,10 +121,35 @@ export const LoanList = () => {
                     <StatusBadge status={l.status} />
                   </td>
                   <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                    <button onClick={() => handleFetchLoanDetails(l.id)} className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
-                      <Eye size={14} />
-                      <span>View</span>
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                      <button onClick={() => handleFetchLoanDetails(l.id)} className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
+                        <Eye size={14} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (onAskAI) onAskAI('loan', l.id);
+                        }}
+                        title="Ask AI to investigate this loan"
+                        style={{
+                          background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+                        }}
+                      >
+                        <Bot size={13} />
+                        <span>Ask AI</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -140,7 +165,31 @@ export const LoanList = () => {
                 <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0f172a' }}>Schedule for {selectedLoan.loan_number}</h3>
                 <p style={{ fontSize: '0.75rem', color: '#64748b' }}>{selectedLoan.company_name}</p>
               </div>
-              <button onClick={() => setSelectedLoan(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: '700' }}>Close</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    if (onAskAI) onAskAI('loan', selectedLoan.id);
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    fontSize: '0.75rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+                  }}
+                >
+                  <Bot size={14} />
+                  <span>Ask AI</span>
+                </button>
+                <button onClick={() => setSelectedLoan(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: '700' }}>Close</button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '420px', overflowY: 'auto' }}>
@@ -173,8 +222,15 @@ export const LoanList = () => {
 
       {/* Add Loan Modal */}
       {showAddModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }} className="animate-fade-in">
+        <div
+          onClick={() => setShowAddModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            className="animate-fade-in"
+          >
             <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', marginBottom: '16px' }}>Create Loan Facility</h3>
 
             <form onSubmit={handleCreateLoan} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

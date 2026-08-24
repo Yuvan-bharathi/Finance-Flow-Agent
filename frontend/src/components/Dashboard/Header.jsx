@@ -1,18 +1,9 @@
 import React from 'react';
-import { Search, Bell, Calendar, ChevronDown } from 'lucide-react';
+import { Search, Bell, Calendar, ChevronDown, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-/**
- * Clean White Enterprise Top Header Component
- * 
- * Called by:
- * - Dashboard.jsx
- * 
- * @param {string} searchQuery - Search query text.
- * @param {Function} setSearchQuery - Setter function for search query.
- */
 export const Header = ({ searchQuery = '', setSearchQuery }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const userName = (user && user.name && user.name.trim()) ? user.name : 'Senior Accountant';
 
   return (
@@ -83,47 +74,12 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
           <ChevronDown size={14} color="#94a3b8" />
         </div>
 
-        {/* Notification Bell */}
-        <div style={{
-          position: 'relative',
-          width: '40px',
-          height: '40px',
-          borderRadius: '12px',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer'
-        }}>
-          <Bell size={18} color="#475569" />
-          <span style={{
-            position: 'absolute',
-            top: '-4px',
-            right: '-4px',
-            width: '18px',
-            height: '18px',
-            borderRadius: '50%',
-            background: '#ef4444',
-            color: '#ffffff',
-            fontSize: '0.65rem',
-            fontWeight: '800',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid #ffffff'
-          }}>
-            8
-          </span>
-        </div>
-
-        {/* User Profile Avatar Dropdown */}
+        {/* User Profile Avatar */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          padding: '4px 8px',
-          cursor: 'pointer'
+          padding: '4px 8px'
         }}>
           <div style={{
             width: '40px',
@@ -142,10 +98,9 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
           <div style={{ textAlign: 'left' }}>
             <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0f172a' }}>{userName}</div>
             <div style={{ fontSize: '0.675rem', fontWeight: '700', color: '#6366f1', textTransform: 'uppercase' }}>
-              {user ? user.role_name : 'ACCOUNTANT'}
+              {user ? (user.role_name || user.role) : 'ACCOUNTANT'}
             </div>
           </div>
-          <ChevronDown size={14} color="#94a3b8" />
         </div>
 
       </div>

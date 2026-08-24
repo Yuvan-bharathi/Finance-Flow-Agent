@@ -26,20 +26,26 @@ export const Navbar = () => {
           width: '42px',
           height: '42px',
           borderRadius: '12px',
-          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+          background: '#ffffff',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 4px 16px rgba(99, 102, 241, 0.4)'
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+          overflow: 'hidden'
         }}>
-          <Cpu size={24} color="#ffffff" />
+          <img
+            src="/FinanceFlow AI Logo-favicon.png"
+            alt="FinanceFlow AI"
+            style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+          />
         </div>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', lineHeight: 1.1 }}>
-            FinanceFlow <span style={{ background: 'linear-gradient(135deg, #6366f1, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>AI</span>
+            FinanceFlow <span style={{ color: '#818cf8' }}>AI</span>
           </h2>
           <p style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: '500' }}>
-            Agentic Repayment & Financial Operations Platform
+            Agentic Financial Operations & Repayment Platform
           </p>
         </div>
       </div>

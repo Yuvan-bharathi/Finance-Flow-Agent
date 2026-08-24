@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Cpu, ShieldCheck, Lock, Mail } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, Sparkles } from 'lucide-react';
 
 export const Login = () => {
   const { login } = useAuth();
@@ -16,7 +16,7 @@ export const Login = () => {
       setLoading(true);
       await login(email, password);
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Invalid credentials');
+      setErrorMsg(err.response?.data?.message || 'Invalid credentials. Please check your email and password.');
     } finally {
       setLoading(false);
     }
@@ -33,92 +33,244 @@ export const Login = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(circle at top left, #1e1b4b 0%, #0b0f17 60%)',
-      padding: '20px'
+      background: 'linear-gradient(135deg, #f0f4ff 0%, #f8fafc 50%, #eef2ff 100%)',
+      padding: '24px',
+      fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+      position: 'relative',
+      overflow: 'hidden'
     }}>
-      <div className="glass-card animate-fade-in" style={{ width: '440px', padding: '36px' }}>
+
+      {/* Decorative ambient blurred background shapes */}
+      <div style={{
+        position: 'absolute',
+        top: '-10%',
+        left: '-5%',
+        width: '400px',
+        height: '400px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
+        filter: 'blur(40px)',
+        pointerEvents: 'none'
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '-10%',
+        right: '-5%',
+        width: '450px',
+        height: '450px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%)',
+        filter: 'blur(50px)',
+        pointerEvents: 'none'
+      }} />
+
+      {/* Main Login Card */}
+      <div style={{
+        width: '460px',
+        maxWidth: '100%',
+        background: '#ffffff',
+        border: '1px solid #e2e8f0',
+        borderRadius: '24px',
+        padding: '40px 36px',
+        boxShadow: '0 20px 45px -15px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.02)',
+        position: 'relative',
+        zIndex: 1
+      }}>
         
-        {/* Brand Header */}
+        {/* Favicon Logo at the Middle Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 6px 24px rgba(99, 102, 241, 0.4)',
-            marginBottom: '16px'
+            marginBottom: '14px',
+            position: 'relative'
           }}>
-            <Cpu size={32} color="#ffffff" />
+            <img
+              src="/FinanceFlow AI Logo-favicon.png"
+              alt="FinanceFlow AI Logo"
+              style={{
+                width: '84px',
+                height: '84px',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 8px 16px rgba(79, 70, 229, 0.25))'
+              }}
+            />
           </div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '800', color: '#ffffff' }}>
-            FinanceFlow <span style={{ background: 'linear-gradient(135deg, #6366f1, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>AI</span>
+
+          <h1 style={{ fontSize: '1.65rem', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+            FinanceFlow <span style={{ color: '#4f46e5' }}>AI</span>
           </h1>
-          <p style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: '6px' }}>
-            Agentic Repayment & Financial Operations Platform
+          <p style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500', marginTop: '6px' }}>
+            Agentic Financial Operations & Repayment Platform
           </p>
         </div>
 
         {errorMsg && (
-          <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '20px', textAlign: 'center' }}>
+          <div style={{
+            background: '#fee2e2',
+            border: '1px solid #fecaca',
+            color: '#dc2626',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            fontSize: '0.825rem',
+            marginBottom: '20px',
+            textAlign: 'center',
+            fontWeight: '600'
+          }}>
             {errorMsg}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#9ca3af' }}>Email Address</label>
-            <div style={{ position: 'relative', marginTop: '4px' }}>
-              <Mail size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <label style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+              Work Email Address
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff', padding: '10px 12px 10px 38px', borderRadius: '10px', fontSize: '0.9rem' }}
+                placeholder="name@financeflow.com"
+                style={{
+                  width: '100%',
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  color: '#0f172a',
+                  padding: '11px 14px 11px 40px',
+                  borderRadius: '12px',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  transition: 'all 0.15s ease'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
               />
             </div>
           </div>
 
           <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#9ca3af' }}>Password</label>
-            <div style={{ position: 'relative', marginTop: '4px' }}>
-              <Lock size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <label style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '6px' }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff', padding: '10px 12px 10px 38px', borderRadius: '10px', fontSize: '0.9rem' }}
+                placeholder="••••••••••••"
+                style={{
+                  width: '100%',
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  color: '#0f172a',
+                  padding: '11px 14px 11px 40px',
+                  borderRadius: '12px',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  transition: 'all 0.15s ease'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
               />
             </div>
           </div>
 
-          <button type="submit" disabled={loading} className="btn-primary" style={{ marginTop: '8px', justifyContent: 'center' }}>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              marginTop: '6px',
+              width: '100%',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '13px',
+              fontSize: '0.9rem',
+              fontWeight: '700',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 16px rgba(79, 70, 229, 0.3)',
+              transition: 'all 0.15s ease'
+            }}
+          >
             <ShieldCheck size={18} />
             <span>{loading ? 'Authenticating...' : 'Sign In to FinanceFlow'}</span>
+            {!loading && <ArrowRight size={16} />}
           </button>
         </form>
 
-        {/* Seed Role Shortcuts */}
-        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', marginBottom: '10px' }}>
-            Quick Demo Accounts (Password: Password123!)
+        {/* Quick Demo Switcher */}
+        <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.725rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Quick Demo Accounts
+            </span>
+            <span style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <Sparkles size={11} /> 1-Click
+            </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <button onClick={() => handleQuickFill('accountant@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              Senior Accountant
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+            <button
+              type="button"
+              onClick={() => handleQuickFill('accountant@financeflow.com')}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '6px 8px',
+                fontSize: '0.725rem',
+                fontWeight: '700',
+                color: '#334155',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              Accountant
             </button>
-            <button onClick={() => handleQuickFill('manager@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              Finance Manager
+            <button
+              type="button"
+              onClick={() => handleQuickFill('manager@financeflow.com')}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '6px 8px',
+                fontSize: '0.725rem',
+                fontWeight: '700',
+                color: '#334155',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              Manager
             </button>
-            <button onClick={() => handleQuickFill('admin@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              System Admin
-            </button>
-            <button onClick={() => handleQuickFill('viewer@financeflow.com')} className="btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 8px', justifyContent: 'center' }}>
-              Audit Viewer
+            <button
+              type="button"
+              onClick={() => handleQuickFill('admin@financeflow.com')}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '6px 8px',
+                fontSize: '0.725rem',
+                fontWeight: '700',
+                color: '#334155',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              Admin
             </button>
           </div>
         </div>

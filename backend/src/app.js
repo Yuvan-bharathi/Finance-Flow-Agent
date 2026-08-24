@@ -18,6 +18,11 @@ import auditRoutes from './routes/audit.routes.js';
 import riskRoutes from './routes/risk.routes.js';
 import collectionRoutes from './routes/collection.routes.js';
 import documentRoutes from './routes/document.routes.js';
+import agentControlRoutes from './routes/agentControl.routes.js';
+import portfolioRoutes from './routes/portfolio.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
+import assistantRoutes from './routes/assistant.routes.js';
 
 /**
  * Express Application Setup
@@ -80,6 +85,11 @@ app.use('/api/audit-logs', auditRoutes);
 app.use('/api/risk', riskRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/agents', agentControlRoutes);
+app.use('/api/portfolio', portfolioRoutes);          // Agent 5: Portfolio Analytics
+app.use('/api/notifications', notificationRoutes);  // Agent 6: Notification & Escalation
+app.use('/api/settings', settingsRoutes);            // User & System Settings
+app.use('/api/assistant', assistantRoutes);          // AI Financial Copilot
 
 // 7. 404 Route Handler
 app.use((req, res, next) => {
