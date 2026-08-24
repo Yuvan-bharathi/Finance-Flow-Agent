@@ -1,34 +1,28 @@
 import { Router } from 'express';
 import {
   ingestPayment,
-  ingestMockBankDeposit,
   getPayments,
-  getPaymentById
+  getPaymentById,
+  ingestMockBankDeposit
 } from '../controllers/payment.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/rbac.middleware.js';
 
 /**
- * Express Router: Payment Routes
- * Base Path: /api/payments
- * 
- * Endpoints:
- * - POST /api/payments/ingest            (Admin, Manager, Accountant) - Section 17 Ingestion API
- * - POST /api/payments/mock-bank-deposit (Admin, Manager, Accountant) - Dummy Bank API Simulator Endpoint
- * - GET  /api/payments                  (Authenticated - All roles)
- * - GET  /api/payments/:id              (Authenticated - All roles)
+ * Express Router: Payment Ingestion Routes
+ * Base path: /api/payments
  */
-
 const router = Router();
 
 router.use(authenticate);
 
-// Section 17 API: Manual raw payment intake with duplicate check & case creation
-router.post('/ingest', authorize(['admin', 'manager', 'accountant']), ingestPayment);
+// Ingest payments (Restricted to non-viewer operational roles)
+router.post('/ingest', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant', 'accountant']), ingestPayment);
 
-// Dummy Bank API Simulator Endpoint (for testing via Postman / UI)
-router.post('/mock-bank-deposit', authorize(['admin', 'manager', 'accountant']), ingestMockBankDeposit);
+// Mock bank deposit simulation
+router.post('/mock-bank-deposit', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant', 'accountant']), ingestMockBankDeposit);
 
+// Read payments (All authenticated roles)
 router.get('/', getPayments);
 router.get('/:id', getPaymentById);
 

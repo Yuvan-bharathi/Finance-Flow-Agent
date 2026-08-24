@@ -1,28 +1,25 @@
 import { Router } from 'express';
 import {
+  createLoan,
   getLoans,
-  getLoanById,
-  createLoan
+  getLoanById
 } from '../controllers/loan.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/rbac.middleware.js';
 
 /**
- * Express Router: Loan Routes
+ * Express Router: Loan Facilities Routes
  * Base Path: /api/loans
- * 
- * Endpoints:
- * - GET  /api/loans     (Authenticated - All roles)
- * - GET  /api/loans/:id (Authenticated - All roles)
- * - POST /api/loans     (Admin, Manager, Accountant)
  */
-
 const router = Router();
 
 router.use(authenticate);
 
+// Read endpoints (All authenticated roles)
 router.get('/', getLoans);
 router.get('/:id', getLoanById);
-router.post('/', authorize(['admin', 'manager', 'accountant']), createLoan);
+
+// Create loan facility (Restricted to owner, super_admin, admin, manager)
+router.post('/', authorize(['owner', 'super_admin', 'admin', 'manager']), createLoan);
 
 export default router;

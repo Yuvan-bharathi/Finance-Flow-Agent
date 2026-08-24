@@ -1,46 +1,41 @@
 import { Router } from 'express';
 import {
+  getStats,
+  getCases,
+  getCaseById,
+  getAllocations,
   analyzeCase,
   analyzeBulk,
   analyzeAllPending,
-  getCases,
-  getCaseById,
-  getStats
-} from '../controllers/reconciliation.controller.js';
-import {
   approveRecommendation,
   rejectRecommendation,
-  overrideRecommendation,
-  getAllocations
-} from '../controllers/settlement.controller.js';
+  overrideRecommendation
+} from '../controllers/reconciliation.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/rbac.middleware.js';
 
 /**
- * Express Router: Reconciliation & Settlement Routes
- * Base Path: /api/reconciliations
+ * Express Router: Payment Reconciliation Routes
+ * Base path: /api/reconciliations
  */
-
 const router = Router();
 
 router.use(authenticate);
 
-// Analytics Stats Endpoint
+// Read statistics & cases (All authenticated roles)
 router.get('/stats', getStats);
-
-// 1. AI Analysis Trigger Endpoints
-router.post('/analyze/:caseId', authorize(['admin', 'manager', 'accountant']), analyzeCase);
-router.post('/analyze-bulk', authorize(['admin', 'manager', 'accountant']), analyzeBulk);
-router.post('/analyze-all-pending', authorize(['admin', 'manager', 'accountant']), analyzeAllPending);
-
-// 2. Human Settlement Gate Endpoints
-router.post('/approve', authorize(['admin', 'manager', 'accountant']), approveRecommendation);
-router.post('/reject', authorize(['admin', 'manager', 'accountant']), rejectRecommendation);
-router.post('/override', authorize(['admin', 'manager', 'accountant']), overrideRecommendation);
-
-// 3. Query Endpoints
 router.get('/cases', getCases);
 router.get('/cases/:caseId', getCaseById);
 router.get('/allocations', getAllocations);
+
+// Trigger AI Agent 1 (Restricted to non-viewer operational roles)
+router.post('/analyze/:caseId', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant', 'accountant']), analyzeCase);
+router.post('/analyze-bulk', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant', 'accountant']), analyzeBulk);
+router.post('/analyze-all-pending', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant', 'accountant']), analyzeAllPending);
+
+// Human-in-the-loop decisions (Restricted to owner, super_admin, admin, manager, senior_accountant)
+router.post('/approve', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), approveRecommendation);
+router.post('/reject', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), rejectRecommendation);
+router.post('/override', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), overrideRecommendation);
 
 export default router;
