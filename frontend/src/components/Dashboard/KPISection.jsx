@@ -29,7 +29,7 @@ export const KPISection = ({ kpis = {}, loading = false }) => {
     {
       title: 'Total Cases',
       value: loading ? '...' : (kpis.total_cases !== undefined ? kpis.total_cases : 0),
-      changeText: '↑ 18 from last week',
+      changeText: 'Live cases tracked',
       isPositiveTrend: true,
       icon: FileText,
       iconBgColor: '#f3e8ff',
@@ -38,7 +38,7 @@ export const KPISection = ({ kpis = {}, loading = false }) => {
     {
       title: 'Pending Review',
       value: loading ? '...' : (kpis.pending_review !== undefined ? kpis.pending_review : 0),
-      changeText: '↑ 8 from last week',
+      changeText: 'Awaiting accountant review',
       isPositiveTrend: true,
       icon: RefreshCw,
       iconBgColor: '#dbeafe',
@@ -47,7 +47,7 @@ export const KPISection = ({ kpis = {}, loading = false }) => {
     {
       title: 'Resolved',
       value: loading ? '...' : (kpis.resolved !== undefined ? kpis.resolved : 0),
-      changeText: '↑ 22 from last week',
+      changeText: 'Completed ledger matches',
       isPositiveTrend: true,
       icon: CheckCircle2,
       iconBgColor: '#fef3c7',
@@ -56,7 +56,7 @@ export const KPISection = ({ kpis = {}, loading = false }) => {
     {
       title: 'AI Auto-Processed',
       value: loading ? '...' : (kpis.ai_auto_processed !== undefined ? kpis.ai_auto_processed : 0),
-      changeText: '↑ 15 from last week',
+      changeText: 'Reconciled via Agent 1',
       isPositiveTrend: true,
       icon: ShieldCheck,
       iconBgColor: '#d1fae5',
@@ -65,7 +65,7 @@ export const KPISection = ({ kpis = {}, loading = false }) => {
     {
       title: 'High Priority',
       value: loading ? '...' : (kpis.high_priority !== undefined ? kpis.high_priority : 0),
-      changeText: '↓ 3 from last week',
+      changeText: 'Urgent attention required',
       isPositiveTrend: false,
       icon: AlertTriangle,
       iconBgColor: '#fee2e2',
