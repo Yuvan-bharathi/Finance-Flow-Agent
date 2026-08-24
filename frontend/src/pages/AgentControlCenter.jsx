@@ -3,6 +3,7 @@ import api from '../services/api';
 import { getAgentStatus, getRecentActivity } from '../services/agentService';
 import { triggerPortfolioAnalysis, getLatestPortfolioSnapshot } from '../services/portfolioService';
 import { triggerEscalationScan, getAlerts, approveAlert, dismissAlert } from '../services/notificationService';
+import { useAuth } from '../context/AuthContext';
 import { AgentRunHistoryDrawer } from '../components/AgentRunHistoryDrawer';
 import {
   Bot,
@@ -30,6 +31,10 @@ import {
  * Central command center for monitoring, triggering, and auditing all 6 FinanceFlow AI operational agents.
  */
 export const AgentControlCenter = () => {
+  const { user } = useAuth();
+  const userRole = (user?.role_name || user?.role || '').toLowerCase();
+  const isViewer = userRole === 'viewer';
+
   const [agents, setAgents] = useState([]);
   const [overview, setOverview] = useState({});
   const [activity, setActivity] = useState([]);
@@ -88,6 +93,12 @@ export const AgentControlCenter = () => {
   }, []);
 
   const handleTriggerAgent = async (agentIdStr) => {
+    if (isViewer) {
+      setAuthErrorToast(`⛔ Authorization Permission Error (403): Access denied. Viewer role ('viewer') is read-only and cannot trigger operational AI agents.`);
+      setTimeout(() => setAuthErrorToast(null), 8000);
+      return;
+    }
+
     try {
       setTriggeringAgentId(agentIdStr);
 
@@ -386,20 +397,22 @@ export const AgentControlCenter = () => {
                   <>
                     <button
                       onClick={() => handleTriggerAgent(agentItem.id)}
-                      disabled={isRunningThis}
+                      disabled={isRunningThis || isViewer}
+                      title={isViewer ? 'Viewer role is read-only — agent execution restricted' : 'Trigger agent test run'}
                       style={{
-                        background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
-                        color: '#ffffff',
+                        background: isViewer ? '#e2e8f0' : 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                        color: isViewer ? '#94a3b8' : '#ffffff',
                         border: 'none',
                         padding: '8px 14px',
                         borderRadius: '8px',
                         fontSize: '0.8rem',
                         fontWeight: '700',
-                        cursor: 'pointer',
+                        cursor: (isRunningThis || isViewer) ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                        boxShadow: isViewer ? 'none' : '0 2px 6px rgba(79, 70, 229, 0.25)',
+                        opacity: isViewer ? 0.75 : 1
                       }}
                     >
                       {isRunningThis ? (
@@ -410,7 +423,7 @@ export const AgentControlCenter = () => {
                       ) : (
                         <>
                           <Zap size={13} />
-                          <span>Test Run</span>
+                          <span>{isViewer ? 'Test Run (Locked)' : 'Test Run'}</span>
                         </>
                       )}
                     </button>
