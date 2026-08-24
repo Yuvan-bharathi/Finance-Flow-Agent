@@ -34,7 +34,7 @@ export const findAllCompanies = async (status = null) => {
       COALESCE(sched_agg.emis_pending, 0) AS emis_pending,
       COALESCE(sched_agg.monthly_installment, 0) AS monthly_installment,
       COALESCE(sched_agg.total_amount_paid, 0) AS total_amount_paid,
-      COALESCE(sched_agg.remaining_balance, 0) AS remaining_balance
+      COALESCE(loan_agg.total_payable - sched_agg.total_amount_paid, 0) AS remaining_balance
     FROM companies c
     LEFT JOIN (
       SELECT 
@@ -89,7 +89,7 @@ export const findCompanyById = async (companyId) => {
       COALESCE(sched_agg.emis_pending, 0) AS emis_pending,
       COALESCE(sched_agg.monthly_installment, 0) AS monthly_installment,
       COALESCE(sched_agg.total_amount_paid, 0) AS total_amount_paid,
-      COALESCE(sched_agg.remaining_balance, 0) AS remaining_balance
+      COALESCE(loan_agg.total_payable - sched_agg.total_amount_paid, 0) AS remaining_balance
     FROM companies c
     LEFT JOIN (
       SELECT 
