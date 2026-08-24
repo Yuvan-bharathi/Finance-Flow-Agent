@@ -281,27 +281,49 @@ export const AgentControlCenter = () => {
                 </div>
               </div>
 
-              {/* Body: Compact single-line metrics OR Coming Soon Description */}
+              {/* Body: Active Agent Metrics OR Coming Soon Description */}
               {!isComingSoon ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', borderRadius: '6px', padding: '4px 10px', fontSize: '0.75rem', fontWeight: '700', color: '#334155' }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#94a3b8' }}>RUNS</span>
-                    {m.total_runs || 0}
-                  </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f0fdf4', borderRadius: '6px', padding: '4px 10px', fontSize: '0.75rem', fontWeight: '700', color: '#059669' }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#86efac' }}>SUCCESS</span>
-                    {m.total_runs ? `${Math.round((m.successful_runs / m.total_runs) * 100)}%` : '100%'}
-                  </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#eef2ff', borderRadius: '6px', padding: '4px 10px', fontSize: '0.75rem', fontWeight: '700', color: '#4f46e5' }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: '600', color: '#a5b4fc' }}>TOKENS</span>
-                    {parseInt(m.total_tokens || 0).toLocaleString()}
-                  </span>
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #f1f5f9',
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: '#64748b' }}>RUNS</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a' }}>{m.total_runs || 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: '#64748b' }}>SUCCESS %</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#059669' }}>
+                      {m.total_runs ? `${Math.round((m.successful_runs / m.total_runs) * 100)}%` : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: '600', color: '#64748b' }}>TOKENS</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#4f46e5' }}>
+                      {parseInt(m.total_tokens || 0).toLocaleString()}
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>
+                <div style={{
+                  background: '#fafafa',
+                  border: '1px solid #f1f5f9',
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  fontSize: '0.75rem',
+                  color: '#64748b',
+                  lineHeight: 1.4
+                }}>
                   {agentItem.description}
                 </div>
               )}
+
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
