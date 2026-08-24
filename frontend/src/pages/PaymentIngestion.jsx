@@ -37,9 +37,9 @@ export const PaymentIngestion = ({ onAskAI }) => {
   const [senderAccount, setSenderAccount] = useState('');
   const [reference, setReference] = useState('');
 
-  const fetchPaymentsAndCases = async () => {
+  const fetchPaymentsAndCases = async (showSpinner = false) => {
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const [payRes, casesData] = await Promise.all([
         api.get('/payments'),
         getCases()
@@ -49,12 +49,12 @@ export const PaymentIngestion = ({ onAskAI }) => {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPaymentsAndCases();
+    fetchPaymentsAndCases(true);
   }, []);
 
   // Filter pending NEW cases
@@ -600,7 +600,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
         <ActionCenterDrawer
           caseItem={selectedCase}
           onClose={() => setSelectedCase(null)}
-          onRefresh={fetchPaymentsAndCases}
+          onRefresh={() => fetchPaymentsAndCases(false)}
         />
       )}
 

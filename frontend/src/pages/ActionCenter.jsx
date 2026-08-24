@@ -11,21 +11,21 @@ export const ActionCenter = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [analyzingCaseId, setAnalyzingCaseId] = useState(null);
 
-  const fetchCases = async () => {
+  const fetchCases = async (showSpinner = false) => {
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const url = statusFilter ? `/reconciliations/cases?status=${statusFilter}` : '/reconciliations/cases';
       const response = await api.get(url);
       setCases(response.data.data || []);
     } catch (error) {
       console.error('Error fetching reconciliation cases:', error);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCases();
+    fetchCases(true);
   }, [statusFilter]);
 
   // Trigger Agent 1 analysis for a case
@@ -231,7 +231,7 @@ export const ActionCenter = () => {
         <ActionCenterDrawer
           caseItem={selectedCase}
           onClose={() => setSelectedCase(null)}
-          onRefresh={fetchCases}
+          onRefresh={() => fetchCases(false)}
         />
       )}
 
