@@ -194,7 +194,7 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
           overflow: 'hidden',
           cursor: 'default'
         }}
-        className="animate-fade-in"
+        className="drawer-panel animate-fade-in"
       >
         
         {/* Drawer Header */}

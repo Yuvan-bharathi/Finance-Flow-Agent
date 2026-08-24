@@ -90,14 +90,15 @@ export const LoanList = ({ onAskAI }) => {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: selectedLoan ? '1fr 1fr' : '1fr', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: selectedLoan ? 'repeat(auto-fit, minmax(360px, 1fr))' : '1fr', gap: '24px' }}>
         
         {/* Loans Table */}
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', fontWeight: '800', color: '#0f172a', fontSize: '1rem' }}>
             Active Loan Contracts
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+          <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+            <table className="responsive-table" style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
                 <th style={{ padding: '14px 20px', fontWeight: '700' }}>Loan Number</th>
@@ -155,6 +156,7 @@ export const LoanList = ({ onAskAI }) => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Selected Loan Schedule Details */}

@@ -38,16 +38,17 @@ export const AuditLogs = () => {
 
       {/* Audit Table */}
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
-              <th style={{ padding: '16px 20px', fontWeight: '700' }}>Timestamp</th>
-              <th style={{ padding: '16px 20px', fontWeight: '700' }}>Action & Entity</th>
-              <th style={{ padding: '16px 20px', fontWeight: '700' }}>User & Role</th>
-              <th style={{ padding: '16px 20px', fontWeight: '700' }}>Audit Snapshot Payload</th>
-              <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
+        <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Timestamp</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Action & Entity</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>User & Role</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Audit Snapshot Payload</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Loading audit logs...</td></tr>
@@ -117,6 +118,7 @@ export const AuditLogs = () => {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Selected Audit Log Drawer */}

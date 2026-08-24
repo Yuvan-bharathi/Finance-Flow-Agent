@@ -117,17 +117,18 @@ export const ActionCenter = () => {
 
       {/* Main Reconciliation Cases Table */}
       <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-          <thead>
-            <tr style={{ background: 'rgba(17, 24, 39, 0.8)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', color: '#9ca3af', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-              <th style={{ padding: '16px 20px' }}>Case & TXN ID</th>
-              <th style={{ padding: '16px 20px' }}>Sender & Narration</th>
-              <th style={{ padding: '16px 20px' }}>Deposit Amount</th>
-              <th style={{ padding: '16px 20px' }}>AI Confidence</th>
-              <th style={{ padding: '16px 20px' }}>Case Status</th>
-              <th style={{ padding: '16px 20px', textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
+        <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: 'rgba(17, 24, 39, 0.8)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', color: '#9ca3af', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                <th style={{ padding: '16px 20px' }}>Case & TXN ID</th>
+                <th style={{ padding: '16px 20px' }}>Sender & Narration</th>
+                <th style={{ padding: '16px 20px' }}>Deposit Amount</th>
+                <th style={{ padding: '16px 20px' }}>AI Confidence</th>
+                <th style={{ padding: '16px 20px' }}>Case Status</th>
+                <th style={{ padding: '16px 20px', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
           <tbody>
             {loading ? (
               <tr>
@@ -224,6 +225,7 @@ export const ActionCenter = () => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Action Center Slide-Over Drawer */}

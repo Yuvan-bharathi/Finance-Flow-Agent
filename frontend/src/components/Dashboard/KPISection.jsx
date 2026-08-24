@@ -83,9 +83,9 @@ export const KPISection = ({ kpis = {}, loading = false }) => {
   ];
 
   return (
-    <div style={{
+    <div className="kpi-grid" style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(6, 1fr)',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
       gap: '16px'
     }}>
       {cardsData.map((card, idx) => (

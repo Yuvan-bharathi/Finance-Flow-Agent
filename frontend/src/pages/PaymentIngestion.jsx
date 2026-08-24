@@ -244,7 +244,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
           </div>
         )}
 
-        <form onSubmit={handleIngest} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+        <form onSubmit={handleIngest} className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
           <div>
             <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Bank Transaction ID *</label>
             <input
@@ -314,44 +314,75 @@ export const PaymentIngestion = ({ onAskAI }) => {
             />
           </div>
 
-          <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
             <button
               type="button"
               onClick={handleSimulateBankDeposit}
-              disabled={submitting}
-              className="btn-secondary"
-              style={{ padding: '10px 18px', border: '1px solid #c7d2fe', color: '#4338ca', fontWeight: '700' }}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                color: '#475569',
+                padding: '10px 18px',
+                borderRadius: '10px',
+                fontSize: '0.85rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease'
+              }}
             >
               <span>🏦 Simulate Dummy Bank Webhook Deposit</span>
             </button>
-            <button type="submit" disabled={submitting} className="btn-primary">
-              <Plus size={18} />
-              <span>Ingest Payment & Open Case</span>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                color: '#ffffff',
+                border: 'none',
+                padding: '10px 24px',
+                borderRadius: '10px',
+                fontSize: '0.85rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)'
+              }}
+            >
+              <Plus size={16} />
+              <span>{submitting ? 'Ingesting...' : '+ Ingest Payment & Open Case'}</span>
             </button>
           </div>
         </form>
       </div>
 
-      {/* Payment Deposit History Table with Case #, Timestamps, Checkboxes & Bulk AI Controls */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+      {/* Historical Ingested Records Table Card */}
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
         
-        {/* Table Header Controls */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '1.05rem' }}>Historical Ingested Deposits</span>
-            <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#2563eb', padding: '2px 10px', borderRadius: '12px', fontWeight: '700' }}>
-              {payments.length} Total Deposits
-            </span>
+        {/* Table Header Bar with Bulk Controls */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>Historical Ingested Deposits</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#0284c7', background: '#e0f2fe', padding: '2px 8px', borderRadius: '9999px' }}>
+                {payments.length} Total Deposits
+              </span>
+            </h3>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Bulk Action Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {selectedCaseIds.length > 0 && (
               <button
                 onClick={() => { setConfirmType('selected'); setShowConfirmModal(true); }}
                 disabled={bulkProcessing}
                 style={{
-                  background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
                   color: '#ffffff',
                   border: 'none',
                   padding: '8px 16px',
@@ -362,11 +393,11 @@ export const PaymentIngestion = ({ onAskAI }) => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.35)'
+                  boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
                 }}
               >
-                <Zap size={15} />
-                <span>Analyze Selected ({selectedCaseIds.length})</span>
+                <Zap size={14} />
+                <span>Bulk Analyze Selected ({selectedCaseIds.length})</span>
               </button>
             )}
 
@@ -375,8 +406,8 @@ export const PaymentIngestion = ({ onAskAI }) => {
                 onClick={() => { setConfirmType('all_new'); setShowConfirmModal(true); }}
                 disabled={bulkProcessing}
                 style={{
-                  background: '#ffffff',
-                  border: '1px solid #6366f1',
+                  background: '#f5f3ff',
+                  border: '1px solid #ddd6fe',
                   color: '#4f46e5',
                   padding: '8px 16px',
                   borderRadius: '10px',
@@ -393,10 +424,10 @@ export const PaymentIngestion = ({ onAskAI }) => {
               </button>
             )}
           </div>
-
         </div>
 
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+        <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase' }}>
               <th style={{ padding: '12px 16px', width: '40px' }}>
@@ -593,6 +624,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Action Center Slide-Over Drawer */}
