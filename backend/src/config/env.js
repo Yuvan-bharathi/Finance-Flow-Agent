@@ -26,11 +26,20 @@ export const config = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   db: {
+    url: process.env.DATABASE_URL || process.env.MYSQL_URL || '',
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     name: process.env.DB_NAME || 'financeflow_db',
-    port: parseInt(process.env.DB_PORT || '3306', 10)
+    port: parseInt(process.env.DB_PORT || '3306', 10),
+    ssl: (process.env.DB_SSL === 'true' ||
+          process.env.DB_HOST?.includes('tidbcloud.com') ||
+          process.env.DB_HOST?.includes('aivencloud.com') ||
+          process.env.DATABASE_URL?.includes('ssl') ||
+          process.env.MYSQL_URL?.includes('ssl') ||
+          (process.env.DB_HOST && process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1'))
+      ? { rejectUnauthorized: false }
+      : undefined
   },
   jwt: {
     secret: process.env.JWT_SECRET || 'fallback_jwt_secret',

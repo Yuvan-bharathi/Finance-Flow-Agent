@@ -23,17 +23,29 @@ import { config } from './env.js';
  * Returns: mysql2 PromisePool instance
  */
 
-const pool = mysql.createPool({
-  host: config.db.host,
-  user: config.db.user,
-  password: config.db.password,
-  database: config.db.name,
-  port: config.db.port,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  dateStrings: true
-});
+const poolConfig = config.db.url
+  ? {
+      uri: config.db.url,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      dateStrings: true,
+      ssl: config.db.ssl || (config.db.url.includes('ssl') ? { rejectUnauthorized: false } : undefined)
+    }
+  : {
+      host: config.db.host,
+      user: config.db.user,
+      password: config.db.password,
+      database: config.db.name,
+      port: config.db.port,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      dateStrings: true,
+      ssl: config.db.ssl
+    };
+
+const pool = mysql.createPool(poolConfig);
 
 /**
  * Function: testConnection
