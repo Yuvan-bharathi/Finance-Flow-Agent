@@ -435,7 +435,8 @@ export const Settings = () => {
             </div>
           </div>
 
-          {/* AI TOKEN USAGE & BILLING GOVERNANCE DASHBOARD */}
+          {/* AI TOKEN USAGE & BILLING GOVERNANCE DASHBOARD — Admin/Owner only */}
+          {isSuperAdminOrOwner && (
           <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -672,9 +673,11 @@ export const Settings = () => {
             </div>
 
           </div>
+          )}
 
         </div>
       )}
+
 
       {/* SECTION 2: RISK & MATCHING RULES */}
       {activeSection === 'rules' && (
