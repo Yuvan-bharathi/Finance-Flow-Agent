@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import { Login } from './pages/Login';
+import { SetPassword } from './pages/SetPassword';
 
 /**
  * Main App Layout with Clean HTML5 History Routing (No # hashes)
