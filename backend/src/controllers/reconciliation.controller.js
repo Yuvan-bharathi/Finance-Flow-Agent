@@ -6,7 +6,20 @@ import {
   getCaseByIdService,
   getStatsService
 } from '../services/reconciliation.service.js';
+import {
+  approveRecommendation,
+  rejectRecommendation,
+  overrideRecommendation,
+  getAllocations
+} from './settlement.controller.js';
 import { sendSuccessResponse } from '../utils/apiResponse.js';
+
+export {
+  approveRecommendation,
+  rejectRecommendation,
+  overrideRecommendation,
+  getAllocations
+};
 
 /**
  * Controller: Reconciliation Controller
