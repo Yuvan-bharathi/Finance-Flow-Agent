@@ -3,6 +3,7 @@ import pool from '../config/db.js';
 import { createAgentRun, updateAgentRun } from '../models/agentRun.model.js';
 import { logStep } from '../models/agentExecutionLog.model.js';
 import { acquireAgentLock, releaseAgentLock } from '../utils/agentLock.js';
+import { DOCUMENT_INTELLIGENCE_PROMPT, buildDocumentExtractionPrompt } from '../prompts/document.prompt.js';
 
 /**
  * Agent 4: Document Intelligence Agent
@@ -76,21 +77,12 @@ export const runDocumentIntelligenceAgent = async (documentId, triggeredBy = nul
 
     // Groq LLM Document Analysis
     try {
-      const userPrompt = `
-Extract structured loan terms from document '${doc.file_name}' for borrower '${doc.company_name}':
-Return JSON structure:
-{
-  "facility_amount": 1000000,
-  "interest_rate_annual": "12.5%",
-  "default_penalty_rate": "2.0%",
-  "governing_law": "Laws of India",
-  "key_clauses": ["Event of Default on 30-day delay", "Personal Guarantee by Promoters"]
-}
-`;
+      const userPrompt = buildDocumentExtractionPrompt(doc.file_name, doc.company_name);
 
       const completion = await groq.chat.completions.create({
         model: GROQ_MODEL,
         messages: [
+          { role: 'system', content: DOCUMENT_INTELLIGENCE_PROMPT },
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.1
