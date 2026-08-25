@@ -409,9 +409,11 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
             padding: '48px',
             textAlign: 'center',
             color: '#64748b',
-            fontSize: '0.85rem'
+            border: '1px solid #e2e8f0'
           }}>
-            Loading Agent 6 escalation stream...
+            <RefreshCw size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#4f46e5' }} />
+            <div style={{ fontWeight: '700', color: '#0f172a' }}>Loading Agent 6 Escalation Stream...</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Scanning SLA breaches, overdue loans, and pending escalation notices</div>
           </div>
         ) : alerts.length === 0 ? (
           <div style={{

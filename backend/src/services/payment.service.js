@@ -36,13 +36,13 @@ import { emitSocketEvent } from '../config/socket.js';
  */
 export const ingestPaymentService = async (paymentData, userId = null) => {
   const {
-    transactionId,
-    amount,
-    paymentDate,
-    senderName,
-    senderAccount,
-    reference,
-    source = 'api'
+    transactionId = paymentData.transaction_id,
+    amount = paymentData.amount,
+    paymentDate = paymentData.payment_date || new Date().toISOString().split('T')[0],
+    senderName = paymentData.sender_name,
+    senderAccount = paymentData.sender_account,
+    reference = paymentData.reference,
+    source = paymentData.source || 'api'
   } = paymentData;
 
   // 1. Validation
@@ -131,8 +131,8 @@ export const ingestPaymentService = async (paymentData, userId = null) => {
  * @param {string|null} status - Optional status filter.
  * @returns {Promise<Array>} List of payments.
  */
-export const getPaymentsService = async (status = null) => {
-  return await findAllPayments(status);
+export const getPaymentsService = async (queryOrStatus = null) => {
+  return await findAllPayments(queryOrStatus);
 };
 
 /**

@@ -1,8 +1,9 @@
 import api from './api';
 
 /**
- * Service: Agent Control Center Service
- * API client functions for agent observability, status, run history, and bulk execution.
+ * Service: Agent Control Center & Multi-Agent Orchestrator Service (Phase 5)
+ * API client functions for agent observability, status, run history,
+ * multi-agent pipeline triggers, and live queue telemetry.
  */
 
 export const getAgentStatus = async () => {
@@ -33,4 +34,42 @@ export const analyzeBulk = async (caseIds) => {
 export const analyzeAllPending = async () => {
   const response = await api.post('/reconciliations/analyze-all-pending');
   return response.data.data;
+};
+
+// =============================================================================
+// Phase 5 Multi-Agent Pipeline API Calls
+// =============================================================================
+
+export const triggerPipelineWorkflow = async (payload) => {
+  const response = await api.post('/agents/pipeline/run', payload);
+  return response.data.data;
+};
+
+export const getPipelineExecutions = async (params = {}) => {
+  try {
+    const response = await api.get('/agents/pipeline/executions', { params });
+    return response.data.data;
+  } catch (err) {
+    if (err.response?.status === 404) {
+      return { data: [] };
+    }
+    throw err;
+  }
+};
+
+export const getPipelineExecutionById = async (id) => {
+  const response = await api.get(`/agents/pipeline/executions/${id}`);
+  return response.data.data;
+};
+
+export const getQueueStatus = async () => {
+  try {
+    const response = await api.get('/agents/queue/status');
+    return response.data.data;
+  } catch (err) {
+    if (err.response?.status === 404) {
+      return { activeJobsCount: 0, queuedJobsCount: 0, stats: { totalCompleted: 0 } };
+    }
+    throw err;
+  }
 };

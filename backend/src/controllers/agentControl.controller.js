@@ -2,30 +2,42 @@ import {
   getRunsByAgent,
   getRecentActivity,
   getAgentStats,
-  getAllAgentsOverview
+  getAllAgentsOverview,
+  getAllAgentStatsGrouped
 } from '../models/agentRun.model.js';
 import { getLogsByRunId } from '../models/agentExecutionLog.model.js';
-import { sendSuccessResponse } from '../utils/apiResponse.js';
+import {
+  findPipelineWithSteps,
+  findHistoricalPipelines
+} from '../models/pipeline.model.js';
+import { runPipelineWorkflow, PIPELINE_WORKFLOWS } from '../services/orchestrator.service.js';
+import { agentQueue, PRIORITY } from '../services/agentQueue.service.js';
+import { sendSuccessResponse, sendErrorResponse } from '../utils/apiResponse.js';
+import { parsePagination, buildPaginatedResponse } from '../utils/paginationHelper.js';
 
 /**
- * Controller: Agent Control Center Controller
- * Purpose: Provides observability endpoints for agent stat cards, run history, and execution timelines.
+ * Controller: Agent Control Center & Multi-Agent Orchestrator Controller
+ * Purpose: Provides observability endpoints for agent stat cards, run history,
+ *          multi-agent workflow triggers, pipeline step tracing, and live queue telemetry.
  */
 
 /**
- * Retrieves aggregate statistics for all 6 agents (active agents 1-4 + coming soon agents 5-6).
+ * Retrieves aggregate statistics for all 6 agents in a single optimized DB round-trip.
  */
 export const getAgentStatus = async (req, res, next) => {
   try {
-    const overview = await getAllAgentsOverview();
+    const [overview, statsMap] = await Promise.all([
+      getAllAgentsOverview(),
+      getAllAgentStatsGrouped()
+    ]);
 
-    // Stats for all 6 active agents
-    const agent1Stats = await getAgentStats('agent_1_reconciliation');
-    const agent2Stats = await getAgentStats('agent_2_risk');
-    const agent3Stats = await getAgentStats('agent_3_collection');
-    const agent4Stats = await getAgentStats('agent_4_document');
-    const agent5Stats = await getAgentStats('agent_5_portfolio');
-    const agent6Stats = await getAgentStats('agent_6_notification');
+    const defaultMetric = { total_runs: 0, successful_runs: 0, failed_runs: 0, success_rate: 100, avg_confidence: 0, avg_duration_ms: 320, total_tokens: 0 };
+    const agent1Stats = statsMap['agent_1_reconciliation'] || defaultMetric;
+    const agent2Stats = statsMap['agent_2_risk'] || defaultMetric;
+    const agent3Stats = statsMap['agent_3_collection'] || defaultMetric;
+    const agent4Stats = statsMap['agent_4_document'] || defaultMetric;
+    const agent5Stats = statsMap['agent_5_portfolio'] || defaultMetric;
+    const agent6Stats = statsMap['agent_6_notification'] || defaultMetric;
 
     const agents = [
       {
@@ -74,7 +86,8 @@ export const getAgentStatus = async (req, res, next) => {
 
     return sendSuccessResponse(res, 200, 'Agent status retrieved successfully', {
       overview,
-      agents
+      agents,
+      queue: agentQueue.getStatus()
     });
   } catch (error) {
     return next(error);
@@ -116,6 +129,90 @@ export const getRecentAgentActivity = async (req, res, next) => {
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
     const activity = await getRecentActivity(limit);
     return sendSuccessResponse(res, 200, 'Recent agent activity retrieved', activity);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// =============================================================================
+// Phase 5 Multi-Agent Pipeline Endpoints
+// =============================================================================
+
+/**
+ * Triggers a multi-agent orchestration pipeline.
+ * POST /api/v1/agents/pipeline/run
+ */
+export const triggerPipeline = async (req, res, next) => {
+  try {
+    const {
+      workflow = PIPELINE_WORKFLOWS.RECONCILIATION_AND_RISK,
+      contextData = {},
+      priority = PRIORITY.CRITICAL
+    } = req.body;
+
+    const userId = req.user?.id || null;
+    const correlationId = req.correlationId || null;
+
+    const result = await runPipelineWorkflow({
+      workflow,
+      contextData,
+      userId,
+      priority,
+      triggerSource: 'manual_ui',
+      correlationId
+    });
+
+    return sendSuccessResponse(res, 200, `Pipeline workflow '${workflow}' executed successfully`, result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Lists historical pipeline executions with pagination.
+ * GET /api/v1/agents/pipeline/executions
+ */
+export const getPipelineExecutions = async (req, res, next) => {
+  try {
+    const { page, limit } = parsePagination(req.query);
+    const status = req.query.status || null;
+
+    const { data, total } = await findHistoricalPipelines({ page, limit, status });
+    const paginated = buildPaginatedResponse(data, total, page, limit);
+
+    return sendSuccessResponse(res, 200, 'Pipeline executions retrieved successfully', paginated);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Retrieves a single pipeline execution along with all ordered child steps.
+ * GET /api/v1/agents/pipeline/executions/:id
+ */
+export const getPipelineExecutionById = async (req, res, next) => {
+  try {
+    const pipelineId = parseInt(req.params.id, 10);
+    const pipeline = await findPipelineWithSteps(pipelineId);
+
+    if (!pipeline) {
+      return sendErrorResponse(res, 404, `Pipeline execution #${pipelineId} not found.`);
+    }
+
+    return sendSuccessResponse(res, 200, `Pipeline #${pipelineId} details retrieved`, pipeline);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Returns live status and depth of the agent priority queue.
+ * GET /api/v1/agents/queue/status
+ */
+export const getQueueStatus = async (req, res, next) => {
+  try {
+    const status = agentQueue.getStatus();
+    return sendSuccessResponse(res, 200, 'Agent queue status retrieved', status);
   } catch (error) {
     return next(error);
   }

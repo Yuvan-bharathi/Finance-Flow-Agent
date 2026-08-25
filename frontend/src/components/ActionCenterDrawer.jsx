@@ -103,7 +103,7 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
     }
   };
 
-  // 1-Click Approve AI Match
+  // 1-Click Approve AI Match with Optimistic Real-Time UI Update
   const handleApprove = async () => {
     if (isViewer) {
       setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot approve allocations.');
@@ -112,21 +112,35 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
     try {
       setSubmitting(true);
       setErrorMsg('');
+      
+      // 1. Optimistically update local active drawer state immediately
+      const updatedCaseObj = { ...currentCase, status: 'resolved' };
+      setActiveCase(updatedCaseObj);
+
+      // 2. Trigger instant optimistic refresh in parent table (0ms delay)
+      if (onRefresh) onRefresh({ id: currentCase.id, status: 'resolved' });
+
+      // 3. Execute server allocation
       await approveRecommendation(rec?.id, 'Approved by accountant via Action Center UI', currentCase?.id);
       setSuccessMsg('Payment successfully allocated to ledger! Installment marked PAID.');
+
+      // 4. Snappy auto-close
       setTimeout(() => {
         if (onRefresh) onRefresh();
         onClose();
-      }, 1200);
+      }, 400);
     } catch (err) {
       console.error(err);
       setErrorMsg(err.response?.data?.message || 'Approval failed.');
+      // Revert on failure
+      setActiveCase(currentCase);
+      if (onRefresh) onRefresh();
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Reject AI Match
+  // Reject AI Match with Optimistic UI Update
   const handleReject = async (e) => {
     e.preventDefault();
     if (isViewer) {
@@ -137,21 +151,29 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
     try {
       setSubmitting(true);
       setErrorMsg('');
+
+      // Optimistically update status
+      setActiveCase({ ...currentCase, status: 'open' });
+      if (onRefresh) onRefresh({ id: currentCase.id, status: 'open' });
+
       await rejectRecommendation(rec?.id, rejectReason, currentCase?.id);
       setSuccessMsg('Recommendation rejected. Case flagged for manual review.');
+
       setTimeout(() => {
         if (onRefresh) onRefresh();
         onClose();
-      }, 1200);
+      }, 400);
     } catch (err) {
       console.error(err);
       setErrorMsg(err.response?.data?.message || 'Rejection failed.');
+      setActiveCase(currentCase);
+      if (onRefresh) onRefresh();
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Accountant Manual Override
+  // Accountant Manual Override with Optimistic UI Update
   const handleOverride = async (e) => {
     e.preventDefault();
     if (isViewer) {
@@ -165,6 +187,10 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
     try {
       setSubmitting(true);
       setErrorMsg('');
+
+      setActiveCase({ ...currentCase, status: 'resolved' });
+      if (onRefresh) onRefresh({ id: currentCase.id, status: 'resolved' });
+
       await overrideRecommendation({
         caseId: caseItem.id,
         repayment_schedule_id: parseInt(overrideScheduleId, 10),
@@ -172,13 +198,16 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
         override_reason: overrideReasonText
       });
       setSuccessMsg('Manual override completed! Ledger updated.');
+
       setTimeout(() => {
         if (onRefresh) onRefresh();
         onClose();
-      }, 1200);
+      }, 400);
     } catch (err) {
       console.error(err);
-      setErrorMsg(err.response?.data?.message || 'Manual override failed.');
+      setErrorMsg(err.response?.data?.message || 'Override failed.');
+      setActiveCase(currentCase);
+      if (onRefresh) onRefresh();
     } finally {
       setSubmitting(false);
     }
@@ -522,31 +551,47 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
                     <button
                       onClick={handleApprove}
                       disabled={submitting}
+                      className="interactive-btn"
                       style={{
                         flex: 2,
-                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        background: submitting 
+                          ? '#059669' 
+                          : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                         color: '#ffffff',
                         border: 'none',
                         padding: '12px 18px',
                         borderRadius: '12px',
                         fontSize: '0.9rem',
                         fontWeight: '800',
-                        cursor: 'pointer',
+                        cursor: submitting ? 'not-allowed' : 'pointer',
+                        opacity: submitting ? 0.8 : 1,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                        transition: 'all 0.15s ease',
+                        transform: submitting ? 'scale(0.98)' : 'scale(1)'
                       }}
                     >
-                      <CheckCircle size={18} />
-                      <span>Approve Match</span>
+                      {submitting ? (
+                        <>
+                          <RefreshCw size={18} className="animate-spin" />
+                          <span>Allocating to Ledger...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle size={18} />
+                          <span>Approve Match</span>
+                        </>
+                      )}
                     </button>
                   )}
 
                   {normStatus !== 'rejected' && (
                     <button
                       onClick={() => setShowRejectForm(true)}
+                      disabled={submitting}
                       style={{
                         flex: 1,
                         background: '#ffffff',
@@ -556,7 +601,9 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
                         borderRadius: '12px',
                         fontSize: '0.85rem',
                         fontWeight: '700',
-                        cursor: 'pointer'
+                        cursor: submitting ? 'not-allowed' : 'pointer',
+                        opacity: submitting ? 0.6 : 1,
+                        transition: 'all 0.15s ease'
                       }}
                     >
                       {(normStatus === 'approved' || normStatus === 'resolved') ? 'Void / Reject' : 'Reject'}
@@ -565,6 +612,7 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
                   <button
                     onClick={() => setShowOverrideForm(true)}
+                    disabled={submitting}
                     style={{
                       flex: 1,
                       background: '#ffffff',
@@ -574,7 +622,9 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
                       borderRadius: '12px',
                       fontSize: '0.85rem',
                       fontWeight: '700',
-                      cursor: 'pointer'
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      opacity: submitting ? 0.6 : 1,
+                      transition: 'all 0.15s ease'
                     }}
                   >
                     Override

@@ -1,124 +1,293 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { History, ShieldCheck, User, Code, X, Eye, FileText, Globe } from 'lucide-react';
+import { History, ShieldCheck, User, Code, X, Eye, FileText, Globe, Search, Copy, Check, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
+/**
+ * AuditLogs Page (Phase 4 Enterprise Edition)
+ * Displays immutable regulatory compliance audit trail enriched with Correlation IDs,
+ * BEFORE & AFTER state diffs, user/role attribution, and server-side pagination.
+ */
 export const AuditLogs = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
-  const fetchAuditLogs = async () => {
+  // Filter & Pagination State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [entityFilter, setEntityFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, totalRecords: 0, totalPages: 1 });
+
+  const fetchAuditLogs = async (currentPage = page) => {
     try {
       setLoading(true);
-      const res = await api.get('/audit-logs');
-      setLogs(res.data.data || []);
+      const params = { page: currentPage, limit: 20 };
+      if (entityFilter) params.entity_type = entityFilter;
+      if (searchTerm) params.correlation_id = searchTerm.trim();
+
+      const res = await api.get('/audit-logs', { params });
+      const responseData = res.data?.data;
+
+      if (responseData && responseData.data) {
+        setLogs(responseData.data);
+        setPagination(responseData.pagination || { page: currentPage, limit: 20, totalRecords: responseData.data.length, totalPages: 1 });
+      } else if (Array.isArray(responseData)) {
+        setLogs(responseData);
+        setPagination(responseData.pagination || { page: currentPage, limit: 20, totalRecords: responseData.length, totalPages: 1 });
+      } else {
+        setLogs([]);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('[AuditLogs] Fetch error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAuditLogs();
-  }, []);
+    fetchAuditLogs(page);
+  }, [page, entityFilter]);
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setPage(1);
+    fetchAuditLogs(1);
+  };
+
+  const handleCopy = (text, id) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      <div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <History color="#d97706" size={26} />
-          Immutable Compliance Audit Trail
-        </h1>
-        <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
-          Regulatory audit logs recording user approvals, rejections, manual overrides, and IP metadata. Click any log row to inspect JSON snapshot diffs.
-        </p>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <History color="#d97706" size={26} />
+            Immutable Compliance Audit Trail
+          </h1>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
+            End-to-end regulatory logs tagged with distributed <strong style={{ color: '#4f46e5' }}>X-Correlation-ID</strong>, recording state mutations and BEFORE/AFTER JSON diffs.
+          </p>
+        </div>
+
+        {/* Search & Filter Controls */}
+        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              placeholder="Filter by Correlation ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                padding: '9px 12px 9px 36px',
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                fontSize: '0.825rem',
+                outline: 'none',
+                width: '240px',
+                background: '#ffffff'
+              }}
+            />
+          </div>
+
+          <select
+            value={entityFilter}
+            onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}
+            style={{
+              padding: '9px 12px',
+              border: '1px solid #cbd5e1',
+              borderRadius: '10px',
+              fontSize: '0.825rem',
+              outline: 'none',
+              background: '#ffffff',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="">All Entity Types</option>
+            <option value="payment_allocations">Payment Allocations</option>
+            <option value="ai_recommendations">AI Recommendations</option>
+            <option value="payments">Payments</option>
+            <option value="reconciliation_cases">Reconciliation Cases</option>
+            <option value="assistant_actions">Assistant Actions</option>
+          </select>
+
+          <button
+            type="submit"
+            style={{
+              background: '#4f46e5',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '9px 16px',
+              fontSize: '0.825rem',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            Filter
+          </button>
+        </form>
       </div>
 
       {/* Audit Table */}
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
         <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
-          <table className="responsive-table" style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Timestamp</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Timestamp & Correlation ID</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Action & Entity</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>User & Role</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Audit Snapshot Payload</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Loading audit logs...</td></tr>
-            ) : logs.map(log => (
-              <tr
-                key={log.id}
-                onClick={() => setSelectedLog(log)}
-                style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s ease' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                  {new Date(log.created_at).toLocaleString()}
-                </td>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
+                    <div>Loading immutable audit trail...</div>
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No audit log records found matching the filter.</td></tr>
+              ) : logs.map(log => (
+                <tr
+                  key={log.id}
+                  onClick={() => setSelectedLog(log)}
+                  style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s ease' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                    <div style={{ color: '#0f172a', fontWeight: '600' }}>{new Date(log.created_at).toLocaleString()}</div>
+                    {log.correlation_id ? (
+                      <div 
+                        onClick={(e) => { e.stopPropagation(); handleCopy(log.correlation_id, `corr-${log.id}`); }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700', marginTop: '4px', cursor: 'pointer' }}
+                        title="Click to copy Correlation ID"
+                      >
+                        <code>{log.correlation_id}</code>
+                        {copiedId === `corr-${log.id}` ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>N/A</span>
+                    )}
+                  </td>
 
-                <td style={{ padding: '16px 20px' }}>
-                  <div style={{ fontWeight: '700', color: '#6366f1' }}>{log.action}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Entity: {log.entity_type} #{log.entity_id}</div>
-                </td>
+                  <td style={{ padding: '16px 20px' }}>
+                    <div style={{ fontWeight: '700', color: '#6366f1' }}>{log.action}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Entity: {log.entity_type} #{log.entity_id}</div>
+                  </td>
 
-                <td style={{ padding: '16px 20px' }}>
-                  <div style={{ color: '#0f172a', fontWeight: '600' }}>{log.user_name || 'System'}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: '700' }}>{log.role_name}</div>
-                </td>
+                  <td style={{ padding: '16px 20px' }}>
+                    <div style={{ color: '#0f172a', fontWeight: '600' }}>{log.user_name || 'System'}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: '700' }}>{log.role_name || 'System'}</div>
+                  </td>
 
-                <td style={{ padding: '16px 20px' }}>
-                  <pre style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    padding: '6px 10px',
-                    borderRadius: '6px',
-                    fontSize: '0.725rem',
-                    color: '#059669',
-                    maxWidth: '320px',
-                    overflowX: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                    margin: 0,
-                    fontWeight: '600'
-                  }}>
-                    {JSON.stringify(log.new_values)}
-                  </pre>
-                </td>
+                  <td style={{ padding: '16px 20px' }}>
+                    <pre style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.725rem',
+                      color: '#059669',
+                      maxWidth: '320px',
+                      overflowX: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                      margin: 0,
+                      fontWeight: '600'
+                    }}>
+                      {JSON.stringify(log.new_values)}
+                    </pre>
+                  </td>
 
-                <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      color: '#4f46e5',
-                      borderRadius: '8px',
-                      padding: '6px 12px',
-                      fontSize: '0.75rem',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Eye size={14} />
-                    <span>Inspect</span>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <td style={{ padding: '16px 20px', textAlign: 'right' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        color: '#4f46e5',
+                        borderRadius: '8px',
+                        padding: '6px 12px',
+                        fontSize: '0.75rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Eye size={14} />
+                      <span>Inspect</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+
+        {/* Pagination Footer */}
+        {pagination.totalPages > 1 && (
+          <div style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Showing Page {pagination.page} of {pagination.totalPages} ({pagination.totalRecords} records)
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                disabled={!pagination.hasPrev}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: pagination.hasPrev ? '#ffffff' : '#f1f5f9',
+                  color: pagination.hasPrev ? '#0f172a' : '#94a3b8',
+                  cursor: pagination.hasPrev ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600'
+                }}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <button
+                disabled={!pagination.hasNext}
+                onClick={() => setPage(p => p + 1)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: pagination.hasNext ? '#ffffff' : '#f1f5f9',
+                  color: pagination.hasNext ? '#0f172a' : '#94a3b8',
+                  cursor: pagination.hasNext ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600'
+                }}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Selected Audit Log Drawer */}
@@ -139,7 +308,7 @@ export const AuditLogs = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: '560px',
+              width: '580px',
               maxWidth: '100vw',
               background: '#ffffff',
               height: '100%',
@@ -168,6 +337,7 @@ export const AuditLogs = () => {
               {/* Event Meta Card */}
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.825rem' }}>
                 <div><strong style={{ color: '#475569' }}>Timestamp:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{new Date(selectedLog.created_at).toLocaleString()}</span></div>
+                <div><strong style={{ color: '#475569' }}>Correlation ID:</strong> <code style={{ background: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>{selectedLog.correlation_id || 'N/A'}</code></div>
                 <div><strong style={{ color: '#475569' }}>Executed By:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedLog.user_name || 'System Auto-Engine'}</span> ({selectedLog.role_name})</div>
                 <div><strong style={{ color: '#475569' }}>Target Entity:</strong> <span style={{ color: '#2563eb', fontWeight: '600' }}>{selectedLog.entity_type} #{selectedLog.entity_id}</span></div>
                 <div><strong style={{ color: '#475569' }}>IP Metadata:</strong> <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{selectedLog.ip_address || '127.0.0.1'}</code></div>
@@ -200,3 +370,5 @@ export const AuditLogs = () => {
     </div>
   );
 };
+
+export default AuditLogs;

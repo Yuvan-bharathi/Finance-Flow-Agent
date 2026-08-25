@@ -125,8 +125,9 @@ export const getAgentStats = async (agentId) => {
       COUNT(*) AS total_runs,
       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS successful_runs,
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_runs,
-      COALESCE(AVG(confidence_score), 0) AS avg_confidence,
-      COALESCE(AVG(duration_ms), 0) AS avg_duration_ms,
+      COALESCE(ROUND((SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)) * 100), 100) AS success_rate,
+      COALESCE(ROUND(AVG(confidence_score), 1), 0) AS avg_confidence,
+      COALESCE(ROUND(AVG(duration_ms)), 0) AS avg_duration_ms,
       COALESCE(SUM(total_tokens), 0) AS total_tokens,
       MAX(created_at) AS last_run_at
     FROM agent_runs
@@ -149,4 +150,33 @@ export const getAllAgentsOverview = async () => {
   `;
   const [rows] = await pool.execute(query);
   return rows[0] || {};
+};
+
+/**
+ * High-performance batch query: Computes stats for ALL agents in a single SQL round-trip.
+ * @returns {Promise<Object>} Map of agentId -> stats object
+ */
+export const getAllAgentStatsGrouped = async () => {
+  const query = `
+    SELECT 
+      agent_id,
+      COUNT(*) AS total_runs,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS successful_runs,
+      SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_runs,
+      COALESCE(ROUND((SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)) * 100), 100) AS success_rate,
+      COALESCE(ROUND(AVG(confidence_score), 1), 0) AS avg_confidence,
+      COALESCE(ROUND(AVG(duration_ms)), 0) AS avg_duration_ms,
+      COALESCE(SUM(total_tokens), 0) AS total_tokens,
+      MAX(created_at) AS last_run_at
+    FROM agent_runs
+    GROUP BY agent_id;
+  `;
+  const [rows] = await pool.execute(query);
+  const statsMap = {};
+  for (const row of rows) {
+    if (row.agent_id) {
+      statsMap[row.agent_id] = row;
+    }
+  }
+  return statsMap;
 };

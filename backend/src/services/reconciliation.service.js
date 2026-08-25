@@ -55,15 +55,15 @@ export const analyzeBulkService = async (caseIds, userId = null) => {
     throw error;
   }
 
-  // Fetch target cases that are 'new' or 'ai_failed'
+  // Fetch target cases that are 'new', 'open', or 'ai_failed'
   const [targetCases] = await pool.query(
-    `SELECT id, status FROM reconciliation_cases WHERE id IN (?) AND status IN ('new', 'ai_failed');`,
+    `SELECT id, status FROM reconciliation_cases WHERE id IN (?) AND status IN ('new', 'open', 'ai_failed');`,
     [caseIds]
   );
 
   if (targetCases.length === 0) {
     return {
-      message: 'No eligible new or failed cases found for analysis.',
+      message: 'No eligible new, open, or failed cases found for analysis.',
       processed_count: 0,
       results: []
     };
@@ -97,20 +97,20 @@ export const analyzeBulkService = async (caseIds, userId = null) => {
 };
 
 /**
- * Analyzes all NEW un-analyzed cases.
+ * Analyzes all un-analyzed (NEW / OPEN) cases.
  * Enforces MAX_BULK_CASES limit (50) and processes with max concurrency (5).
  */
 export const analyzeAllPendingService = async (userId = null) => {
   const maxLimit = AGENT_CONFIG.bulk.maxAllPendingCases; // 50
 
   const [pendingCases] = await pool.query(
-    `SELECT id FROM reconciliation_cases WHERE status = 'new' ORDER BY created_at ASC LIMIT ?;`,
+    `SELECT id FROM reconciliation_cases WHERE status IN ('new', 'open') ORDER BY created_at ASC LIMIT ?;`,
     [maxLimit]
   );
 
   if (pendingCases.length === 0) {
     return {
-      message: 'No pending NEW cases found to analyze.',
+      message: 'No pending unanalyzed cases found to analyze.',
       processed_count: 0,
       results: []
     };

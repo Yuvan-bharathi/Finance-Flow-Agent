@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { RiskAssessmentDrawer } from '../components/RiskAssessmentDrawer';
@@ -196,9 +197,14 @@ export const CompanyList = ({ onAskAI }) => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Loading companies...</td></tr>
+                <tr>
+                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
+                    <div>Loading borrower enterprise profiles...</div>
+                  </td>
+                </tr>
               ) : companies.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>No borrowing companies registered yet.</td></tr>
+                <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No borrowing companies registered yet.</td></tr>
               ) : (
                 companies.map(c => {
                   const totalEmis = parseInt(c.total_emis || 0, 10);

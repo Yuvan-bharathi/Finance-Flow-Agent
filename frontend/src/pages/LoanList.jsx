@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { FileSpreadsheet, Plus, Calendar, DollarSign, ChevronRight, Eye, Bot } from 'lucide-react';
+import { FileSpreadsheet, Plus, Calendar, DollarSign, ChevronRight, Eye, Bot, RefreshCw } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 
@@ -154,7 +154,18 @@ export const LoanList = ({ onAskAI }) => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Loading loans...</td></tr>
+                <tr>
+                  <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
+                    <div>Loading loan facilities & schedules...</div>
+                  </td>
+                </tr>
+              ) : loans.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                    No active loan contracts found.
+                  </td>
+                </tr>
               ) : loans.map(l => (
                 <tr key={l.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ padding: '14px 20px', fontWeight: '700', color: '#6366f1' }}>{l.loan_number}</td>

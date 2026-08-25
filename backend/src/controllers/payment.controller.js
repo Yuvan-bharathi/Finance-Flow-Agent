@@ -76,8 +76,7 @@ export const ingestMockBankDeposit = async (req, res, next) => {
  */
 export const getPayments = async (req, res, next) => {
   try {
-    const { status } = req.query;
-    const payments = await getPaymentsService(status);
+    const payments = await getPaymentsService(req.query);
     return sendSuccessResponse(res, 200, 'Payments retrieved successfully', payments);
   } catch (error) {
     return next(error);

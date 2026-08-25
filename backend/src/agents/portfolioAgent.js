@@ -255,28 +255,23 @@ Output ONLY valid JSON:
     // This snapshot can be retrieved by the frontend for historical trending.
     const [insertResult] = await pool.execute(`
       INSERT INTO portfolio_snapshots (
-        agent_run_id, run_date,
-        total_portfolio_value, collection_efficiency, delinquency_rate,
-        top_borrower_concentration, total_overdue_amount, active_loan_count,
-        health_score, health_grade,
-        ai_interpretation, ai_recommendations, reasoning_summary,
-        groq_model, total_tokens_used
-      ) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        agent_run_id, snapshot_date,
+        total_active_loans, total_principal_deployed, total_interest_expected,
+        total_repaid_amount, total_overdue_amount, overdue_loans_count,
+        npa_ratio_pct, collection_efficiency_pct,
+        risk_tier_breakdown, insights_summary, ai_recommendations
+      ) VALUES (?, CURDATE(), ?, ?, 0.00, 0.00, ?, ?, ?, ?, ?, ?, ?)
     `, [
       runId,
-      parseFloat(portfolioSummary.total_portfolio_value || 0),
-      collectionEffPct,
-      delinquencyRatePct,
-      topConcentrationPct,
-      parseFloat(delinquencyData.total_overdue_amount || 0),
       activeLoanCount,
-      analysisResult.health_score,
-      analysisResult.health_grade,
-      analysisResult.ai_interpretation,
-      JSON.stringify(analysisResult.ai_recommendations),
-      analysisResult.reasoning_summary,
-      groqCalled ? GROQ_MODEL : 'sql-deterministic',
-      totalTokens
+      parseFloat(portfolioSummary.total_portfolio_value || 0),
+      parseFloat(delinquencyData.total_overdue_amount || 0),
+      overdueCount,
+      delinquencyRatePct,
+      collectionEffPct,
+      JSON.stringify({ concentration_pct: topConcentrationPct, top_borrower: concentrationData.top_borrower_name || 'N/A' }),
+      analysisResult.ai_interpretation || analysisResult.reasoning_summary,
+      JSON.stringify(analysisResult.ai_recommendations || [])
     ]);
 
     const snapshotId = insertResult.insertId;

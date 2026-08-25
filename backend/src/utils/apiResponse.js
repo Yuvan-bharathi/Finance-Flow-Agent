@@ -18,11 +18,14 @@
  * @param {string} message - Human-readable success message.
  * @param {Object|Array|null} data - Payload data returned to client.
  */
-export const sendSuccessResponse = (res, statusCode = 200, message = 'Operation successful', data = null) => {
+export const sendSuccessResponse = (res, statusCode = 200, message = 'Operation successful', data = null, meta = {}) => {
+  const correlationId = res.getHeader ? res.getHeader('X-Correlation-ID') : (res.req?.correlationId || 'N/A');
   return res.status(statusCode).json({
     success: true,
     message,
     data,
+    correlationId: correlationId || undefined,
+    ...meta,
     timestamp: new Date().toISOString()
   });
 };
@@ -36,10 +39,12 @@ export const sendSuccessResponse = (res, statusCode = 200, message = 'Operation 
  * @param {Object|Array|null} errors - Detailed validation errors or debugging metadata.
  */
 export const sendErrorResponse = (res, statusCode = 500, message = 'Internal server error', errors = null) => {
+  const correlationId = res.getHeader ? res.getHeader('X-Correlation-ID') : (res.req?.correlationId || 'N/A');
   return res.status(statusCode).json({
     success: false,
     message,
     errors,
+    correlationId: correlationId || undefined,
     timestamp: new Date().toISOString()
   });
 };

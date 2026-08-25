@@ -97,7 +97,18 @@ export const DocumentList = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>Loading document vault...</td></tr>
+              <tr>
+                <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                  <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
+                  <div>Loading document vault & legal agreements...</div>
+                </td>
+              </tr>
+            ) : documents.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                  No legal documents uploaded yet. Click "Upload PDF Agreement" to get started.
+                </td>
+              </tr>
             ) : documents.map(d => (
               <tr
                 key={d.id}

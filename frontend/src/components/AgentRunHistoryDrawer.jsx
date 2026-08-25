@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Activity, CheckCircle2, AlertCircle, Clock, Zap, Cpu, ChevronDown, ChevronUp, Layers, Terminal } from 'lucide-react';
+import { X, Activity, CheckCircle2, AlertCircle, Clock, Zap, Cpu, ChevronDown, ChevronUp, Layers, Terminal, RefreshCw } from 'lucide-react';
 import { getAgentRuns, getRunDetail } from '../services/agentService';
 
 /**
  * Slide-Over Drawer: Agent Run History & Execution Log Inspector
  * Displays run history list for an agent, expandable to show step-by-step execution timeline logs.
  */
-export const AgentRunHistoryDrawer = ({ agent, onClose }) => {
+export const AgentRunHistoryDrawer = ({ agent, agentId, agentName, onClose }) => {
+  const currentAgentId = agent?.id || (typeof agent === 'string' ? agent : agentId);
+  const currentAgentName = agent?.name || agentName || (typeof agent === 'string' ? agent : 'Operational Agent');
+
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedRunId, setExpandedRunId] = useState(null);
@@ -14,15 +17,15 @@ export const AgentRunHistoryDrawer = ({ agent, onClose }) => {
   const [loadingLogs, setLoadingLogs] = useState({});
 
   useEffect(() => {
-    if (agent?.id) {
+    if (currentAgentId) {
       fetchRuns();
     }
-  }, [agent]);
+  }, [currentAgentId]);
 
   const fetchRuns = async () => {
     try {
       setLoading(true);
-      const data = await getAgentRuns(agent.id, 30);
+      const data = await getAgentRuns(currentAgentId, 30);
       setRuns(data || []);
     } catch (err) {
       console.error('Error fetching agent runs:', err);
@@ -42,7 +45,7 @@ export const AgentRunHistoryDrawer = ({ agent, onClose }) => {
     if (!runLogs[runId]) {
       try {
         setLoadingLogs(prev => ({ ...prev, [runId]: true }));
-        const logs = await getRunDetail(agent.id, runId);
+        const logs = await getRunDetail(currentAgentId, runId);
         setRunLogs(prev => ({ ...prev, [runId]: logs || [] }));
       } catch (err) {
         console.error('Error fetching run detail logs:', err);
@@ -62,7 +65,7 @@ export const AgentRunHistoryDrawer = ({ agent, onClose }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  if (!agent) return null;
+  if (!currentAgentId) return null;
 
   return (
     <div
@@ -119,7 +122,7 @@ export const AgentRunHistoryDrawer = ({ agent, onClose }) => {
             </div>
             <div>
               <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1 }}>
-                {agent.name}
+                {currentAgentName}
               </h2>
               <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
                 Run History & Step Execution Logs
@@ -151,7 +154,7 @@ export const AgentRunHistoryDrawer = ({ agent, onClose }) => {
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Agent Summary Card */}
-          {agent.metrics && (
+          {agent?.metrics && (
             <div style={{
               background: '#f8fafc',
               border: '1px solid #e2e8f0',
@@ -185,7 +188,8 @@ export const AgentRunHistoryDrawer = ({ agent, onClose }) => {
 
             {loading ? (
               <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>
-                Loading agent run logs...
+                <RefreshCw size={22} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
+                <div>Loading agent execution telemetry...</div>
               </div>
             ) : runs.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1', fontSize: '0.85rem' }}>

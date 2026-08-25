@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
-import { Zap, Play, Search, Filter, AlertTriangle, CheckCircle, Clock, Eye } from 'lucide-react';
+import { Zap, Play, Search, Filter, AlertTriangle, CheckCircle, Clock, Eye, RefreshCw } from 'lucide-react';
 
 export const ActionCenter = () => {
   const [cases, setCases] = useState([]);
@@ -133,7 +133,8 @@ export const ActionCenter = () => {
             {loading ? (
               <tr>
                 <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
-                  Loading reconciliation cases...
+                  <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#6366f1' }} />
+                  <div>Loading reconciliation cases & candidate matches...</div>
                 </td>
               </tr>
             ) : filteredCases.length === 0 ? (
@@ -233,7 +234,12 @@ export const ActionCenter = () => {
         <ActionCenterDrawer
           caseItem={selectedCase}
           onClose={() => setSelectedCase(null)}
-          onRefresh={() => fetchCases(false)}
+          onRefresh={(optimisticData) => {
+            if (optimisticData && optimisticData.id) {
+              setCases(prev => prev.map(c => c.id === optimisticData.id ? { ...c, status: optimisticData.status } : c));
+            }
+            fetchCases(false);
+          }}
         />
       )}
 

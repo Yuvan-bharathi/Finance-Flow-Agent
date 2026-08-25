@@ -332,24 +332,23 @@ export const runReconciliationAgent = async (caseId, triggeredBy = null, trigger
     console.error(`[Reconciliation Agent Error] Case #${caseId} failed:`, error.message);
 
     // Revert case status to open
-    await pool.execute(`UPDATE reconciliation_cases SET status = 'open' WHERE id = ?;`, [caseId]);
+    try {
+      await pool.execute(`UPDATE reconciliation_cases SET status = 'open' WHERE id = ?;`, [caseId]);
+    } catch (revertErr) {
+      console.error('Failed to revert case status:', revertErr.message);
+    }
 
-    // Update agent_runs record to failed
-    await updateAgentRun(runId, {
-      status: 'failed',
-      duration_ms: Date.now() - startTime,
-      error_message: error.message
-    });
-
-    await logStep({
-      agent_run_id: runId,
-      agent_id: agentId,
-      step_type: 'ERROR',
-      step_name: 'RUN_FAILED',
-      status: 'failed',
-      error_message: error.message,
-      duration_ms: Date.now() - startTime
-    });
+    if (runId) {
+      try {
+        await updateAgentRun(runId, {
+          status: 'failed',
+          duration_ms: Date.now() - startTime,
+          error_message: error.message
+        });
+      } catch (runErr) {
+        console.error('Failed to update agent run:', runErr.message);
+      }
+    }
 
     throw error;
   }

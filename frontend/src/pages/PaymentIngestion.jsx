@@ -61,8 +61,12 @@ export const PaymentIngestion = ({ onAskAI }) => {
     fetchPaymentsAndCases(true);
   }, []);
 
-  // Filter pending NEW cases
-  const newCases = cases.filter(c => (c.status || '').toLowerCase() === 'new');
+  // Filter pending unanalyzed cases (both 'new' and 'open' without an existing match)
+  const unanalyzedCases = cases.filter(c => {
+    const s = (c.status || '').toLowerCase();
+    return (s === 'new' || s === 'open') && !c.has_recommendation;
+  });
+  const newCases = unanalyzedCases;
 
   // Checkbox handlers
   const handleSelectAll = (e) => {
@@ -421,7 +425,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
               </button>
             )}
 
-            {newCases.length > 0 && (
+            {unanalyzedCases.length > 0 && (
               <button
                 onClick={() => { setConfirmType('all_new'); setShowConfirmModal(true); }}
                 disabled={bulkProcessing}
@@ -440,7 +444,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
                 }}
               >
                 <Play size={14} />
-                <span>Analyze All NEW ({newCases.length})</span>
+                <span>Analyze All Unprocessed ({unanalyzedCases.length})</span>
               </button>
             )}
           </div>
@@ -448,202 +452,205 @@ export const PaymentIngestion = ({ onAskAI }) => {
 
         <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
           <table className="responsive-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase' }}>
-              <th style={{ padding: '12px 16px', width: '40px' }}>
-                <input
-                  type="checkbox"
-                  checked={cases.length > 0 && selectedCaseIds.length === cases.length}
-                  onChange={handleSelectAll}
-                  style={{ cursor: 'pointer', accentColor: '#4f46e5', width: '16px', height: '16px' }}
-                />
-              </th>
-              <th style={{ padding: '12px 16px', fontWeight: '700' }}>CASE & TXN ID</th>
-              <th style={{ padding: '12px 16px', fontWeight: '700' }}>SENDER & ACCOUNT</th>
-              <th style={{ padding: '12px 16px', fontWeight: '700' }}>DEPOSIT AMOUNT</th>
-              <th style={{ padding: '12px 16px', fontWeight: '700' }}>RECEIVED DATE & TIME</th>
-              <th style={{ padding: '12px 16px', fontWeight: '700' }}>CASE STATUS</th>
-              <th style={{ padding: '12px 16px', fontWeight: '700', textAlign: 'right' }}>ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
-                  Loading deposit records...
-                </td>
+            <thead>
+              <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
+                <th style={{ width: '40px', padding: '16px 20px', textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={cases.length > 0 && selectedCaseIds.length === cases.length}
+                    onChange={handleSelectAll}
+                    style={{ cursor: 'pointer', accentColor: '#4f46e5', width: '16px', height: '16px' }}
+                  />
+                </th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Case & Txn ID</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Sender & Account</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Deposit Amount</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Received Date & Time</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Case Status</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
               </tr>
-            ) : payments.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
-                  No payment deposits ingested yet.
-                </td>
-              </tr>
-            ) : (
-              payments.map(p => {
-                const matchedCase = cases.find(c => c.payment_id === p.id);
-                const caseId = matchedCase ? matchedCase.id : p.case_id;
-                const normStatus = matchedCase ? (matchedCase.status || '').toLowerCase() : (p.status || '').toLowerCase();
-                const isSelected = caseId ? selectedCaseIds.includes(caseId) : false;
-                const isProcessingThis = processingCaseId === caseId || normStatus === 'ai_processing';
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
+                    <div>Loading ingested payment records...</div>
+                  </td>
+                </tr>
+              ) : payments.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                    No payment deposits found. Use the ingestion form above to register transactions.
+                  </td>
+                </tr>
+              ) : (
+                payments.map((p) => {
+                  const matchedCase = cases.find(c => c.payment_id === p.id);
+                  const caseId = p.case_id || matchedCase?.id;
+                  const rawStatus = (p.case_status || matchedCase?.status || p.status || 'new').toLowerCase();
+                  const normStatus = rawStatus === 'pending' ? 'new' : rawStatus;
+                  const isSelected = caseId && selectedCaseIds.includes(caseId);
+                  const isProcessingThis = processingCaseId === caseId;
+                  const hasRecommendation = matchedCase?.has_recommendation || matchedCase?.recommendation_id;
 
-                return (
-                  <tr
-                    key={p.id}
-                    onClick={() => matchedCase && setSelectedCase(matchedCase)}
-                    style={{
-                      borderBottom: '1px solid #f1f5f9',
-                      cursor: matchedCase ? 'pointer' : 'default',
-                      background: isSelected ? '#f0f9ff' : 'transparent',
-                      transition: 'background 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => { if (matchedCase && !isSelected) e.currentTarget.style.background = '#f8fafc'; }}
-                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {/* Checkbox Column */}
-                    <td style={{ padding: '12px 16px' }} onClick={(e) => e.stopPropagation()}>
-                      {caseId ? (
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => handleSelectRow(caseId, e)}
-                          style={{ cursor: 'pointer', accentColor: '#4f46e5', width: '16px', height: '16px' }}
-                        />
-                      ) : null}
-                    </td>
+                  return (
+                    <tr
+                      key={p.id}
+                      onClick={() => matchedCase && setSelectedCase(matchedCase)}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        cursor: matchedCase ? 'pointer' : 'default',
+                        background: isSelected ? '#f5f3ff' : 'transparent',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
+                      onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      {/* Checkbox */}
+                      <td style={{ padding: '12px 20px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        {caseId ? (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleSelectRow(caseId, e)}
+                            style={{ cursor: 'pointer', accentColor: '#4f46e5', width: '16px', height: '16px' }}
+                          />
+                        ) : null}
+                      </td>
 
-                    {/* Case # & TXN ID Column */}
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '0.9rem' }}>
-                        {caseId ? `Case #${caseId}` : `Payment #${p.id}`}
-                      </div>
-                      <div style={{ fontSize: '0.725rem', fontFamily: 'monospace', color: '#2563eb', fontWeight: '600', marginTop: '2px' }}>
-                        TXN ID: {p.transaction_id}
-                      </div>
-                    </td>
+                      {/* Case & Txn ID */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>Case #{caseId || 'N/A'}</span>
+                        </div>
+                        <div style={{ fontSize: '0.725rem', fontFamily: 'monospace', color: '#2563eb', fontWeight: '600', marginTop: '2px' }}>
+                          TXN ID: {p.transaction_id}
+                        </div>
+                      </td>
 
-                    {/* Sender & Account */}
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: '700', color: '#0f172a' }}>{p.sender_name || 'N/A'}</div>
-                      <div style={{ fontSize: '0.725rem', color: '#64748b' }}>
-                        {p.sender_account ? `Acct: ${p.sender_account}` : p.reference || 'N/A'}
-                      </div>
-                    </td>
+                      {/* Sender & Account */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: '700', color: '#0f172a' }}>{p.sender_name || 'N/A'}</div>
+                        <div style={{ fontSize: '0.725rem', color: '#64748b' }}>
+                          {p.sender_account ? `Acct: ${p.sender_account}` : p.reference || 'N/A'}
+                        </div>
+                      </td>
 
-                    {/* Deposit Amount */}
-                    <td style={{ padding: '12px 16px', fontWeight: '800', color: '#0f172a' }}>
-                      ₹{parseFloat(p.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
+                      {/* Deposit Amount */}
+                      <td style={{ padding: '12px 16px', fontWeight: '800', color: '#0f172a' }}>
+                        ₹{parseFloat(p.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
 
-                    {/* Exact Received Date & Time Timestamp */}
-                    <td style={{ padding: '12px 16px', color: '#334155', fontWeight: '600', fontSize: '0.8rem' }}>
-                      {formatDateTime(p.payment_date, p.created_at || (matchedCase && matchedCase.created_at))}
-                    </td>
+                      {/* Exact Received Date & Time Timestamp */}
+                      <td style={{ padding: '12px 16px', color: '#334155', fontWeight: '600', fontSize: '0.8rem' }}>
+                        {formatDateTime(p.payment_date, p.created_at || (matchedCase && matchedCase.created_at))}
+                      </td>
 
-                    {/* Case Status */}
-                    <td style={{ padding: '12px 16px' }}>
-                      <StatusBadge status={normStatus} />
-                    </td>
+                      {/* Case Status */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <StatusBadge status={normStatus} />
+                      </td>
 
-                    {/* Actions Column */}
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                        
-                        {/* Single Case AI Analyze / Retry Trigger */}
-                        {caseId && (normStatus === 'new' || normStatus === 'ai_failed') && (
+                      {/* Actions Column */}
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                          
+                          {/* Single Case AI Analyze / Retry Trigger */}
+                          {caseId && (normStatus === 'new' || normStatus === 'open' || normStatus === 'ai_failed') && !hasRecommendation && (
+                            <button
+                              onClick={(e) => handleSingleAnalyze(caseId, e)}
+                              disabled={isProcessingThis || bulkProcessing}
+                              style={{
+                                background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '5px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                              }}
+                            >
+                              {isProcessingThis ? (
+                                <>
+                                  <RefreshCw size={12} className="animate-spin" />
+                                  <span>Analyzing...</span>
+                                </>
+                              ) : normStatus === 'ai_failed' ? (
+                                <>
+                                  <RefreshCw size={12} />
+                                  <span>Retry</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Zap size={12} />
+                                  <span>Analyze</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          {/* View Case Drawer Button */}
+                          {matchedCase && (
+                            <button
+                              onClick={() => setSelectedCase(matchedCase)}
+                              style={{
+                                background: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                color: '#475569',
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <Eye size={12} /> View Case
+                            </button>
+                          )}
+
+                          {/* Ask AI / Investigate button */}
                           <button
-                            onClick={(e) => handleSingleAnalyze(caseId, e)}
-                            disabled={isProcessingThis || bulkProcessing}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onAskAI) onAskAI('payment', p.id);
+                            }}
+                            title="Ask AI to investigate this payment"
                             style={{
-                              background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                              background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
                               color: '#ffffff',
                               border: 'none',
-                              padding: '5px 12px',
+                              padding: '5px 10px',
                               borderRadius: '6px',
-                              fontSize: '0.75rem',
+                              fontSize: '0.72rem',
                               fontWeight: '700',
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '4px',
-                              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                              boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
                             }}
                           >
-                            {isProcessingThis ? (
-                              <>
-                                <RefreshCw size={12} className="animate-spin" />
-                                <span>Analyzing...</span>
-                              </>
-                            ) : normStatus === 'ai_failed' ? (
-                              <>
-                                <RefreshCw size={12} />
-                                <span>Retry</span>
-                              </>
-                            ) : (
-                              <>
-                                <Zap size={12} />
-                                <span>Analyze</span>
-                              </>
-                            )}
+                            <Bot size={11} />
+                            Ask AI
                           </button>
-                        )}
 
-                        {/* View Case Drawer Button */}
-                        {matchedCase && (
-                          <button
-                            onClick={() => setSelectedCase(matchedCase)}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              color: '#475569',
-                              padding: '5px 10px',
-                              borderRadius: '6px',
-                              fontSize: '0.75rem',
-                              fontWeight: '700',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <Eye size={12} /> View Case
-                          </button>
-                        )}
-
-                        {/* Ask AI / Investigate button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onAskAI) onAskAI('payment', p.id);
-                          }}
-                          title="Ask AI to investigate this payment"
-                          style={{
-                            background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '6px',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
-                          }}
-                        >
-                          <Bot size={11} />
-                          Ask AI
-                        </button>
-
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -652,7 +659,19 @@ export const PaymentIngestion = ({ onAskAI }) => {
         <ActionCenterDrawer
           caseItem={selectedCase}
           onClose={() => setSelectedCase(null)}
-          onRefresh={() => fetchPaymentsAndCases(false)}
+          onRefresh={(optimisticData) => {
+            if (optimisticData && optimisticData.id) {
+              setCases(prev => prev.map(c => c.id === optimisticData.id ? { ...c, status: optimisticData.status } : c));
+              setPayments(prev => prev.map(p => {
+                const match = (p.case_id === optimisticData.id || (cases.find(c => c.id === optimisticData.id && c.payment_id === p.id)));
+                if (match) {
+                  return { ...p, case_status: optimisticData.status };
+                }
+                return p;
+              }));
+            }
+            fetchPaymentsAndCases(false);
+          }}
         />
       )}
 

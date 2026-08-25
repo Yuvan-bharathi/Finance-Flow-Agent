@@ -15,7 +15,7 @@ import { insertAuditLog, findAllAuditLogs } from '../models/auditLog.model.js';
  * Approves an AI Recommendation and executes official financial ledger allocation.
  * Uses a MySQL ACID transaction.
  */
-export const approveRecommendationService = async (recommendationId, approvedByUserId, notes = null, ipAddress = null) => {
+export const approveRecommendationService = async (recommendationId, approvedByUserId, notes = null, ipAddress = null, correlationId = null) => {
   // 1. Retrieve recommendation details
   const rec = await findRecommendationById(recommendationId);
   if (!rec) {
@@ -130,7 +130,8 @@ export const approveRecommendationService = async (recommendationId, approvedByU
         schedule_new_status: newScheduleStatus,
         payment_new_status: newPaymentStatus
       },
-      ip_address: ipAddress
+      ip_address: ipAddress,
+      correlation_id: correlationId
     }, connection);
 
     await connection.commit();
@@ -153,7 +154,7 @@ export const approveRecommendationService = async (recommendationId, approvedByU
 /**
  * Rejects an AI Recommendation (with full ledger rollback support if previously approved).
  */
-export const rejectRecommendationService = async (recommendationId, rejectedByUserId, reason = 'Rejected by accountant', ipAddress = null) => {
+export const rejectRecommendationService = async (recommendationId, rejectedByUserId, reason = 'Rejected by accountant', ipAddress = null, correlationId = null) => {
   const rec = await findRecommendationById(recommendationId);
   if (!rec) {
     const error = new Error(`AI Recommendation with ID ${recommendationId} not found.`);
@@ -215,7 +216,8 @@ export const rejectRecommendationService = async (recommendationId, rejectedByUs
       entity_id: recommendationId,
       old_values: { status: rec.status },
       new_values: { status: 'rejected', reason },
-      ip_address: ipAddress
+      ip_address: ipAddress,
+      correlation_id: correlationId
     }, connection);
 
     await connection.commit();
@@ -237,7 +239,7 @@ export const rejectRecommendationService = async (recommendationId, rejectedByUs
  * Overrides an AI recommendation and manually maps a payment to a repayment schedule.
  * Automatically reverses any previous allocations if this case was previously allocated.
  */
-export const overrideRecommendationService = async (caseId, overrideData, user, ipAddress = null) => {
+export const overrideRecommendationService = async (caseId, overrideData, user, ipAddress = null, correlationId = null) => {
   const { repayment_schedule_id, allocated_amount, override_reason } = overrideData;
 
   if (!repayment_schedule_id || !allocated_amount || !override_reason) {
@@ -343,7 +345,8 @@ export const overrideRecommendationService = async (caseId, overrideData, user, 
         allocated_amount: allocAmount,
         override_reason
       },
-      ip_address: ipAddress
+      ip_address: ipAddress,
+      correlation_id: correlationId
     }, connection);
 
     await connection.commit();
