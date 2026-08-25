@@ -75,7 +75,24 @@ app.use(cookieParser(config.jwt.cookieSecret));
 app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
 
 // 5. Swagger API Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+const swaggerUiOptions = {
+  customCss: `
+    .swagger-ui .topbar { background-color: #0f172a; border-bottom: 2px solid #4f46e5; padding: 12px 0; }
+    .swagger-ui .topbar .download-url-wrapper { display: none; }
+    .swagger-ui .info { margin: 24px 0; }
+    .swagger-ui .info .title { color: #4f46e5; font-weight: 800; font-family: sans-serif; }
+    .swagger-ui .scheme-container { background: #f8fafc; border-radius: 12px; box-shadow: none; padding: 16px; }
+    .swagger-ui .btn.authorize { background-color: #4f46e5; border-color: #4f46e5; color: #fff; border-radius: 8px; font-weight: 700; }
+    .swagger-ui .btn.authorize svg { fill: #fff; }
+    .swagger-ui .opblock.opblock-post { background: rgba(79, 70, 229, 0.04); border-color: #6366f1; }
+    .swagger-ui .opblock.opblock-get { background: rgba(16, 185, 129, 0.04); border-color: #10b981; }
+    .swagger-ui .opblock.opblock-put { background: rgba(245, 158, 11, 0.04); border-color: #f59e0b; }
+    .swagger-ui .opblock.opblock-delete { background: rgba(239, 68, 68, 0.04); border-color: #ef4444; }
+  `,
+  customSiteTitle: "FinanceFlow AI — Enterprise API Documentation"
+};
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
 // 6. Health Check Route
 app.get('/api/health', (req, res) => {
