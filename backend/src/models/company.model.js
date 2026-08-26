@@ -207,3 +207,16 @@ export const updateCompanyById = async (companyId, companyData) => {
 
   return result.affectedRows > 0;
 };
+
+/**
+ * Deletes a company record by primary key ID.
+ * 
+ * @param {number} companyId - Primary key ID in `companies` table.
+ * @returns {Promise<boolean>} True if deleted.
+ */
+export const deleteCompanyById = async (companyId) => {
+  const query = `DELETE FROM companies WHERE id = ?;`;
+  const [result] = await pool.execute(query, [companyId]);
+  return result.affectedRows > 0;
+};
+

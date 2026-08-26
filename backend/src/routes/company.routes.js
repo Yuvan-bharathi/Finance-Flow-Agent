@@ -3,7 +3,8 @@ import {
   createCompany,
   getCompanies,
   getCompanyById,
-  updateCompany
+  updateCompany,
+  deleteCompany
 } from '../controllers/company.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/rbac.middleware.js';
@@ -23,5 +24,8 @@ router.get('/:id', getCompanyById);
 // Create / Modify endpoints (Restricted to owner, super_admin, admin, manager)
 router.post('/', authorize(['owner', 'super_admin', 'admin', 'manager']), createCompany);
 router.put('/:id', authorize(['owner', 'super_admin', 'admin', 'manager']), updateCompany);
+
+// Delete / Deactivate endpoint (Strictly restricted to owner, super_admin)
+router.delete('/:id', authorize(['owner', 'super_admin']), deleteCompany);
 
 export default router;

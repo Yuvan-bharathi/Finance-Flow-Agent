@@ -101,7 +101,7 @@ export const runCollectionAgent = async (companyId, triggeredBy = null) => {
     let finalDraft = {
       company_id: company.id,
       recipient_name: company.contact_name || 'Finance Department',
-      recipient_email: `${company.company_name.toLowerCase().replace(/[^a-z0-9]/g, '')}@borrower.com`,
+      recipient_email: company.contact_email || 'finance@abctech.com',
       urgency_level: urgencyLevel,
       days_overdue: daysOverdue,
       total_overdue_amount: totalOverdue,

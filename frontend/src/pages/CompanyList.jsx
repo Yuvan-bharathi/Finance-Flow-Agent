@@ -21,7 +21,11 @@ import {
   FileSpreadsheet,
   TrendingUp,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+  HelpCircle
 } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { RiskAssessmentDrawer } from '../components/RiskAssessmentDrawer';
@@ -33,17 +37,30 @@ export const CompanyList = ({ onAskAI }) => {
   const userRole = (user?.role_name || user?.role || '').toLowerCase();
   const isViewer = userRole === 'viewer';
   const canCreateCompany = ['owner', 'super_admin', 'admin', 'manager'].includes(userRole);
+  const canEditCompany = ['owner', 'super_admin', 'admin', 'manager'].includes(userRole);
+  const canDeleteCompany = ['owner', 'super_admin'].includes(userRole); // Strictly Owner and Super Admin
+
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [companyDetailsLoading, setCompanyDetailsLoading] = useState(false);
   
+  // CRUD Edit & Delete States
+  const [editingCompany, setEditingCompany] = useState(null);
+  const [deletingCompany, setDeletingCompany] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  // Confirmation Dialog States
+  const [pendingCreateData, setPendingCreateData] = useState(null);
+  const [pendingUpdateData, setPendingUpdateData] = useState(null);
+
   // Multi-Agent Modal & Drawer states
   const [riskCompany, setRiskCompany] = useState(null);
   const [collectionCompany, setCollectionCompany] = useState(null);
 
-  // Form states
+  // Add Company Form states
   const [companyName, setCompanyName] = useState('');
   const [regNumber, setRegNumber] = useState('');
   const [taxId, setTaxId] = useState('');
@@ -51,7 +68,26 @@ export const CompanyList = ({ onAskAI }) => {
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit Company Form state
+  const [editForm, setEditForm] = useState({
+    company_name: '',
+    registration_number: '',
+    tax_identifier: '',
+    bank_account_number: '',
+    contact_name: '',
+    contact_email: '',
+    contact_phone: '',
+    address: '',
+    status: 'active'
+  });
+
+  const showToast = (type, text) => {
+    setToastMessage({ type, text });
+    setTimeout(() => setToastMessage(null), 6000);
+  };
 
   const fetchCompanies = async () => {
     try {
@@ -84,7 +120,8 @@ export const CompanyList = ({ onAskAI }) => {
     }
   };
 
-  const handleCreateCompany = async (e) => {
+  // ─── 1. Create Company Handlers (With Confirmation) ─────────────────────────
+  const handleInitiateCreate = (e) => {
     e.preventDefault();
     if (!companyName.trim()) return;
     if (!canCreateCompany) {
@@ -94,17 +131,26 @@ export const CompanyList = ({ onAskAI }) => {
       return;
     }
 
+    setPendingCreateData({
+      company_name: companyName,
+      registration_number: regNumber,
+      tax_identifier: taxId,
+      bank_account_number: bankAcc,
+      contact_name: contactName,
+      contact_email: contactEmail,
+      contact_phone: contactPhone,
+      address: address,
+      status: 'active'
+    });
+  };
+
+  const handleConfirmCreate = async () => {
+    if (!pendingCreateData) return;
+
     try {
       setSubmitting(true);
-      await api.post('/companies', {
-        company_name: companyName,
-        registration_number: regNumber,
-        tax_identifier: taxId,
-        bank_account_number: bankAcc,
-        contact_name: contactName,
-        contact_email: contactEmail,
-        contact_phone: contactPhone
-      });
+      await api.post('/companies', pendingCreateData);
+      setPendingCreateData(null);
       setShowAddModal(false);
       setCompanyName('');
       setRegNumber('');
@@ -113,6 +159,8 @@ export const CompanyList = ({ onAskAI }) => {
       setContactName('');
       setContactEmail('');
       setContactPhone('');
+      setAddress('');
+      showToast('success', `✓ Successfully registered borrower company '${pendingCreateData.company_name}'.`);
       fetchCompanies();
     } catch (err) {
       const status = err.response?.status;
@@ -121,10 +169,97 @@ export const CompanyList = ({ onAskAI }) => {
           detail: { status: status || 403, message: err.response?.data?.message || 'Access denied: You do not have permission to create companies.' }
         }));
       } else {
-        alert(err.response?.data?.message || 'Failed to create company');
+        showToast('error', `Failed to create company: ${err.response?.data?.message || err.message}`);
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ─── 2. Edit Company Handlers (With Confirmation) ───────────────────────────
+  const handleStartEdit = (company) => {
+    if (!canEditCompany) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Editing borrower profiles requires Admin or Risk Manager permissions.' }
+      }));
+      return;
+    }
+    setEditingCompany(company);
+    setEditForm({
+      company_name: company.company_name || '',
+      registration_number: company.registration_number || '',
+      tax_identifier: company.tax_identifier || '',
+      bank_account_number: company.bank_account_number || '',
+      contact_name: company.contact_name || '',
+      contact_email: company.contact_email || '',
+      contact_phone: company.contact_phone || '',
+      address: company.address || '',
+      status: company.status || 'active'
+    });
+  };
+
+  const handleInitiateUpdate = (e) => {
+    e.preventDefault();
+    if (!editingCompany || !editForm.company_name.trim()) return;
+    setPendingUpdateData({ id: editingCompany.id, ...editForm });
+  };
+
+  const handleConfirmUpdate = async () => {
+    if (!pendingUpdateData) return;
+
+    try {
+      setSubmitting(true);
+      await api.put(`/companies/${pendingUpdateData.id}`, pendingUpdateData);
+      showToast('success', `✓ Updated profile for '${pendingUpdateData.company_name}' successfully.`);
+      setPendingUpdateData(null);
+      setEditingCompany(null);
+      fetchCompanies();
+      if (selectedCompany && selectedCompany.id === pendingUpdateData.id) {
+        setSelectedCompany(prev => ({ ...prev, ...pendingUpdateData }));
+      }
+    } catch (err) {
+      console.error('Update company error:', err);
+      showToast('error', `Failed to update company: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ─── 3. Delete / Deactivate Company Handler (Owner / Super Admin Only) ───────
+  const handleDeletePrompt = (company) => {
+    if (!canDeleteCompany) {
+      window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
+        detail: { status: 403, message: 'Company deletion is strictly restricted to Super Admin and Owner accounts.' }
+      }));
+      return;
+    }
+    setDeletingCompany(company);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingCompany) return;
+
+    try {
+      setDeleteLoading(true);
+      const res = await api.delete(`/companies/${deletingCompany.id}`);
+      const data = res.data.data;
+
+      if (data?.action === 'deactivated') {
+        showToast('warning', `⚠️ ${res.data.message || `Company '${deletingCompany.company_name}' has associated loan facilities and has been safely archived/deactivated.`}`);
+      } else {
+        showToast('success', `✓ ${res.data.message || `Company '${deletingCompany.company_name}' was successfully deleted.`}`);
+      }
+
+      setDeletingCompany(null);
+      if (selectedCompany && selectedCompany.id === deletingCompany.id) {
+        setSelectedCompany(null);
+      }
+      fetchCompanies();
+    } catch (err) {
+      console.error('Delete company error:', err);
+      showToast('error', `Failed to delete company: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -136,77 +271,89 @@ export const CompanyList = ({ onAskAI }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '24px',
+          zIndex: 120,
+          background: toastMessage.type === 'success' ? '#065f46' : toastMessage.type === 'warning' ? '#92400e' : '#991b1b',
+          color: '#ffffff',
+          padding: '12px 20px',
+          borderRadius: '10px',
+          fontSize: '0.85rem',
+          fontWeight: '700',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <span>{toastMessage.text}</span>
+          <button onClick={() => setToastMessage(null)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Building2 color="#4f46e5" size={26} />
-            Borrowing Companies Master Data
+          <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Building2 size={24} color="#4f46e5" />
+            <span>Borrowing Companies Master Data</span>
           </h1>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
+          <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '4px 0 0 0' }}>
             Corporate borrower profiles, real-time EMI tracking, credit risk health (Agent 2), and automated collections (Agent 3).
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            if (!canCreateCompany) {
-              window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
-                detail: { status: 403, message: 'Adding new corporate borrower profiles requires Admin or Risk Manager permissions.' }
-              }));
-              return;
-            }
-            setShowAddModal(true);
-          }}
-          disabled={!canCreateCompany}
-          title={!canCreateCompany ? 'Adding borrower profiles requires Admin or Manager permissions' : 'Add Borrower Company'}
-          style={{
-            background: !canCreateCompany ? '#cbd5e1' : 'linear-gradient(135deg, #4f46e5, #6366f1)',
-            color: !canCreateCompany ? '#94a3b8' : '#ffffff',
-            border: 'none',
-            padding: '10px 18px',
-            borderRadius: '10px',
-            fontSize: '0.85rem',
-            fontWeight: '700',
-            cursor: !canCreateCompany ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            opacity: !canCreateCompany ? 0.75 : 1
-          }}
-        >
-          <Plus size={18} />
-          <span>{canCreateCompany ? 'Add Borrower Company' : 'Add Borrower (Locked)'}</span>
-        </button>
+        {canCreateCompany && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Plus size={16} />
+            <span>Add Borrower Company</span>
+          </button>
+        )}
       </div>
 
-      {/* Companies Table */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-        <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
-          <table className="responsive-table" style={{ width: '100%', minWidth: '940px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+      {/* Main Companies Table Card */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%' }}>
+          <table className="responsive-table" style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Company Name</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Amount Borrowed</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Monthly Installment (EMI)</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>EMI Progress</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Remaining Balance</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Status</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>AI Agents & Actions</th>
+              <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
+                <th style={{ padding: '14px 20px', fontWeight: '800' }}>Company Name</th>
+                <th style={{ padding: '14px 20px', fontWeight: '800' }}>Amount Borrowed</th>
+                <th style={{ padding: '14px 20px', fontWeight: '800' }}>Monthly Installment (EMI)</th>
+                <th style={{ padding: '14px 20px', fontWeight: '800' }}>EMI Progress</th>
+                <th style={{ padding: '14px 20px', fontWeight: '800' }}>Remaining Balance</th>
+                <th style={{ padding: '14px 20px', fontWeight: '800' }}>Status</th>
+                <th style={{ padding: '14px 20px', fontWeight: '800', textAlign: 'right', minWidth: '200px' }}>AI Agents & Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
                   <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
-                    <div>Loading borrower enterprise profiles...</div>
+                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5', display: 'block' }} />
+                    <div>Loading company records & amortization schedules...</div>
                   </td>
                 </tr>
               ) : companies.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No borrowing companies registered yet.</td></tr>
+                <tr>
+                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                    <ShieldAlert size={30} color="#94a3b8" style={{ margin: '0 auto 8px', display: 'block' }} />
+                    <div style={{ fontWeight: '700', color: '#0f172a' }}>No borrowing companies registered yet.</div>
+                    <div style={{ fontSize: '0.78rem' }}>Click "+ Add Borrower Company" above to register your first corporate account.</div>
+                  </td>
+                </tr>
               ) : (
-                companies.map(c => {
+                companies.map((c) => {
                   const totalEmis = parseInt(c.total_emis || 0, 10);
                   const emisPaid = parseInt(c.emis_paid || 0, 10);
                   const emisPending = parseInt(c.emis_pending || 0, 10);
@@ -216,18 +363,25 @@ export const CompanyList = ({ onAskAI }) => {
                     <tr
                       key={c.id}
                       onClick={() => handleSelectCompany(c)}
-                      style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s ease' }}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease'
+                      }}
                       onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
+                      {/* Company Name & Registration */}
                       <td style={{ padding: '16px 20px' }}>
-                        <div style={{ fontWeight: '700', color: '#0f172a' }}>{c.company_name}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                          ID #{c.id} • {c.registration_number || c.tax_identifier || 'Reg Verified'}
+                        <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '0.88rem' }}>
+                          {c.company_name}
+                        </div>
+                        <div style={{ fontSize: '0.725rem', color: '#64748b', marginTop: '2px' }}>
+                          ID #{c.id} • {c.registration_number || 'REG-PENDING'}
                         </div>
                       </td>
 
-                      {/* Borrowed Principal Amount */}
+                      {/* Amount Borrowed (Principal) */}
                       <td style={{ padding: '16px 20px' }}>
                         <div style={{ fontWeight: '800', color: '#0f172a' }}>
                           {formatRupees(c.total_borrowed)}
@@ -237,13 +391,13 @@ export const CompanyList = ({ onAskAI }) => {
                         </div>
                       </td>
 
-                      {/* Monthly Installment */}
+                      {/* Monthly Installment (EMI) */}
                       <td style={{ padding: '16px 20px' }}>
-                        <div style={{ fontWeight: '700', color: '#4f46e5' }}>
+                        <div style={{ fontWeight: '800', color: '#4f46e5' }}>
                           {formatRupees(c.monthly_installment)} / mo
                         </div>
                         <div style={{ fontSize: '0.725rem', color: '#64748b' }}>
-                          {c.active_loans_count || 1} Active Loan(s)
+                          {c.active_loans_count || 0} Active Loan(s)
                         </div>
                       </td>
 
@@ -277,19 +431,20 @@ export const CompanyList = ({ onAskAI }) => {
                         <StatusBadge status={c.status} />
                       </td>
 
-                      {/* Actions */}
+                      {/* Actions Column: Risk -> Collection -> Edit (Icon) -> Delete (Icon) -> AI (Icon) */}
                       <td style={{ padding: '16px 20px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
                           
                           {/* Agent 2: Assess Risk Button */}
                           <button
                             onClick={() => setRiskCompany(c)}
+                            title="Audit credit risk profile (Agent 2)"
                             style={{
                               background: '#e0e7ff',
                               border: '1px solid #c7d2fe',
                               color: '#3730a3',
                               borderRadius: '8px',
-                              padding: '6px 10px',
+                              padding: '5px 8px',
                               fontSize: '0.75rem',
                               fontWeight: '700',
                               cursor: 'pointer',
@@ -298,19 +453,20 @@ export const CompanyList = ({ onAskAI }) => {
                               gap: '4px'
                             }}
                           >
-                            <ShieldAlert size={14} />
-                            <span>Risk (Agent 2)</span>
+                            <ShieldAlert size={13} />
+                            <span>Risk</span>
                           </button>
 
                           {/* Agent 3: Collection Reminder Button */}
                           <button
                             onClick={() => setCollectionCompany(c)}
+                            title="Draft collection email (Agent 3)"
                             style={{
                               background: '#fef2f2',
                               border: '1px solid #fecaca',
                               color: '#991b1b',
                               borderRadius: '8px',
-                              padding: '6px 10px',
+                              padding: '5px 8px',
                               fontSize: '0.75rem',
                               fontWeight: '700',
                               cursor: 'pointer',
@@ -319,33 +475,87 @@ export const CompanyList = ({ onAskAI }) => {
                               gap: '4px'
                             }}
                           >
-                            <Send size={14} />
-                            <span>Collection</span>
+                            <Send size={13} />
+                            <span>Notice</span>
                           </button>
 
-                          {/* Ask AI / Investigate Company Button */}
+                          {/* Edit Company Icon-Only Button (Admin / Manager) */}
+                          {canEditCompany && (
+                            <button
+                              onClick={() => handleStartEdit(c)}
+                              title="Edit company master details"
+                              style={{
+                                background: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                color: '#059669',
+                                borderRadius: '8px',
+                                width: '28px',
+                                height: '28px',
+                                padding: '0',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'transform 0.1s ease, border-color 0.1s ease'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.borderColor = '#10b981'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                            >
+                              <Pencil size={14} color="#059669" />
+                            </button>
+                          )}
+
+                          {/* Delete Company Icon-Only Button (Strictly Super Admin / Owner) */}
+                          {canDeleteCompany && (
+                            <button
+                              onClick={() => handleDeletePrompt(c)}
+                              title="Delete or deactivate company (Owner & Super Admin only)"
+                              style={{
+                                background: '#fff1f2',
+                                border: '1px solid #fecdd3',
+                                color: '#e11d48',
+                                borderRadius: '8px',
+                                width: '28px',
+                                height: '28px',
+                                padding: '0',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'transform 0.1s ease, background 0.1s ease'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.background = '#ffe4e6'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#fff1f2'; }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+
+                          {/* AI Assistant Icon-Only Badge Button */}
                           <button
                             onClick={() => {
                               if (onAskAI) onAskAI('company', c.id);
                             }}
-                            title="Ask AI to investigate this company"
+                            title="Ask AI Assistant to audit this company"
                             style={{
                               background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
                               color: '#ffffff',
                               border: 'none',
                               borderRadius: '8px',
-                              padding: '6px 10px',
-                              fontSize: '0.75rem',
-                              fontWeight: '700',
+                              width: '28px',
+                              height: '28px',
+                              padding: '0',
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px',
-                              boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+                              justifyContent: 'center',
+                              boxShadow: '0 2px 6px rgba(124,58,237,0.25)',
+                              transition: 'transform 0.1s ease, box-shadow 0.1s ease'
                             }}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.08)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                           >
-                            <Bot size={14} />
-                            <span>Ask AI</span>
+                            <Bot size={15} />
                           </button>
 
                         </div>
@@ -390,16 +600,66 @@ export const CompanyList = ({ onAskAI }) => {
           >
             
             {/* Drawer Header */}
-            <div style={{ padding: '24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a' }}>{selectedCompany.company_name}</h2>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#0f172a' }}>{selectedCompany.company_name}</h2>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
                   Borrower Profile ID #{selectedCompany.id} • Status: <strong style={{ color: '#059669', textTransform: 'uppercase' }}>{selectedCompany.status}</strong>
                 </div>
               </div>
-              <button onClick={() => setSelectedCompany(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X size={20} color="#64748b" />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {canEditCompany && (
+                  <button
+                    onClick={() => {
+                      const c = selectedCompany;
+                      setSelectedCompany(null);
+                      handleStartEdit(c);
+                    }}
+                    title="Edit company"
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      color: '#059669',
+                      borderRadius: '8px',
+                      width: '32px',
+                      height: '32px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Pencil size={15} color="#059669" />
+                  </button>
+                )}
+                {canDeleteCompany && (
+                  <button
+                    onClick={() => {
+                      const c = selectedCompany;
+                      setSelectedCompany(null);
+                      handleDeletePrompt(c);
+                    }}
+                    title="Delete company"
+                    style={{
+                      background: '#fff1f2',
+                      border: '1px solid #fecdd3',
+                      color: '#e11d48',
+                      borderRadius: '8px',
+                      width: '32px',
+                      height: '32px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+                <button onClick={() => setSelectedCompany(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={18} color="#64748b" />
+                </button>
+              </div>
             </div>
 
             {/* Drawer Body */}
@@ -487,7 +747,7 @@ export const CompanyList = ({ onAskAI }) => {
                   })()}
                 </div>
 
-                {/* Individual Loan Contracts Details (if returned) */}
+                {/* Individual Loan Contracts Details */}
                 {selectedCompany.loans && selectedCompany.loans.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #dbeafe', paddingTop: '12px' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e40af', textTransform: 'uppercase' }}>
@@ -587,20 +847,28 @@ export const CompanyList = ({ onAskAI }) => {
         />
       )}
 
-      {/* Add Company Modal */}
+      {/* ─── 4. Add Borrowing Company Modal ────────────────────────────────────── */}
       {showAddModal && (
         <div
           onClick={() => setShowAddModal(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '20px' }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '520px', maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
             className="animate-fade-in"
           >
-            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', marginBottom: '16px' }}>Add Borrowing Company</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Building2 size={20} color="#4f46e5" />
+                <span>Add Borrowing Company</span>
+              </h3>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                <X size={18} color="#64748b" />
+              </button>
+            </div>
 
-            <form onSubmit={handleCreateCompany} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleInitiateCreate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Company Name *</label>
                 <input required type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Financials Pvt Ltd" style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
@@ -609,11 +877,11 @@ export const CompanyList = ({ onAskAI }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Registration No.</label>
-                  <input type="text" value={regNumber} onChange={e => setRegNumber(e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
+                  <input type="text" value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="e.g. REG-2026-ACM100" style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Tax Identifier (GST/PAN)</label>
-                  <input type="text" value={taxId} onChange={e => setTaxId(e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
+                  <input type="text" value={taxId} onChange={e => setTaxId(e.target.value)} placeholder="e.g. TAX-IN-998822" style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
                 </div>
               </div>
 
@@ -625,11 +893,11 @@ export const CompanyList = ({ onAskAI }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Contact Person</label>
-                  <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
+                  <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} placeholder="e.g. Rajesh Kumar" style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Contact Email</label>
-                  <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
+                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Corporate Contact Email</label>
+                  <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="e.g. finance@company.com" style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
                 </div>
               </div>
 
@@ -638,11 +906,379 @@ export const CompanyList = ({ onAskAI }) => {
                 <input type="text" value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="e.g. +91 9876543210" style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }} />
               </div>
 
+              <div>
+                <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Corporate Office Address</label>
+                <textarea rows={2} value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 102 Business Tower, Sector 5, Bengaluru" style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px', resize: 'vertical' }} />
+              </div>
+
               <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                <button type="submit" disabled={submitting} className="btn-primary" style={{ flex: 1 }}>Save Company</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1 }}>
+                  Save Company
+                </button>
                 <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary">Cancel</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 5. Edit Borrowing Company Modal ────────────────────────────────────── */}
+      {editingCompany && (
+        <div
+          onClick={() => setEditingCompany(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '20px' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', width: '540px', maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            className="animate-fade-in"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Pencil size={18} color="#059669" />
+                  <span>Edit Company Profile</span>
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                  Updating master records for ID #{editingCompany.id}
+                </div>
+              </div>
+              <button onClick={() => setEditingCompany(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                <X size={18} color="#64748b" />
+              </button>
+            </div>
+
+            <form onSubmit={handleInitiateUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Company Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={editForm.company_name}
+                  onChange={e => setEditForm(prev => ({ ...prev, company_name: e.target.value }))}
+                  style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Registration No.</label>
+                  <input
+                    type="text"
+                    value={editForm.registration_number}
+                    onChange={e => setEditForm(prev => ({ ...prev, registration_number: e.target.value }))}
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Tax Identifier (GST/PAN)</label>
+                  <input
+                    type="text"
+                    value={editForm.tax_identifier}
+                    onChange={e => setEditForm(prev => ({ ...prev, tax_identifier: e.target.value }))}
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Bank Account Number</label>
+                  <input
+                    type="text"
+                    value={editForm.bank_account_number}
+                    onChange={e => setEditForm(prev => ({ ...prev, bank_account_number: e.target.value }))}
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Status</label>
+                  <select
+                    value={editForm.status}
+                    onChange={e => setEditForm(prev => ({ ...prev, status: e.target.value }))}
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive / Archived</option>
+                    <option value="watchlist">Watchlist</option>
+                    <option value="blacklisted">Blacklisted</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Contact Person</label>
+                  <input
+                    type="text"
+                    value={editForm.contact_name}
+                    onChange={e => setEditForm(prev => ({ ...prev, contact_name: e.target.value }))}
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Corporate Email</label>
+                  <input
+                    type="email"
+                    value={editForm.contact_email}
+                    onChange={e => setEditForm(prev => ({ ...prev, contact_email: e.target.value }))}
+                    style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Contact Phone</label>
+                <input
+                  type="text"
+                  value={editForm.contact_phone}
+                  onChange={e => setEditForm(prev => ({ ...prev, contact_phone: e.target.value }))}
+                  style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Corporate Office Address</label>
+                <textarea
+                  rows={2}
+                  value={editForm.address}
+                  onChange={e => setEditForm(prev => ({ ...prev, address: e.target.value }))}
+                  style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', marginTop: '4px', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                <button type="submit" className="btn-primary" style={{ flex: 1, background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                  Update Company Profile
+                </button>
+                <button type="button" onClick={() => setEditingCompany(null)} className="btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 6. Confirmation Dialog: Create New Company ──────────────────────────── */}
+      {pendingCreateData && (
+        <div
+          onClick={() => setPendingCreateData(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '20px' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '16px', width: '460px', maxWidth: '100%', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            className="animate-fade-in"
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <HelpCircle size={22} color="#2563eb" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                  Confirm New Borrower Registration
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                  Please review before saving to master records
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+              Are you sure you want to register <strong>{pendingCreateData.company_name}</strong> in the borrowing master registry?
+            </p>
+
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', fontSize: '0.775rem', color: '#334155', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div><strong>Registration No:</strong> {pendingCreateData.registration_number || 'N/A'}</div>
+              <div><strong>Bank Account:</strong> {pendingCreateData.bank_account_number || 'N/A'}</div>
+              <div><strong>Contact Person:</strong> {pendingCreateData.contact_name || 'N/A'} ({pendingCreateData.contact_email || 'No email'})</div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleConfirmCreate}
+                disabled={submitting}
+                className="btn-primary"
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                {submitting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Registering...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={14} />
+                    <span>Yes, Confirm & Register</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingCreateData(null)}
+                className="btn-secondary"
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 7. Confirmation Dialog: Update Company ──────────────────────────────── */}
+      {pendingUpdateData && (
+        <div
+          onClick={() => setPendingUpdateData(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '20px' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #a7f3d0', borderRadius: '16px', width: '460px', maxWidth: '100%', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            className="animate-fade-in"
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CheckCircle2 size={22} color="#059669" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                  Confirm Profile Updates
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: '700', marginTop: '2px' }}>
+                  Saving changes for ID #{pendingUpdateData.id}
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+              Are you sure you want to commit these changes for <strong>{pendingUpdateData.company_name}</strong>?
+            </p>
+
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', fontSize: '0.775rem', color: '#334155', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div><strong>Status:</strong> <span style={{ textTransform: 'uppercase', fontWeight: '700', color: '#059669' }}>{pendingUpdateData.status}</span></div>
+              <div><strong>Contact Email:</strong> {pendingUpdateData.contact_email}</div>
+              <div><strong>Bank Account:</strong> {pendingUpdateData.bank_account_number}</div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleConfirmUpdate}
+                disabled={submitting}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #059669, #10b981)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                {submitting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={14} />
+                    <span>Confirm & Save Changes</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingUpdateData(null)}
+                className="btn-secondary"
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 8. Delete / Deactivate Confirmation Modal (Strictly Super Admin / Owner) ── */}
+      {deletingCompany && (
+        <div
+          onClick={() => setDeletingCompany(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '20px' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #fecaca', borderRadius: '16px', width: '460px', maxWidth: '100%', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', cursor: 'default' }}
+            className="animate-fade-in"
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertTriangle size={22} color="#dc2626" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                  Confirm Company Deletion
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: '700', marginTop: '2px' }}>
+                  Super Admin / Owner Authorization Required
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+              Are you sure you want to delete or deactivate <strong>{deletingCompany.company_name}</strong> (ID #{deletingCompany.id})?
+            </p>
+
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', fontSize: '0.775rem', color: '#64748b', marginBottom: '16px' }}>
+              <strong style={{ color: '#334155' }}>Financial Integrity Rule:</strong> If active loans or historical repayment records exist, this facility will be safely deactivated/archived to preserve ledger schedules.
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                style={{
+                  flex: 1,
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  fontWeight: '700',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                {deleteLoading ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Confirm Deletion</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeletingCompany(null)}
+                className="btn-secondary"
+                disabled={deleteLoading}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

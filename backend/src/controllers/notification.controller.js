@@ -173,10 +173,11 @@ export const approveAlert = async (req, res) => {
 
     // Trigger Nodemailer / Email Service dispatch
     const emailResult = await sendEscalationNoticeEmail({
-      recipientEmail: alert.contact_email || alert.recommended_recipient || 'contact@borrower.com',
-      companyName: alert.company_name || 'Borrower Company',
-      subject: alert.subject || `Official Financial Escalation Notice — ${alert.company_name || 'Facility Debt'}`,
-      body: alert.message_draft || alert.reasoning || 'Please review your delinquent loan account balance immediately.',
+      recipientEmail: alert.contact_email || 'finance@abctech.com',
+      fromEmail: 'yuvanbharathin@gmail.com',
+      companyName: alert.company_name || 'ABC Technologies Pvt Ltd',
+      subject: alert.subject || alert.title || `Official Financial Escalation Notice — ${alert.company_name || 'Facility Debt'}`,
+      body: alert.message || alert.ai_reasoning || 'Please review your delinquent loan account balance immediately.',
       priority: (alert.severity || 'HIGH').toLowerCase(),
       alertId: alert.id
     });
