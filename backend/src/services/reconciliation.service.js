@@ -2,6 +2,7 @@ import pool from '../config/db.js';
 import { runReconciliationAgent } from '../agents/reconciliationAgent.js';
 import { findRecommendationsByCaseId, findRecommendationById } from '../models/aiRecommendation.model.js';
 import { findCaseById } from '../models/reconciliationCase.model.js';
+import { previewWaterfallAllocation } from './settlement.service.js';
 import { AGENT_CONFIG } from '../config/agentConfig.js';
 import { createAgentRun } from '../models/agentRun.model.js';
 
@@ -176,17 +177,21 @@ export const getCasesService = async (status = null, priority = null) => {
 
   const [cases] = await pool.execute(query, params);
 
-  // Attach latest AI recommendation for each case
+  // Attach latest AI recommendation and waterfall plan preview for each case
   for (const item of cases) {
     const recs = await findRecommendationsByCaseId(item.id);
-    item.latest_recommendation = recs.length > 0 ? recs[0] : null;
+    const latestRec = recs.length > 0 ? recs[0] : null;
+    if (latestRec && latestRec.recommended_loan_id) {
+      latestRec.waterfall_preview = await previewWaterfallAllocation(item.amount, latestRec.recommended_loan_id);
+    }
+    item.latest_recommendation = latestRec;
   }
 
   return cases;
 };
 
 /**
- * Retrieves single case details and its full recommendation history.
+ * Retrieves single case details and its full recommendation history with waterfall preview.
  */
 export const getCaseByIdService = async (caseId) => {
   const caseDetails = await findCaseById(caseId);
@@ -197,6 +202,12 @@ export const getCaseByIdService = async (caseId) => {
   }
 
   const recommendations = await findRecommendationsByCaseId(caseId);
+  for (const rec of recommendations) {
+    if (rec.recommended_loan_id) {
+      rec.waterfall_preview = await previewWaterfallAllocation(caseDetails.amount, rec.recommended_loan_id);
+    }
+  }
+
   return {
     ...caseDetails,
     recommendations

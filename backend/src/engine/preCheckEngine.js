@@ -1,6 +1,7 @@
 import pool from '../config/db.js';
 import { AGENT_CONFIG } from '../config/agentConfig.js';
 import { executeTool } from '../tools/reconciliationTools.js';
+import { previewWaterfallAllocation } from '../services/settlement.service.js';
 import { logStep } from '../models/agentExecutionLog.model.js';
 
 /**
@@ -121,16 +122,17 @@ export const runPreCheckEngine = async (payment, agentRunId = null) => {
 
       const dueInstallments = await executeTool('getDueRepayments', { loanId: matchedLoan.id });
       if (dueInstallments && dueInstallments.length > 0) {
-        // Check for exact amount match
-        const exactAmountMatch = dueInstallments.find(inst => parseFloat(inst.scheduled_amount) === parseFloat(payment.amount));
-        if (exactAmountMatch) {
-          matchedSchedule = exactAmountMatch;
+        matchedSchedule = dueInstallments[0];
+        const waterfallPreview = await previewWaterfallAllocation(payment.amount, matchedLoan.id);
+        if (waterfallPreview && waterfallPreview.allocations.length > 0) {
           score += AGENT_CONFIG.precheck.scoring.amount; // +30 pts
-          reasons.push(`Exact amount match (₹${payment.amount}) for Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} (+${AGENT_CONFIG.precheck.scoring.amount} pts).`);
+          const instNums = waterfallPreview.allocations.map(a => `#${a.installment_number}`);
+          reasons.push(`Continuous waterfall allocation maps ₹${parseFloat(payment.amount).toLocaleString('en-IN')} across ${waterfallPreview.allocations.length} open milestones (${instNums.join(', ')}) (+${AGENT_CONFIG.precheck.scoring.amount} pts).`);
+          reasons.push(`Projected net remaining overdue after settlement: ₹${waterfallPreview.post_settlement_overdue_exposure.toLocaleString('en-IN')}.`);
         } else {
           matchedSchedule = dueInstallments[0];
           score += 10;
-          reasons.push(`Partial installment match for Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} (+10 pts).`);
+          reasons.push(`Targeted anchor installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} (+10 pts).`);
         }
       }
 

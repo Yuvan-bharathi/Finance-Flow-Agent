@@ -7,6 +7,7 @@ import { insertAIRecommendation } from '../models/aiRecommendation.model.js';
 import { createAgentRun, updateAgentRun } from '../models/agentRun.model.js';
 import { logStep } from '../models/agentExecutionLog.model.js';
 import { runPreCheckEngine } from '../engine/preCheckEngine.js';
+import { previewWaterfallAllocation } from '../services/settlement.service.js';
 import { emitSocketEvent } from '../config/socket.js';
 
 /**
@@ -39,14 +40,15 @@ const runFallbackRuleBasedMatching = async (payment, agentRunId = null) => {
 
       const dueInstallments = await executeTool('getDueRepayments', { loanId: matchedLoan.id });
       if (dueInstallments && dueInstallments.length > 0) {
-        const exactAmountMatch = dueInstallments.find(inst => parseFloat(inst.scheduled_amount) === parseFloat(payment.amount));
-        if (exactAmountMatch) {
-          matchedSchedule = exactAmountMatch;
+        matchedSchedule = dueInstallments[0];
+        const waterfallPreview = await previewWaterfallAllocation(payment.amount, matchedLoan.id);
+        if (waterfallPreview && waterfallPreview.allocations.length > 0) {
           confidence += 10.0;
-          reasoningLines.push(`Exact amount match found for Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} for amount ₹${payment.amount}.`);
+          const instNums = waterfallPreview.allocations.map(a => `#${a.installment_number}`);
+          reasoningLines.push(`Continuous waterfall algorithm will allocate ₹${parseFloat(payment.amount).toLocaleString('en-IN')} across ${waterfallPreview.allocations.length} open milestones (${instNums.join(', ')}).`);
+          reasoningLines.push(`Projected remaining overdue balance after settlement: ₹${waterfallPreview.post_settlement_overdue_exposure.toLocaleString('en-IN')}.`);
         } else {
-          matchedSchedule = dueInstallments[0];
-          reasoningLines.push(`Selected nearest pending Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date}.`);
+          reasoningLines.push(`Identified anchor installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date}.`);
         }
       }
     }

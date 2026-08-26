@@ -414,23 +414,97 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
               {/* Match Candidate Details */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem', background: '#ffffff', padding: '14px', borderRadius: '12px', border: '1px solid #e9d5ff' }}>
-                <div>
-                  <span style={{ color: '#6b21a8', fontWeight: '700' }}>Matched Company ID:</span>{' '}
-                  <strong style={{ color: '#0f172a' }}>Company #{rec.recommended_company_id || 'N/A'}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#6b21a8', fontWeight: '700' }}>Matched Borrower:</span>
+                  <strong style={{ color: '#0f172a' }}>{rec.company_name || `Company #${rec.recommended_company_id || 'N/A'}`}</strong>
                 </div>
-                <div>
-                  <span style={{ color: '#6b21a8', fontWeight: '700' }}>Matched Loan Facility ID:</span>{' '}
-                  <strong style={{ color: '#0f172a' }}>Loan #{rec.recommended_loan_id || 'N/A'}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#6b21a8', fontWeight: '700' }}>Matched Loan Facility:</span>
+                  <strong style={{ color: '#4f46e5' }}>{rec.loan_number || `Loan #${rec.recommended_loan_id || 'N/A'}`}</strong>
                 </div>
-                <div>
-                  <span style={{ color: '#6b21a8', fontWeight: '700' }}>Target Installment Schedule ID:</span>{' '}
-                  <strong style={{ color: '#0f172a' }}>Schedule #{rec.recommended_schedule_id || 'N/A'}</strong>
-                </div>
-                <div>
-                  <span style={{ color: '#6b21a8', fontWeight: '700' }}>Proposed Allocation Amount:</span>{' '}
-                  <strong style={{ color: '#059669', fontSize: '0.95rem' }}>₹{parseFloat(rec.recommended_amount || caseItem.amount).toLocaleString('en-IN')}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#6b21a8', fontWeight: '700' }}>Total Payment Ingested:</span>
+                  <strong style={{ color: '#059669', fontSize: '0.95rem' }}>₹{parseFloat(caseItem.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                 </div>
               </div>
+
+              {/* 🌊 Proposed Continuous Waterfall Allocation Plan */}
+              {rec.waterfall_preview && rec.waterfall_preview.allocations && rec.waterfall_preview.allocations.length > 0 ? (
+                <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e9d5ff', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#4c1d95', textTransform: 'uppercase' }}>
+                      🌊 Proposed Waterfall Allocation Plan
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#6b21a8', fontWeight: '700' }}>
+                      {rec.waterfall_preview.allocations_count} Milestones Affected
+                    </span>
+                  </div>
+
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: '#faf5ff', color: '#6b21a8', fontSize: '0.68rem', textTransform: 'uppercase', borderBottom: '1px solid #e9d5ff' }}>
+                        <th style={{ padding: '6px 8px', fontWeight: '800' }}>#</th>
+                        <th style={{ padding: '6px 8px', fontWeight: '800' }}>Due Date</th>
+                        <th style={{ padding: '6px 8px', fontWeight: '800' }}>Allocation</th>
+                        <th style={{ padding: '6px 8px', fontWeight: '800', textAlign: 'right' }}>Result Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rec.waterfall_preview.allocations.map((alloc) => (
+                        <tr key={alloc.schedule_id} style={{ borderBottom: '1px solid #f3e8ff' }}>
+                          <td style={{ padding: '8px', fontWeight: '800', color: '#4c1d95' }}>
+                            #{alloc.installment_number}
+                          </td>
+                          <td style={{ padding: '8px', color: '#334155' }}>
+                            {formatAuditTimestamp(alloc.due_date)}
+                          </td>
+                          <td style={{ padding: '8px', fontWeight: '800', color: '#059669' }}>
+                            ₹{alloc.allocated_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>
+                            {alloc.projected_status === 'paid' ? (
+                              <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', padding: '2px 6px', borderRadius: '10px', fontSize: '0.65rem', fontWeight: '800' }}>
+                                ✓ FULLY PAID
+                              </span>
+                            ) : (
+                              <span style={{ background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', padding: '2px 6px', borderRadius: '10px', fontSize: '0.65rem', fontWeight: '800' }}>
+                                🟠 PARTIAL (₹{alloc.remaining_balance.toLocaleString('en-IN')} rem)
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Post-Settlement Balance Metric Banner */}
+                  <div style={{
+                    background: '#faf5ff',
+                    border: '1px dashed #c084fc',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem'
+                  }}>
+                    <div>
+                      <span style={{ color: '#6b21a8', fontWeight: '700' }}>Remaining Overdue Exposure:</span>{' '}
+                      <strong style={{ color: rec.waterfall_preview.post_settlement_overdue_exposure > 0 ? '#dc2626' : '#059669' }}>
+                        ₹{rec.waterfall_preview.post_settlement_overdue_exposure.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                    {rec.waterfall_preview.unallocated_amount > 0 && (
+                      <div>
+                        <span style={{ color: '#6b21a8', fontWeight: '700' }}>Unallocated Credit:</span>{' '}
+                        <strong style={{ color: '#d97706' }}>
+                          ₹{rec.waterfall_preview.unallocated_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
 
               {/* AI Reasoning Summary */}
               <div>
@@ -438,7 +512,7 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
                   AI Evidence Reasoning Breakdown
                 </div>
                 <div style={{ fontSize: '0.825rem', color: '#334155', background: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #e9d5ff', lineHeight: 1.5 }}>
-                  {rec.reasoning || 'AI agent matched bank deposit narration reference string directly with active loan schedule contract.'}
+                  {rec.reasoning || 'AI agent matched bank deposit narration reference string directly with active loan contract.'}
                 </div>
               </div>
 

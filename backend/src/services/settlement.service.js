@@ -119,6 +119,93 @@ export const executeContinuousWaterfall = async ({
 };
 
 /**
+ * Generates a deterministic preview of continuous waterfall allocation
+ * without mutating database tables. Used for UI preview in Case Details Drawer.
+ */
+export const previewWaterfallAllocation = async (paymentAmount, targetLoanId) => {
+  if (!targetLoanId || !paymentAmount) return null;
+
+  let remainingPaisa = Math.round(parseFloat(paymentAmount) * 100);
+  const totalIncomingPaisa = remainingPaisa;
+
+  const [openSchedules] = await pool.query(`
+    SELECT id, installment_number, due_date, scheduled_amount, paid_amount, status
+    FROM repayment_schedules
+    WHERE loan_id = ? AND status IN ('pending', 'partially_paid', 'overdue')
+    ORDER BY due_date ASC, installment_number ASC;
+  `, [targetLoanId]);
+
+  const previewAllocations = [];
+  let totalAllocatedPaisa = 0;
+
+  for (const schedule of openSchedules) {
+    if (remainingPaisa <= 0) break;
+
+    const scheduledPaisa = Math.round(parseFloat(schedule.scheduled_amount) * 100);
+    const currentPaidPaisa = Math.round(parseFloat(schedule.paid_amount || 0) * 100);
+    const neededPaisa = scheduledPaisa - currentPaidPaisa;
+
+    if (neededPaisa <= 0) continue;
+
+    const allocatePaisa = Math.min(remainingPaisa, neededPaisa);
+    const newPaidPaisa = currentPaidPaisa + allocatePaisa;
+    const isFullyPaid = newPaidPaisa >= scheduledPaisa;
+    const projectedStatus = isFullyPaid ? 'paid' : 'partially_paid';
+
+    const allocatedAmountStr = (allocatePaisa / 100).toFixed(2);
+    const remainingBalanceStr = ((scheduledPaisa - newPaidPaisa) / 100).toFixed(2);
+
+    previewAllocations.push({
+      schedule_id: schedule.id,
+      installment_number: schedule.installment_number,
+      due_date: schedule.due_date,
+      scheduled_amount: parseFloat(schedule.scheduled_amount),
+      current_paid_amount: parseFloat((currentPaidPaisa / 100).toFixed(2)),
+      allocated_amount: parseFloat(allocatedAmountStr),
+      new_paid_amount: parseFloat((newPaidPaisa / 100).toFixed(2)),
+      remaining_balance: parseFloat(remainingBalanceStr),
+      projected_status: projectedStatus
+    });
+
+    remainingPaisa -= allocatePaisa;
+    totalAllocatedPaisa += allocatePaisa;
+  }
+
+  // Calculate post-settlement overdue exposure
+  const [overdueRows] = await pool.query(`
+    SELECT id, scheduled_amount, paid_amount
+    FROM repayment_schedules
+    WHERE loan_id = ? AND due_date < CURDATE() AND status != 'paid';
+  `, [targetLoanId]);
+
+  let remainingOverduePaisa = 0;
+  let remainingOverdueCount = 0;
+  for (const row of overdueRows) {
+    const sPaisa = Math.round(parseFloat(row.scheduled_amount) * 100);
+    const pPaisa = Math.round(parseFloat(row.paid_amount || 0) * 100);
+    const previewItem = previewAllocations.find(a => a.schedule_id === row.id);
+    const previewAllocPaisa = previewItem ? Math.round(previewItem.allocated_amount * 100) : 0;
+    const netRemPaisa = sPaisa - (pPaisa + previewAllocPaisa);
+    if (netRemPaisa > 0) {
+      remainingOverduePaisa += netRemPaisa;
+      remainingOverdueCount++;
+    }
+  }
+
+  const unallocatedPaisa = Math.max(0, totalIncomingPaisa - totalAllocatedPaisa);
+
+  return {
+    total_payment_amount: parseFloat(paymentAmount),
+    total_allocated_amount: parseFloat((totalAllocatedPaisa / 100).toFixed(2)),
+    unallocated_amount: parseFloat((unallocatedPaisa / 100).toFixed(2)),
+    allocations_count: previewAllocations.length,
+    allocations: previewAllocations,
+    post_settlement_overdue_exposure: parseFloat((remainingOverduePaisa / 100).toFixed(2)),
+    post_settlement_overdue_count: remainingOverdueCount
+  };
+};
+
+/**
  * Approves an AI Recommendation and executes official financial ledger allocation
  * using deterministic, decimal-safe continuous waterfall across open installments.
  */
@@ -215,9 +302,9 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     connection.release();
 
     // Cache invalidation and real-time socket events
-    await cacheService.delByPattern('loans:*');
-    await cacheService.delByPattern('dashboard:*');
-    await cacheService.delByPattern('reconciliations:*');
+    cacheService.invalidateByTag('payments');
+    cacheService.invalidateByTag('reconciliations');
+    cacheService.invalidateByTag('reports');
 
     emitSocketEvent('RECONCILIATION_COMPLETED', {
       reconciliation_case_id: rec.reconciliation_case_id,
