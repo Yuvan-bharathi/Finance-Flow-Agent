@@ -172,6 +172,14 @@ export const finalizePipelineExecution = async (pipelineId, finalData) => {
     error_message,
     pipelineId
   ]);
+
+  if (status === 'completed') {
+    await pool.execute(`
+      UPDATE pipeline_steps
+      SET status = 'completed'
+      WHERE pipeline_id = ? AND status = 'running';
+    `, [pipelineId]);
+  }
 };
 
 /**

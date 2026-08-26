@@ -348,75 +348,76 @@ export const PipelineVisualizer = ({ pipeline, onClose, onRefresh }) => {
       gap: '20px',
       position: 'relative'
     }}>
-      {/* 1. Pipeline Header Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              background: isRunning ? '#eff6ff' : isCompleted ? '#ecfdf5' : '#fef2f2',
-              color: isRunning ? '#3b82f6' : isCompleted ? '#10b981' : '#ef4444',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Zap size={22} />
+      {/* 1. Pipeline Header Bar (With right-aligned metrics & action toolbar) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap' }}>
+        {/* Left Column: Icon + Title + Linked Entity Badges */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flex: '1 1 380px' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
+            background: isRunning ? '#eff6ff' : isCompleted ? '#ecfdf5' : '#fef2f2',
+            color: isRunning ? '#3b82f6' : isCompleted ? '#10b981' : '#ef4444',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: '2px'
+          }}>
+            <Zap size={22} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                Pipeline #{pipeline.id}: {pipeline.pipeline_name?.replace(/_/g, ' ') || pipeline.workflow_name || 'Autonomous Multi-Agent Workflow'}
+              </h2>
+              <span style={{
+                padding: '3px 10px',
+                borderRadius: '20px',
+                fontSize: '0.7rem',
+                fontWeight: '800',
+                textTransform: 'uppercase',
+                background: getStepBadgeColor(pipeline.status).bg,
+                border: `1px solid ${getStepBadgeColor(pipeline.status).border}`,
+                color: getStepBadgeColor(pipeline.status).text
+              }}>
+                {pipeline.status}
+              </span>
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                  Pipeline #{pipeline.id}: {pipeline.pipeline_name?.replace(/_/g, ' ') || pipeline.workflow_name || 'Autonomous Multi-Agent Workflow'}
-                </h2>
-                <span style={{
-                  padding: '4px 10px',
-                  borderRadius: '20px',
-                  fontSize: '0.7rem',
-                  fontWeight: '800',
-                  textTransform: 'uppercase',
-                  background: getStepBadgeColor(pipeline.status).bg,
-                  border: `1px solid ${getStepBadgeColor(pipeline.status).border}`,
-                  color: getStepBadgeColor(pipeline.status).text
-                }}>
-                  {pipeline.status}
+            
+            {/* Linked Transaction, Case & Borrower Context */}
+            <div style={{ fontSize: '0.75rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {pipeline.linked_company_name && (
+                <span style={{ background: '#f1f5f9', color: '#1e293b', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                  🏢 Borrower: {pipeline.linked_company_name}
                 </span>
-              </div>
-              
-              {/* Linked Transaction, Case & Borrower Context */}
-              <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                {pipeline.linked_company_name && (
-                  <span style={{ background: '#f1f5f9', color: '#1e293b', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
-                    🏢 Borrower: {pipeline.linked_company_name}
-                  </span>
-                )}
-                {pipeline.linked_transaction_id && (
-                  <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
-                    💳 Transaction: {pipeline.linked_transaction_id}
-                  </span>
-                )}
-                {pipeline.linked_case_id && (
-                  <span style={{ background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
-                    📄 Reconciliation Case #{pipeline.linked_case_id}
-                  </span>
-                )}
-                <span>Trigger: <strong>{pipeline.trigger_source || 'manual'}</strong></span>
-                {pipeline.correlation_id && <span># <code>{pipeline.correlation_id}</code></span>}
-              </div>
+              )}
+              {pipeline.linked_transaction_id && (
+                <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                  💳 Transaction: {pipeline.linked_transaction_id}
+                </span>
+              )}
+              {pipeline.linked_case_id && (
+                <span style={{ background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                  📄 Reconciliation Case #{pipeline.linked_case_id}
+                </span>
+              )}
+              <span>Trigger: <strong>{pipeline.trigger_source || 'manual'}</strong></span>
+              {pipeline.correlation_id && <span># <code>{pipeline.correlation_id}</code></span>}
             </div>
           </div>
         </div>
 
-        {/* Metrics & Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Right Column: Duration, Tokens, Refresh & Close Actions (Always on Far Right) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, marginLeft: 'auto' }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
+            gap: '14px',
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
             borderRadius: '12px',
-            padding: '8px 16px'
+            padding: '8px 14px'
           }}>
             <div>
               <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>Duration</div>
