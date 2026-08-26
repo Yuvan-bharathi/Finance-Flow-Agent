@@ -6,6 +6,7 @@ import {
   Search, Mail, X, ShieldAlert, Landmark
 } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socketService';
 
@@ -157,7 +158,7 @@ export const LoanList = ({ onAskAI }) => {
 
     try {
       setActionLoading(prev => ({ ...prev, [loan.id]: true }));
-      await api.post(`/collection/generate/${loan.company_id}`);
+      await api.post(`/collections/generate/${loan.company_id}`);
       setToastMessage({
         type: 'success',
         text: `⚡ Agent 3 drafted collection notice for ${loan.company_name} (₹${overdueAmt.toLocaleString('en-IN')} overdue). Available in Notifications.`
@@ -562,7 +563,7 @@ export const LoanList = ({ onAskAI }) => {
                 <th style={{ padding: '14px 20px', fontWeight: '800' }}>Principal & Terms</th>
                 <th style={{ padding: '14px 20px', fontWeight: '800' }}>Repayment Progress</th>
                 <th style={{ padding: '14px 20px', fontWeight: '800' }}>Outstanding & Next Due</th>
-                <th style={{ padding: '14px 20px', fontWeight: '800' }}>Health Status</th>
+                <th style={{ padding: '14px 20px', fontWeight: '800', whiteSpace: 'nowrap', minWidth: '180px' }}>Health Status</th>
                 <th style={{ padding: '14px 20px', fontWeight: '800', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -666,21 +667,73 @@ export const LoanList = ({ onAskAI }) => {
                       </td>
 
                       {/* Health Status Pill */}
-                      <td style={{ padding: '14px 20px' }}>
+                      <td style={{ padding: '14px 20px', whiteSpace: 'nowrap' }}>
                         {l.health_status === 'FULLY_RECOVERED' ? (
-                          <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', padding: '3px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#ecfdf5',
+                            color: '#059669',
+                            border: '1px solid #a7f3d0',
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            fontSize: '0.72rem',
+                            fontWeight: '800',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />
                             ✓ FULLY SETTLED
                           </span>
                         ) : l.health_status === 'CRITICAL' ? (
-                          <span style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '3px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#fef2f2',
+                            color: '#dc2626',
+                            border: '1px solid #fecaca',
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            fontSize: '0.72rem',
+                            fontWeight: '800',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#dc2626' }} />
                             CRITICAL ({maxDaysOverdue}d overdue)
                           </span>
                         ) : l.health_status === 'WATCHLIST' ? (
-                          <span style={{ background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', padding: '3px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#fffbeb',
+                            color: '#d97706',
+                            border: '1px solid #fde68a',
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            fontSize: '0.72rem',
+                            fontWeight: '800',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d97706' }} />
                             WATCHLIST ({maxDaysOverdue}d)
                           </span>
                         ) : (
-                          <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', padding: '3px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: '800' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#ecfdf5',
+                            color: '#059669',
+                            border: '1px solid #a7f3d0',
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            fontSize: '0.72rem',
+                            fontWeight: '800',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />
                             HEALTHY
                           </span>
                         )}
@@ -712,31 +765,6 @@ export const LoanList = ({ onAskAI }) => {
                             <span>Schedule</span>
                           </button>
 
-                          {/* Ask Copilot */}
-                          <button
-                            onClick={() => {
-                              if (onAskAI) onAskAI('loan', l.id);
-                            }}
-                            title="Trigger Copilot audit on this facility"
-                            style={{
-                              background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
-                              color: '#ffffff',
-                              border: 'none',
-                              borderRadius: '8px',
-                              padding: '5px 10px',
-                              fontSize: '0.75rem',
-                              fontWeight: '700',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              boxShadow: '0 2px 6px rgba(124,58,237,0.2)'
-                            }}
-                          >
-                            <Bot size={13} />
-                            <span>Copilot</span>
-                          </button>
-
                           {/* Collection Notice (Agent 3) */}
                           <button
                             onClick={() => handleTriggerCollection(l)}
@@ -758,6 +786,33 @@ export const LoanList = ({ onAskAI }) => {
                           >
                             <Mail size={13} />
                             <span>{actionLoading[l.id] ? 'Drafting...' : 'Notice'}</span>
+                          </button>
+
+                          {/* AI Assistant Icon Button */}
+                          <button
+                            onClick={() => {
+                              if (onAskAI) onAskAI('loan', l.id);
+                            }}
+                            title="Ask AI Assistant about this facility"
+                            style={{
+                              background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '8px',
+                              width: '28px',
+                              height: '28px',
+                              padding: '0',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 2px 6px rgba(124,58,237,0.25)',
+                              transition: 'transform 0.1s ease, box-shadow 0.1s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.08)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                          >
+                            <Bot size={15} />
                           </button>
 
                         </div>
@@ -1101,15 +1156,12 @@ export const LoanList = ({ onAskAI }) => {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                    First Installment Start Date *
-                  </label>
-                  <input
-                    type="date"
+                  <CustomDatePicker
+                    label="First Installment Start Date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(val) => setStartDate(val)}
                     required
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    placeholder="Select start date"
                   />
                 </div>
               </div>

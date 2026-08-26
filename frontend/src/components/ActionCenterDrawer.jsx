@@ -19,6 +19,19 @@ import { StatusBadge } from './Dashboard/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 
 /**
+ * Normalizes UTC datetime strings from backend/MySQL and converts to Local Browser Time.
+ */
+const formatAuditTimestamp = (dateStr) => {
+  if (!dateStr) return '—';
+  let str = String(dateStr).trim();
+  if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+/**
  * Slide-over Action Center AI Review Drawer
  * Displays deposit bank evidence, Groq AI candidate recommendation, dynamic confidence ring, reasoning breakdown,
  * and 1-click settlement approval controls matching bright enterprise SaaS theme.

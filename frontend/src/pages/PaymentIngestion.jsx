@@ -3,6 +3,7 @@ import api from '../services/api';
 import { CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play, RefreshCw, AlertTriangle, ShieldCheck, Bot } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 import { getCases, analyzeCase } from '../services/reconciliationService';
 import { analyzeBulk, analyzeAllPending } from '../services/agentService';
 import { useAuth } from '../context/AuthContext';
@@ -337,13 +338,12 @@ export const PaymentIngestion = ({ onAskAI }) => {
           </div>
 
           <div>
-            <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Payment Date *</label>
-            <input
-              type="date"
-              required
+            <CustomDatePicker
+              label="Payment Date"
               value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
-              style={{ width: '100%', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', padding: '10px 14px', borderRadius: '10px', marginTop: '4px', fontSize: '0.875rem' }}
+              onChange={(val) => setPaymentDate(val)}
+              required
+              placeholder="Select payment date"
             />
           </div>
 
