@@ -1,5 +1,34 @@
 # Changelog — FinanceFlow AI
 
+## [1.7.0-Phase7] - 2026-08-26 (Human-in-the-Loop AI Operational Copilot & Action Proposal Safety Engine)
+
+### Added
+- **Database Schema Migration (`006_phase7_copilot_proposals.sql`)**:
+  - `assistant_action_proposals`: Macro-level human confirmation ledger (`id`, `user_id`, `action_type`, `target_entity_type`, `target_id`, `parameters_payload`, `payload_hash`, `proposal_version`, `evidence_summary`, `confidence_score`, `status`, `expires_at`, `confirmed_by`, `confirmed_at`).
+  - Cryptographic SHA-256 payload integrity hashing (`payload_hash`) and optimistic concurrency versioning (`proposal_version`).
+  - Table documentation: `database/documentation/assistant_action_proposals.md`.
+- **Action Proposal Safety Gate Service (`assistantAction.service.js`)**:
+  - Golden Safety Rule: Enforces a strict read-first AI model. No direct database mutations can ever execute from an LLM tool call.
+  - Generates proposals with 5-minute TTL and SHA-256 integrity hash.
+  - Pessimistic row locking (`FOR UPDATE`) inside ACID transactions during human confirmation.
+  - Inline TTL validation returning HTTP 410 Gone for expired proposals.
+  - PBAC permission verification on confirmation.
+  - Payload tamper detection returning HTTP 422 for hash mismatches.
+  - Immutable audit trail recording `{ old_values, new_values, source: 'AI Copilot Assistant' }`.
+  - WebSocket event broadcast `ASSISTANT_ACTION_CONFIRMED`.
+- **OpenAPI 3.0 JSDoc Annotated Assistant Router (`assistant.routes.js`)**:
+  - `POST /api/v1/assistant/chat`: AI Copilot conversation endpoint with `agentRateLimiter`.
+  - `GET /api/v1/assistant/proposals`: Active proposals retrieval endpoint.
+  - `POST /api/v1/assistant/proposals/:id/confirm`: Protected by `idempotencyMiddleware()` with `Idempotency-Key` header.
+  - `POST /api/v1/assistant/proposals/:id/dismiss`: Proposal dismissal endpoint.
+- **Interactive Frontend AI Copilot Panel (`AiCopilotPanel.jsx`)**:
+  - Decision Evidence cards presenting clear bullet-point findings, risk scores, and confidence pills without leaking private internal model chain-of-thought.
+  - Real-time action proposal interactive cards with 5-minute countdown timers, one-click `[Confirm Action]` with idempotency keys, and `[Dismiss]` actions.
+- **Master 18-Vector Automated Integration Test Suite (`phase7_assistant.test.js`)**:
+  - 100% test coverage across Conversational Chat, Read Tools, Chaining, Resilience, Unknown Entity Handling, Proposal Generation, Evidence Integrity, Inline TTL Rejection (HTTP 410), PBAC Enforcement (HTTP 403), Tamper Check (HTTP 422), Idempotent Replay, ACID State Mutation, Rollback Resilience, Audit Trail, and Dismissal.
+
+---
+
 ## [1.6.0-Phase6] - 2026-08-25 (OpenAPI Documentation, Observability, Security Hardening & Full E2E Verification)
 
 ### Added

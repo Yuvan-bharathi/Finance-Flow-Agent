@@ -1,65 +1,45 @@
 import api from './api';
 
 /**
- * Service: AI Copilot API Client
+ * Service: AI Operational Copilot API Client (Phase 7)
  *
- * Purpose:
- *   Frontend functions to interact with the AI Assistant backend.
- *
- * Called by:
- *   - frontend/src/components/AiCopilotPanel.jsx
- *
- * Data flow:
- *   AiCopilotPanel → sendMessage() → POST /api/assistant/chat → Groq + MySQL
- *   [Ask AI] button → wakeContext() → GET /api/assistant/wake/:type/:id → context meta
+ * Provides frontend functions to interact with the AI Assistant backend,
+ * retrieve active proposals, confirm proposals with Idempotency keys, and dismiss proposals.
  */
 
 /**
- * sendMessage
- *
  * Sends the user's message along with conversation history and current context.
- * Backend returns: { answer, sources[], suggestedActions[], total_tokens }
- *
- * @param {string} message              - User's current message
- * @param {Array}  conversationHistory  - Last N messages [{ role, content }] (max 10)
- * @param {Object} contextPayload       - { page, recordType, recordId }
- * @returns {Promise<AxiosResponse>}
  */
 export const sendMessage = (message, conversationHistory = [], contextPayload = {}) =>
   api.post('/assistant/chat', { message, conversationHistory, contextPayload });
 
 /**
- * wakeContext
+ * Retrieves active pending proposals for the authenticated user.
+ */
+export const getActiveProposals = () =>
+  api.get('/assistant/proposals');
+
+/**
+ * Confirms and executes an action proposal with Idempotency Key protection.
  *
+ * @param {number|string} proposalId - Proposal ID
+ * @param {string} [idempotencyKey] - Optional idempotency key to prevent double clicks
+ */
+export const confirmProposal = (proposalId, idempotencyKey = null) => {
+  const key = idempotencyKey || `IDEMP-ACT-${proposalId}-${Date.now()}`;
+  return api.post(`/assistant/proposals/${proposalId}/confirm`, {}, {
+    headers: { 'Idempotency-Key': key }
+  });
+};
+
+/**
+ * Dismisses an action proposal without executing mutations.
+ */
+export const dismissProposal = (proposalId) =>
+  api.post(`/assistant/proposals/${proposalId}/dismiss`);
+
+/**
  * Pre-loads a record's context when user clicks [Ask AI] on a specific record.
- * Returns: { title, snippet } for the copilot panel context badge.
- *
- * @param {string} recordType - 'payment' | 'reconciliation_case' | 'company' | 'loan'
- * @param {number} recordId   - Primary key of the record
- * @returns {Promise<AxiosResponse>}
  */
 export const wakeContext = (recordType, recordId) =>
   api.get(`/assistant/wake/${recordType}/${recordId}`);
-
-/**
- * confirmProposal (Phase 3)
- *
- * Executes a pending action proposal with human confirmation.
- *
- * @param {string} proposalId - Unique action proposal ID (e.g. "ACT-000123")
- * @returns {Promise<AxiosResponse>}
- */
-export const confirmProposal = (proposalId) =>
-  api.post('/assistant/actions/confirm', { proposalId });
-
-/**
- * dismissProposal (Phase 3)
- *
- * Dismisses an action proposal without executing mutations.
- *
- * @param {string} proposalId - Unique action proposal ID
- * @returns {Promise<AxiosResponse>}
- */
-export const dismissProposal = (proposalId) =>
-  api.post('/assistant/actions/dismiss', { proposalId });
-

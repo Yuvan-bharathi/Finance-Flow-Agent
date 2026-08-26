@@ -24,14 +24,14 @@ import { parsePagination, buildPaginatedResponse } from '../utils/paginationHelp
 export const insertAuditLog = async (auditData, connection = null) => {
   const executor = connection || pool;
   const {
-    user_id = null,
+    user_id = auditData.userId || null,
     action,
-    entity_type,
-    entity_id = null,
-    old_values = null,
-    new_values = null,
-    ip_address = null,
-    correlation_id = null
+    entity_type = auditData.entityType,
+    entity_id = auditData.entityId || null,
+    old_values = auditData.oldValues || null,
+    new_values = auditData.newValues || null,
+    ip_address = auditData.ipAddress || null,
+    correlation_id = auditData.correlationId || null
   } = auditData;
 
   const query = `
@@ -120,7 +120,10 @@ export const findAllAuditLogs = async (queryParams = {}) => {
   return buildPaginatedResponse(formattedRows, totalRecords, { page, limit });
 };
 
+export const createAuditLog = insertAuditLog;
+
 export default {
   insertAuditLog,
+  createAuditLog,
   findAllAuditLogs
 };
