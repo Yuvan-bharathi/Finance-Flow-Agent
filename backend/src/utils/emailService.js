@@ -14,23 +14,27 @@ import { config } from '../config/env.js';
  * the service logs formatted email previews to console without throwing errors or halting operations.
  */
 
-// Initialize Nodemailer Transporter
-const createTransporter = () => {
-  if (config.smtp.user && config.smtp.pass) {
+// Dynamic Nodemailer Transporter Getter
+const getTransporter = () => {
+  const user = process.env.SMTP_USER || config.smtp.user;
+  const pass = process.env.SMTP_PASS || config.smtp.pass;
+  const host = process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || config.smtp.port || '587', 10);
+  const secure = (process.env.SMTP_SECURE || config.smtp.secure) === true || (process.env.SMTP_SECURE === 'true');
+
+  if (user && pass && user.trim() !== '' && pass.trim() !== '') {
     return nodemailer.createTransport({
-      host: config.smtp.host,
-      port: config.smtp.port,
-      secure: config.smtp.secure,
+      host,
+      port,
+      secure,
       auth: {
-        user: config.smtp.user.trim(),
-        pass: config.smtp.pass.replace(/\s+/g, ''),
+        user: user.trim(),
+        pass: pass.replace(/\s+/g, ''),
       },
     });
   }
   return null;
 };
-
-const transporter = createTransporter();
 
 /**
  * Sends a User Invitation & Password Setup Email
@@ -97,6 +101,8 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
     </body>
     </html>
   `;
+
+  const transporter = getTransporter();
 
   if (transporter) {
     try {
@@ -190,6 +196,8 @@ export const sendEscalationNoticeEmail = async ({
     </html>
   `;
 
+  const transporter = getTransporter();
+
   if (transporter) {
     try {
       const info = await transporter.sendMail({
@@ -205,15 +213,21 @@ export const sendEscalationNoticeEmail = async ({
       return { success: false, error: err.message, mode: 'smtp_failed', from: fromEmail, to: targetRecipient };
     }
   } else {
-    // Console Fallback when SMTP credentials are not configured
+    // Console Fallback when SMTP credentials are not configured in environment variables
     console.log('\n=============================================================');
-    console.log('📧 [MOCK ESCALATION MAIL DISPATCH]');
+    console.log('📧 [MOCK ESCALATION MAIL DISPATCH — REAL SMTP CREDENTIALS NOT SET]');
     console.log(`FROM: ${senderFrom}`);
     console.log(`TO: ${companyName} <${targetRecipient}>`);
     console.log(`PRIORITY: ${priority.toUpperCase()}`);
     console.log(`SUBJECT: ${subject}`);
     console.log(`BODY:\n${body}`);
     console.log('=============================================================\n');
-    return { success: true, mode: 'mock_console', from: fromEmail, to: targetRecipient };
+    return {
+      success: true,
+      mode: 'mock_console',
+      from: fromEmail,
+      to: targetRecipient,
+      notice: 'Email logged to server console. To deliver real emails, set SMTP_USER and SMTP_PASS in your Render Environment Variables.'
+    };
   }
 };
