@@ -127,6 +127,18 @@ app.get('/api-docs.json', (req, res) => {
   res.send(swaggerSpec);
 });
 
+// Root Gateway Liveness Handler (handles HEAD / and GET / for Render / Cloud Uptime health checks)
+app.all('/', (req, res) => {
+  res.status(200).json({
+    status: 'UP',
+    name: 'FinanceFlow AI Enterprise Backend API',
+    version: '1.7.0',
+    documentation: '/api-docs',
+    health: '/health',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // 8. Health & Observability Probe Routes
 app.use('/health', healthRoutes);
 app.use('/api/health', healthRoutes);

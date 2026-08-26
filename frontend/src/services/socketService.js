@@ -12,7 +12,7 @@ let socket = null;
 
 export const connectSocket = () => {
   if (!socket) {
-    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (import.meta.env.PROD ? 'https://finance-flow-agent.onrender.com' : 'http://localhost:5000');
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (import.meta.env.PROD ? 'https://finance-flow-agent-1.onrender.com' : 'http://localhost:5000');
     
     socket = io(SOCKET_URL, {
       withCredentials: true,

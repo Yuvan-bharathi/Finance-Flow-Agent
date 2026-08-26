@@ -5,7 +5,7 @@ import axios from 'axios';
  * Uses VITE_API_URL or defaults to Render backend in production and localhost in development.
  * Automatically injects X-Correlation-ID and Authorization headers on all requests.
  */
-const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://finance-flow-agent.onrender.com/api' : 'http://localhost:5000/api');
+const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://finance-flow-agent-1.onrender.com/api' : 'http://localhost:5000/api');
 
 export const generateCorrelationId = () => {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
