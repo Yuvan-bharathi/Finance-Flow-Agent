@@ -296,36 +296,103 @@ export const AgentRunHistoryDrawer = ({ agent, agentId, agentName, onClose }) =>
                           {loadingLogs[run.id] ? (
                             <div style={{ fontSize: '0.75rem', color: '#64748b', padding: '8px' }}>Loading step logs...</div>
                           ) : logs.length === 0 ? (
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>No detailed step logs recorded.</div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', padding: '6px 0' }}>No detailed step logs recorded.</div>
                           ) : (
-                            logs.map((step, idx) => (
-                              <div
-                                key={idx}
-                                style={{
-                                  background: '#ffffff',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '8px',
-                                  padding: '8px 12px',
-                                  fontSize: '0.725rem',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '4px'
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: '600' }}>
-                                  <span style={{ color: '#4f46e5' }}>[{step.step_type}] {step.step_name}</span>
-                                  <span style={{ color: step.status === 'completed' ? '#059669' : '#dc2626' }}>
-                                    {step.status.toUpperCase()} {step.duration_ms ? `(${step.duration_ms}ms)` : ''}
-                                  </span>
-                                </div>
+                            logs.map((step, idx) => {
+                              let out = step.output_data;
+                              if (typeof out === 'string') {
+                                try { out = JSON.parse(out); } catch (e) { out = null; }
+                              }
 
-                                {step.output_data && (
-                                  <pre style={{ margin: 0, fontSize: '0.68rem', color: '#475569', background: '#f1f5f9', padding: '4px 6px', borderRadius: '4px', overflowX: 'auto' }}>
-                                    {JSON.stringify(step.output_data, null, 2)}
-                                  </pre>
-                                )}
-                              </div>
-                            ))
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    background: '#ffffff',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '10px',
+                                    padding: '10px 14px',
+                                    fontSize: '0.75rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '6px'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: '700' }}>
+                                    <span style={{ color: '#4f46e5' }}>[{step.step_type}] {step.step_name}</span>
+                                    <span style={{
+                                      fontSize: '0.68rem',
+                                      padding: '2px 8px',
+                                      borderRadius: '6px',
+                                      fontWeight: '800',
+                                      background: step.status === 'completed' ? '#ecfdf5' : '#fef2f2',
+                                      color: step.status === 'completed' ? '#059669' : '#dc2626'
+                                    }}>
+                                      {step.status.toUpperCase()} {step.duration_ms ? `(${step.duration_ms}ms)` : ''}
+                                    </span>
+                                  </div>
+
+                                  {/* Human-Readable Output Formatter */}
+                                  {out && (
+                                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 10px', marginTop: '2px' }}>
+                                      {/* Case 1: Breached Borrowers List */}
+                                      {out.breached_borrowers && Array.isArray(out.breached_borrowers) ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                          <div style={{ fontWeight: '800', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem' }}>
+                                            <span>🚨 {out.total_delinquent_companies || out.breached_borrowers.length} Delinquent Borrower(s) Identified:</span>
+                                          </div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '160px', overflowY: 'auto' }}>
+                                            {out.breached_borrowers.map((b, bIdx) => (
+                                              <div key={bIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem' }}>
+                                                <span style={{ fontWeight: '700', color: '#1e293b' }}>🏢 {b.company || b.company_name || `Company #${b.company_id}`}</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                  <span style={{ color: '#b91c1c', fontWeight: '800' }}>{b.overdue_amount || (b.outstanding_amount ? `₹${Number(b.outstanding_amount).toLocaleString('en-IN')}` : '')}</span>
+                                                  <span style={{ background: '#fef2f2', color: '#991b1b', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>{b.overdue_days}</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : out.companies && Array.isArray(out.companies) ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                          <span style={{ fontWeight: '700', color: '#b91c1c' }}>🚨 {out.breach_count || out.companies.length} Breached Accounts Identified</span>
+                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                            {out.companies.map((c, cIdx) => (
+                                              <span key={cIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem', color: '#334155' }}>
+                                                Company #{c.company_id} ({c.overdue_days}d overdue)
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : out.total_alerts !== undefined ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.72rem' }}>
+                                          <span style={{ fontWeight: '800', color: '#059669' }}>✅ Scan Complete</span>
+                                          <span style={{ color: '#475569' }}>Total Alerts: <strong>{out.total_alerts}</strong></span>
+                                          {out.critical > 0 && <span style={{ color: '#dc2626', fontWeight: '700' }}>Critical: {out.critical}</span>}
+                                          {out.high > 0 && <span style={{ color: '#d97706', fontWeight: '700' }}>High: {out.high}</span>}
+                                        </div>
+                                      ) : out.overdue_count !== undefined ? (
+                                        <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                                          🔍 Scanned portfolio records. Found <strong>{out.overdue_count}</strong> delinquent entries.
+                                        </div>
+                                      ) : out.alerts_classified !== undefined ? (
+                                        <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                                          🧠 Groq AI classified <strong>{out.alerts_classified}</strong> risk escalation notices.
+                                        </div>
+                                      ) : out.subject ? (
+                                        <div style={{ fontSize: '0.72rem', color: '#1e293b' }}>
+                                          <span style={{ fontWeight: '700', color: '#4f46e5' }}>✉️ Notice Draft:</span> {out.subject}
+                                        </div>
+                                      ) : (
+                                        <pre style={{ margin: 0, fontSize: '0.68rem', color: '#475569', overflowX: 'auto' }}>
+                                          {JSON.stringify(out, null, 2)}
+                                        </pre>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
                           )}
                         </div>
 
