@@ -121,8 +121,6 @@ export const findLoanById = async (loanId) => {
       rs.installment_number,
       rs.due_date,
       rs.scheduled_amount,
-      rs.principal_amount,
-      rs.interest_amount,
       rs.paid_amount,
       (rs.scheduled_amount - COALESCE(rs.paid_amount, 0)) AS remaining_amount,
       rs.status,
