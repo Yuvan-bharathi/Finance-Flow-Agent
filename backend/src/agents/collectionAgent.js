@@ -187,12 +187,42 @@ Output JSON format:
       duration_ms: durationMs
     });
 
+    // Save drafted collection notice into notification_alerts for human review/dispatch in Notification Center
+    try {
+      const [alertInsert] = await pool.execute(`
+        INSERT INTO notification_alerts (
+          agent_run_id, company_id, severity, overdue_days, outstanding_amount,
+          title, message, ai_reasoning, recommended_recipient, recommended_action,
+          escalation_level, notification_status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+      `, [
+        runId,
+        company.id,
+        urgencyLevel === 'FINAL_DEMAND' ? 'CRITICAL' : urgencyLevel === 'URGENT_WARNING' ? 'HIGH' : 'MEDIUM',
+        daysOverdue,
+        totalOverdue,
+        finalDraft.subject,
+        finalDraft.email_body,
+        finalDraft.email_body,
+        `${finalDraft.recipient_name} <${finalDraft.recipient_email}>`,
+        `Dispatch formal ${urgencyLevel.replace(/_/g, ' ')} notice to borrower contact.`,
+        'Borrower Contact'
+      ]);
+      finalDraft.alert_id = alertInsert.insertId;
+    } catch (alertErr) {
+      console.warn('[Collection Agent] Warning: Failed to insert into notification_alerts:', alertErr.message);
+    }
+
     // Emit real-time WebSocket event
     emitSocketEvent('COLLECTION_DRAFTED', {
       company_id: company.id,
       company_name: company.company_name,
       urgency: urgencyLevel,
       subject: finalDraft.subject
+    });
+    emitSocketEvent('escalation_alert_created', {
+      company_id: company.id,
+      title: finalDraft.subject
     });
 
     return finalDraft;

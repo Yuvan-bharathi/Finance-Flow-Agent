@@ -33,6 +33,12 @@ const formatAuditTimestamp = (dateStr) => {
  * Builds a formal, high-impact drafted notice body.
  */
 const buildFormalNoticeDraft = (alert) => {
+  if (alert.message && alert.message.includes('Dear ')) {
+    return alert.message;
+  }
+  if (alert.ai_reasoning && alert.ai_reasoning.includes('Dear ')) {
+    return alert.ai_reasoning;
+  }
   if (alert.message_draft && alert.message_draft.length > 60) {
     return alert.message_draft;
   }
@@ -106,6 +112,9 @@ export const Notifications = ({ onAskAI, onSelectCase }) => {
   // ─── Category Filtering Helper ─────────────────────────────────────────────
   // Distinguishes Internal Executive Escalations (Agent 6) vs External Borrower Collection Notices (Agent 3)
   const isInternalEscalation = (alert) => {
+    if (alert.escalation_level === 'Borrower Contact' || alert.escalation_level === 'BORROWER_CONTACT') {
+      return false;
+    }
     const route = (alert.escalation_level || alert.recommended_recipient || '').toLowerCase();
     return route.includes('director') || route.includes('manager') || route.includes('officer') || route.includes('admin') || !alert.contact_email;
   };
