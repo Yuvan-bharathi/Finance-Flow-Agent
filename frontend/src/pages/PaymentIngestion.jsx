@@ -5,18 +5,18 @@ import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
 import { getCases, analyzeCase } from '../services/reconciliationService';
 import { analyzeBulk, analyzeAllPending } from '../services/agentService';
-
 import { useAuth } from '../context/AuthContext';
+import { useDateFilter } from '../context/DateFilterContext';
+import { swrCache } from '../services/cacheService';
+import { connectSocket } from '../services/socketService';
 
 /**
- * Section 17 Payment Ingestion & Deposit Inspection Page
- * Features Case # Column, Exact Date+Time Timestamps, Checkbox Selection, Bulk Execution, and Inline Single-Case AI Execution.
- * 
- * Called by:
- * - Dashboard.jsx / App.jsx
+ * Section 17 Payment Ingestion & Deposit Inspection Page (Real-Time & Date Filter Enhanced)
+ * Features Case # Column, Exact Date+Time Timestamps, Checkbox Selection, Bulk Execution, and Live WebSocket Prepending.
  */
 export const PaymentIngestion = ({ onAskAI }) => {
   const { user } = useAuth();
+  const { startDate, endDate } = useDateFilter();
   const isViewer = (user?.role_name || user?.role || '').toLowerCase() === 'viewer';
   const [payments, setPayments] = useState([]);
   const [cases, setCases] = useState([]);
@@ -43,23 +43,65 @@ export const PaymentIngestion = ({ onAskAI }) => {
 
   const fetchPaymentsAndCases = async (showSpinner = false) => {
     try {
-      if (showSpinner) setLoading(true);
-      const [payRes, casesData] = await Promise.all([
-        api.get('/payments'),
+      if (showSpinner && payments.length === 0) setLoading(true);
+      const cacheKey = `payments:${startDate}:${endDate}`;
+
+      const [payData, casesData] = await Promise.all([
+        swrCache.fetchWithSwr(
+          cacheKey,
+          () => api.get('/payments', { params: { startDate, endDate } }).then(res => res.data?.data || []),
+          { ttlMs: 30000, onBackgroundUpdate: (fresh) => setPayments(fresh || []) }
+        ),
         getCases()
       ]);
-      setPayments(payRes.data.data || []);
+
+      setPayments(payData || []);
       setCases(casesData || []);
     } catch (err) {
       console.error(err);
     } finally {
-      if (showSpinner) setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPaymentsAndCases(true);
-  }, []);
+    fetchPaymentsAndCases(payments.length === 0);
+
+    // Attach real-time WebSocket listener for live deposits
+    const socket = connectSocket();
+    if (socket) {
+      const handlePaymentIngested = (payload) => {
+        const newPayment = payload.payment || payload;
+        const newCase = payload.case;
+
+        setPayments(prev => {
+          if (prev.some(p => p.id === newPayment.id || p.transaction_id === newPayment.transaction_id)) {
+            return prev;
+          }
+          return [{ ...newPayment, isLive: true }, ...prev];
+        });
+
+        if (newCase) {
+          setCases(prev => {
+            if (prev.some(c => c.id === newCase.id)) return prev;
+            return [{ ...newCase, isLive: true }, ...prev];
+          });
+        }
+
+        // Remove live badge highlight after 4s
+        setTimeout(() => {
+          setPayments(prev => prev.map(p => (p.id === newPayment.id ? { ...p, isLive: false } : p)));
+        }, 4000);
+
+        swrCache.invalidate('payments');
+      };
+
+      socket.on('PAYMENT_INGESTED', handlePaymentIngested);
+      return () => {
+        socket.off('PAYMENT_INGESTED', handlePaymentIngested);
+      };
+    }
+  }, [startDate, endDate]);
 
   // Filter pending unanalyzed cases (both 'new' and 'open' without an existing match)
   const unanalyzedCases = cases.filter(c => {

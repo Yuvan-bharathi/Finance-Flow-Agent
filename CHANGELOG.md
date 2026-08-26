@@ -1,5 +1,25 @@
 # Changelog — FinanceFlow AI
 
+## [1.7.1-RealTimeSync] - 2026-08-26 (Global Date Range Filter, In-Memory Caching & Real-Time WebSocket Synchronization)
+
+### Added
+- **Global Interactive Date Range Filter (`DateFilterContext.jsx` & `Header.jsx`)**:
+  - Interactive dropdown selector anchored in the navbar with 1-click presets (*Today*, *Last 7 Days*, *This Month*, *Last 30 Days*, *YTD*) and custom HTML5 date pickers.
+  - Persisted in `sessionStorage` and dynamically propagated across Payments, Reports, Action Center, Loans, and Audit Compliance.
+- **Zero-Dependency Multi-Tier Cache Layer (`cache.service.js` & `cache.middleware.js`)**:
+  - In-memory cache abstraction with TTL expiration and tag-based group invalidation (`invalidateByTag()`).
+  - Express cache middleware attaching `X-Cache: HIT` / `X-Cache: MISS` headers.
+  - Automatic cache purging on mutations (payment ingestion, AI settlement approval).
+- **Client-Side SWR Cache (`cacheService.js`)**:
+  - In-memory Stale-While-Revalidate cache enabling instant tab switching with zero database query spam.
+- **Real-Time WebSocket Zero-Reload Synchronization (`PaymentIngestion.jsx`)**:
+  - Event-driven state injection listening for `PAYMENT_INGESTED` and `PAYMENT_ALLOCATED`.
+  - Optimistically prepends new transactions with a highlight glow badge (`⚡ Just Now`) without requiring page refresh.
+- **Automated Integration Test Suite (`test_date_cache_realtime.js`)**:
+  - 100% test coverage across date boundary filtering, cache HIT/MISS latency measurement, tag invalidation on mutation, and near-real-time WebSocket event delivery.
+
+---
+
 ## [1.7.0-Phase7] - 2026-08-26 (Human-in-the-Loop AI Operational Copilot & Action Proposal Safety Engine)
 
 ### Added

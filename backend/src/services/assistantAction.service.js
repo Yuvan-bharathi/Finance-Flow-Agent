@@ -215,7 +215,7 @@ export const confirmActionProposal = async (proposalId, user, options = {}) => {
         const currentCase = caseRows[0];
         oldState = { resolution_reason: currentCase.resolution_reason };
 
-        const authorName = user?.name || user?.email || 'Finance Officer';
+        const authorName = user?.name || user?.email || 'Senior Accountant';
         const timestamp = new Date().toISOString();
         const noteText = params.noteText || params.note || proposal.evidence_summary;
         const noteEntry = `[${timestamp} · Note by ${authorName}]: ${noteText}`;

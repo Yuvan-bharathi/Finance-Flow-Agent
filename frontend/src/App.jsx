@@ -175,10 +175,14 @@ const MainLayout = () => {
   );
 };
 
+import { DateFilterProvider } from './context/DateFilterContext';
+
 export default function App() {
   return (
     <AuthProvider>
-      <MainLayout />
+      <DateFilterProvider>
+        <MainLayout />
+      </DateFilterProvider>
     </AuthProvider>
   );
 }

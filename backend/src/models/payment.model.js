@@ -116,6 +116,16 @@ export const findAllPayments = async (filterOrQuery = null) => {
     params.push(query.status);
   }
 
+  if (query.startDate) {
+    whereClauses.push('p.payment_date >= ?');
+    params.push(query.startDate);
+  }
+
+  if (query.endDate) {
+    whereClauses.push('p.payment_date <= ?');
+    params.push(query.endDate);
+  }
+
   if (query.search) {
     whereClauses.push('(p.transaction_id LIKE ? OR p.sender_name LIKE ? OR p.reference LIKE ?)');
     const term = `%${query.search}%`;

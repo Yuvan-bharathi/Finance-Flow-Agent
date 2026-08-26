@@ -7,6 +7,28 @@ import { History, ShieldCheck, User, Code, X, Eye, FileText, Globe, Search, Copy
  * Displays immutable regulatory compliance audit trail enriched with Correlation IDs,
  * BEFORE & AFTER state diffs, user/role attribution, and server-side pagination.
  */
+const formatAuditTimestamp = (dateStr) => {
+  if (!dateStr) return '—';
+  const str = String(dateStr);
+  const normalized = str.includes('T') || str.endsWith('Z') ? str : `${str.replace(' ', 'T')}Z`;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? dateStr : d.toLocaleString();
+};
+
+const formatRoleBadge = (roleName) => {
+  if (!roleName) return 'System';
+  const map = {
+    owner: 'Owner',
+    super_admin: 'Super Admin',
+    admin: 'Admin',
+    manager: 'Manager',
+    senior_accountant: 'Senior Accountant',
+    accountant: 'Accountant',
+    viewer: 'Viewer'
+  };
+  return map[roleName.toLowerCase()] || roleName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
 export const AuditLogs = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -169,7 +191,7 @@ export const AuditLogs = () => {
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
                   <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                    <div style={{ color: '#0f172a', fontWeight: '600' }}>{new Date(log.created_at).toLocaleString()}</div>
+                    <div style={{ color: '#0f172a', fontWeight: '600' }}>{formatAuditTimestamp(log.created_at)}</div>
                     {log.correlation_id ? (
                       <div 
                         onClick={(e) => { e.stopPropagation(); handleCopy(log.correlation_id, `corr-${log.id}`); }}
@@ -190,8 +212,8 @@ export const AuditLogs = () => {
                   </td>
 
                   <td style={{ padding: '16px 20px' }}>
-                    <div style={{ color: '#0f172a', fontWeight: '600' }}>{log.user_name || 'System'}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: '700' }}>{log.role_name || 'System'}</div>
+                    <div style={{ color: '#0f172a', fontWeight: '600' }}>{log.user_name || 'System Auto-Engine'}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: '700', textTransform: 'uppercase' }}>{formatRoleBadge(log.role_name)}</div>
                   </td>
 
                   <td style={{ padding: '16px 20px' }}>
@@ -336,9 +358,9 @@ export const AuditLogs = () => {
               
               {/* Event Meta Card */}
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.825rem' }}>
-                <div><strong style={{ color: '#475569' }}>Timestamp:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{new Date(selectedLog.created_at).toLocaleString()}</span></div>
+                <div><strong style={{ color: '#475569' }}>Timestamp:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{formatAuditTimestamp(selectedLog.created_at)}</span></div>
                 <div><strong style={{ color: '#475569' }}>Correlation ID:</strong> <code style={{ background: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>{selectedLog.correlation_id || 'N/A'}</code></div>
-                <div><strong style={{ color: '#475569' }}>Executed By:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedLog.user_name || 'System Auto-Engine'}</span> ({selectedLog.role_name})</div>
+                <div><strong style={{ color: '#475569' }}>Executed By:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedLog.user_name || 'System Auto-Engine'}</span> ({formatRoleBadge(selectedLog.role_name)})</div>
                 <div><strong style={{ color: '#475569' }}>Target Entity:</strong> <span style={{ color: '#2563eb', fontWeight: '600' }}>{selectedLog.entity_type} #{selectedLog.entity_id}</span></div>
                 <div><strong style={{ color: '#475569' }}>IP Metadata:</strong> <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{selectedLog.ip_address || '127.0.0.1'}</code></div>
               </div>

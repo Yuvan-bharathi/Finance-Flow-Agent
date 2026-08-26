@@ -4,21 +4,40 @@ import {
   getPaymentByIdService
 } from '../services/payment.service.js';
 import { sendSuccessResponse } from '../utils/apiResponse.js';
+import { cacheService } from '../services/cache.service.js';
+import { emitSocketEvent } from '../config/socket.js';
 
 /**
- * Controller: Payment Controller
+ * Controller: Payment Controller (Phase 7 Real-Time & Caching Enhanced)
  * Purpose: Express HTTP request handlers for Raw Payment Ingestion & Mock Bank Simulator endpoints.
  */
 
 /**
  * Controller: ingestPayment (Section 17 Manual Ingestion API)
  * Endpoint: POST /api/payments/ingest
- * Access: Admin, Manager, Accountant
  */
 export const ingestPayment = async (req, res, next) => {
   try {
     const userId = req.user ? req.user.id : null;
     const result = await ingestPaymentService(req.body, userId);
+
+    // 1. Invalidate cache tags
+    cacheService.invalidateByTag('payments');
+    cacheService.invalidateByTag('reports');
+    cacheService.invalidateByTag('reconciliations');
+
+    // 2. Broadcast near-real-time WebSocket events for zero-reload UI updates
+    emitSocketEvent('PAYMENT_INGESTED', {
+      payment: result.payment,
+      case: result.reconciliation_case,
+      timestamp: new Date().toISOString()
+    });
+
+    emitSocketEvent('RECONCILIATION_CASE_CREATED', {
+      case: result.reconciliation_case,
+      timestamp: new Date().toISOString()
+    });
+
     return sendSuccessResponse(res, 201, 'Payment ingested successfully and reconciliation case opened', result);
   } catch (error) {
     return next(error);
@@ -28,10 +47,6 @@ export const ingestPayment = async (req, res, next) => {
 /**
  * Controller: ingestMockBankDeposit (Dummy Bank API Simulator Endpoint)
  * Endpoint: POST /api/payments/mock-bank-deposit
- * Access: Authenticated (or External Webhook)
- * 
- * Simulates raw bank payment ingestion from Core Banking Systems / Webhooks into FinanceFlow AI DB.
- * Auto-generates random realistic bank payment fields if payload properties are omitted.
  */
 export const ingestMockBankDeposit = async (req, res, next) => {
   try {
@@ -58,6 +73,17 @@ export const ingestMockBankDeposit = async (req, res, next) => {
 
     const userId = req.user ? req.user.id : null;
     const result = await ingestPaymentService(payload, userId);
+
+    // Invalidate cache & emit real-time event
+    cacheService.invalidateByTag('payments');
+    cacheService.invalidateByTag('reports');
+    cacheService.invalidateByTag('reconciliations');
+
+    emitSocketEvent('PAYMENT_INGESTED', {
+      payment: result.payment,
+      case: result.reconciliation_case,
+      timestamp: new Date().toISOString()
+    });
 
     return sendSuccessResponse(
       res,

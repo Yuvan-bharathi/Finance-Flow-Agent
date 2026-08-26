@@ -16,6 +16,7 @@ import { runNotificationAgent } from '../agents/notificationAgent.js';
 import { emitSocketEvent } from '../config/socket.js';
 import { logger } from '../utils/logger.js';
 import { findCaseById } from '../models/reconciliationCase.model.js';
+import pool from '../config/db.js';
 
 /**
  * Service: Multi-Agent Pipeline Orchestrator (Phase 5)
@@ -144,6 +145,52 @@ const _executePipelineSteps = async (pipelineId, workflow, stepRecords, initialC
         status: 'skipped'
       });
       continue;
+    }
+
+    // Step Precondition: Check if Agent 3 (Collection) is eligible to run
+    if (step.agent_name === 'AutomatedCollectionFollowUpAgent') {
+      const companyId = runtimeContext.companyId || runtimeContext.company_id || runtimeContext.recommended_company_id || 1;
+      const eligibility = await _checkCollectionFollowUpEligibility(companyId, runtimeContext);
+
+      if (!eligibility.eligible) {
+        logger.info(`[Orchestrator] Skipping Step ${step.step_index} (${step.agent_name}): ${eligibility.reason}`, {
+          pipelineId,
+          stepIndex: step.step_index,
+          companyId
+        });
+
+        const skippedPayload = {
+          status: 'SKIPPED',
+          skipped: true,
+          reason: eligibility.reason,
+          company_id: companyId,
+          company_name: eligibility.company_name,
+          total_overdue_amount: 0,
+          days_overdue: 0,
+          urgency_level: 'NONE'
+        };
+
+        await completePipelineStep(step.id, {
+          status: 'skipped',
+          output_payload: skippedPayload,
+          tokens_used: 0,
+          duration_ms: 0
+        });
+
+        emitSocketEvent('PIPELINE_STEP_COMPLETED', {
+          pipeline_id: pipelineId,
+          step_id: step.id,
+          step_index: step.step_index,
+          agent_name: step.agent_name,
+          status: 'skipped',
+          duration_ms: 0,
+          tokens_used: 0,
+          output_payload: skippedPayload
+        });
+
+        Object.assign(runtimeContext, { collectionFollowUp: skippedPayload });
+        continue;
+      }
     }
 
     try {
@@ -322,5 +369,64 @@ const _getPlannedSteps = (workflow, context) => {
       return [
         { step_index: 1, agent_id: 1, agent_name: 'PaymentReconciliationAgent', input_payload: context }
       ];
+  }
+};
+
+/**
+ * Evaluates whether a borrower is eligible for Automated Collection Follow-Up.
+ * Collection notices are only permitted for borrowers with actual pending or overdue debt obligations.
+ *
+ * @private
+ * @param {number} companyId - Borrower company ID
+ * @param {Object} runtimeContext - Pipeline execution context
+ * @returns {Promise<{ eligible: boolean, reason: string, company_name: string, total_overdue: number }>}
+ */
+const _checkCollectionFollowUpEligibility = async (companyId, runtimeContext) => {
+  try {
+    const [compRows] = await pool.query(`SELECT id, company_name FROM companies WHERE id = ?`, [companyId]);
+    const companyName = compRows[0]?.company_name || `Company #${companyId}`;
+
+    // Query active overdue or unpaid repayment schedules
+    const [overdueSchedules] = await pool.query(`
+      SELECT rs.id, rs.due_date, rs.scheduled_amount, rs.paid_amount, rs.status
+      FROM repayment_schedules rs
+      JOIN loans l ON rs.loan_id = l.id
+      WHERE l.company_id = ?
+        AND (
+          LOWER(rs.status) = 'overdue'
+          OR (rs.due_date < CURRENT_DATE AND (rs.paid_amount IS NULL OR rs.paid_amount < rs.scheduled_amount) AND LOWER(rs.status) != 'paid')
+        )
+    `, [companyId]);
+
+    // Compute remaining unpaid balance
+    let totalOverdue = 0;
+    for (const item of overdueSchedules) {
+      const remaining = parseFloat(item.scheduled_amount) - parseFloat(item.paid_amount || 0);
+      if (remaining > 0) totalOverdue += remaining;
+    }
+
+    if (overdueSchedules.length === 0 || totalOverdue <= 0) {
+      return {
+        eligible: false,
+        reason: `Borrower '${companyName}' has zero pending or overdue payments. Account is in good standing (₹0.00).`,
+        company_name: companyName,
+        total_overdue: 0
+      };
+    }
+
+    return {
+      eligible: true,
+      reason: `Found ${overdueSchedules.length} pending/overdue installment(s) totaling ₹${totalOverdue.toFixed(2)}.`,
+      company_name: companyName,
+      total_overdue: totalOverdue
+    };
+  } catch (err) {
+    logger.warn(`[Orchestrator] Error checking collection eligibility: ${err.message}`);
+    return {
+      eligible: true,
+      reason: 'Eligibility verification bypassed on error.',
+      company_name: `Company #${companyId}`,
+      total_overdue: 0
+    };
   }
 };

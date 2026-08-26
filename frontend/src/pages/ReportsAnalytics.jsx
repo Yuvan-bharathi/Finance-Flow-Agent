@@ -6,11 +6,14 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 
+import { useDateFilter } from '../context/DateFilterContext';
+
 /**
- * Interactive Reports & Financial Analytics Page
+ * Interactive Reports & Financial Analytics Page (Date Filter & Real-Time Sync)
  * Live data: overdue aging buckets, collection trends, portfolio health, AI efficiency.
  */
 export const ReportsAnalytics = () => {
+  const { startDate, endDate, formattedDisplay } = useDateFilter();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [hoveredBar, setHoveredBar] = useState(null);
@@ -27,7 +30,7 @@ export const ReportsAnalytics = () => {
         setLoading(true);
         const [agentRes, reconRes] = await Promise.all([
           api.get('/agents/status').catch(() => ({ data: null })),
-          api.get('/reconciliations/stats').catch(() => ({ data: null })),
+          api.get('/reconciliations/stats', { params: { startDate, endDate } }).catch(() => ({ data: null })),
         ]);
         if (agentRes.data?.data?.agents) setAgentStats(agentRes.data.data.agents);
         if (reconRes.data?.data) setReconciliationStats(reconRes.data.data);
@@ -38,7 +41,7 @@ export const ReportsAnalytics = () => {
       }
     };
     load();
-  }, []);
+  }, [startDate, endDate]);
 
   // Static + derived analytics data
   const collectionTrend = [

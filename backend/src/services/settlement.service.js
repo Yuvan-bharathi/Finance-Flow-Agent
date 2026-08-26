@@ -5,6 +5,8 @@ import { insertPaymentAllocation, findAllPaymentAllocations } from '../models/al
 import { findScheduleById } from '../models/repayment.model.js';
 import { findPaymentById } from '../models/payment.model.js';
 import { insertAuditLog, findAllAuditLogs } from '../models/auditLog.model.js';
+import { cacheService } from './cache.service.js';
+import { emitSocketEvent } from '../config/socket.js';
 
 /**
  * Service: Settlement & Human Approval Service
@@ -136,6 +138,20 @@ export const approveRecommendationService = async (recommendationId, approvedByU
 
     await connection.commit();
     connection.release();
+
+    // Invalidate cache tags
+    cacheService.invalidateByTag('payments');
+    cacheService.invalidateByTag('reconciliations');
+    cacheService.invalidateByTag('reports');
+
+    // Broadcast real-time allocation event
+    emitSocketEvent('PAYMENT_ALLOCATED', {
+      allocation_id: allocId,
+      payment_id: rec.payment_id,
+      repayment_schedule_id: targetScheduleId,
+      allocated_amount: allocatedAmount,
+      timestamp: new Date().toISOString()
+    });
 
     return {
       allocation_id: allocId,

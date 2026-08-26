@@ -48,8 +48,8 @@ export const Sidebar = ({
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
-  const userName = (user && user.name && user.name.trim()) ? user.name : 'Senior Accountant';
-  const userInitials = userName.split(' ').map(n => n[0]).join('');
+  const userName = (user && user.name && user.name.trim()) ? user.name : (user?.email || 'User');
+  const userInitials = userName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   return (
     <aside style={{
@@ -303,7 +303,7 @@ export const Sidebar = ({
                 </div>
                 <div style={{ overflow: 'hidden' }}>
                   <div style={{ fontSize: '0.83rem', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
-                  <div style={{ fontSize: '0.68rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user ? user.email : 'accountant@financeflow.com'}</div>
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email || '—'}</div>
                 </div>
               </div>
 

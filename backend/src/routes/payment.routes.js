@@ -121,7 +121,9 @@ router.post(
  *       200:
  *         description: Paginated list of ingested payments.
  */
-router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), getPayments);
+import { cacheMiddleware } from '../middleware/cache.middleware.js';
+
+router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), cacheMiddleware({ ttlSeconds: 60, tag: 'payments' }), getPayments);
 router.get('/:id', requirePermission(PERMISSIONS.PAYMENT_VIEW), getPaymentById);
 
 export default router;

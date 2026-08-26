@@ -61,13 +61,35 @@ export const runCollectionAgent = async (companyId, triggeredBy = null) => {
     if (overdueList.length > 0) {
       oldestDueDate = new Date(overdueList[0].due_date);
       overdueList.forEach(item => {
-        totalOverdue += parseFloat(item.scheduled_amount) - parseFloat(item.paid_amount);
+        const remaining = parseFloat(item.scheduled_amount) - parseFloat(item.paid_amount || 0);
+        if (remaining > 0) totalOverdue += remaining;
       });
     }
 
     const daysOverdue = overdueList.length > 0
       ? Math.max(0, Math.floor((Date.now() - oldestDueDate.getTime()) / (1000 * 60 * 60 * 24)))
       : 0;
+
+    // Guard: Do not generate collection notice if borrower has zero overdue
+    if (overdueList.length === 0 || totalOverdue <= 0) {
+      const skippedPayload = {
+        status: 'SKIPPED',
+        skipped: true,
+        company_id: company.id,
+        company_name: company.company_name,
+        total_overdue_amount: 0,
+        days_overdue: 0,
+        message: `Borrower '${company.company_name}' has no pending or overdue installments. Account is in good standing (₹0.00 overdue). Collection notice was not generated.`
+      };
+
+      await updateAgentRun(runId, {
+        status: 'completed',
+        output_data: skippedPayload,
+        total_duration_ms: Date.now() - startTime
+      });
+
+      return skippedPayload;
+    }
 
     let urgencyLevel = 'POLITE_REMINDER';
     if (daysOverdue > 30 || company.risk_level === 'CRITICAL') {
