@@ -6,6 +6,16 @@ import { getAgentRuns, getRunDetail } from '../services/agentService';
  * Slide-Over Drawer: Agent Run History & Execution Log Inspector
  * Displays run history list for an agent, expandable to show step-by-step execution timeline logs.
  */
+const formatAuditTimestamp = (dateStr) => {
+  if (!dateStr) return '—';
+  let str = String(dateStr).trim();
+  if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? dateStr : d.toLocaleString();
+};
+
 export const AgentRunHistoryDrawer = ({ agent, agentId, agentName, onClose }) => {
   const currentAgentId = agent?.id || (typeof agent === 'string' ? agent : agentId);
   const currentAgentName = agent?.name || agentName || (typeof agent === 'string' ? agent : 'Operational Agent');
@@ -240,7 +250,7 @@ export const AgentRunHistoryDrawer = ({ agent, agentId, agentName, onClose }) =>
                             </span>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px' }}>
-                            {new Date(run.created_at).toLocaleString()} • Triggered by: {run.triggered_by_name || 'System'}
+                            {formatAuditTimestamp(run.created_at)} • Triggered by: {run.triggered_by_name || 'System'}
                           </div>
                         </div>
                       </div>

@@ -45,6 +45,16 @@ export const triggerPipelineWorkflow = async (payload) => {
   return response.data.data;
 };
 
+export const batchTriggerPipeline = async (payload) => {
+  const response = await api.post('/agents/pipeline/batch-run', payload);
+  return response.data.data;
+};
+
+export const getPendingPipelineTargets = async () => {
+  const response = await api.get('/agents/pipeline/pending-targets');
+  return response.data.data;
+};
+
 export const getPipelineExecutions = async (params = {}) => {
   try {
     const response = await api.get('/agents/pipeline/executions', { params });

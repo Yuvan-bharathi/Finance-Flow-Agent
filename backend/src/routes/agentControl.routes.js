@@ -5,6 +5,8 @@ import {
   getRunDetail,
   getRecentAgentActivity,
   triggerPipeline,
+  batchTriggerPipeline,
+  getPendingPipelineTargets,
   getPipelineExecutions,
   getPipelineExecutionById,
   getQueueStatus
@@ -102,6 +104,20 @@ router.post(
   agentRateLimiter,
   idempotencyMiddleware(),
   triggerPipeline
+);
+
+router.get(
+  '/pipeline/pending-targets',
+  requirePermission(PERMISSIONS.AGENT_VIEW),
+  getPendingPipelineTargets
+);
+
+router.post(
+  '/pipeline/batch-run',
+  requirePermission(PERMISSIONS.AGENT_RUN),
+  agentRateLimiter,
+  idempotencyMiddleware(),
+  batchTriggerPipeline
 );
 
 /**

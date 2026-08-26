@@ -74,3 +74,27 @@ export const approveAlert = (alertId) =>
  */
 export const dismissAlert = (alertId) =>
   api.put(`/notifications/alerts/${alertId}/dismiss`);
+
+/**
+ * batchApproveAlerts
+ *
+ * Purpose:
+ *   Approves and dispatches multiple notification alerts in a single batch call.
+ *
+ * @param {Array<number>} alertIds - Array of notification_alerts.id
+ * @returns {Promise<Object>} { success, message, data }
+ */
+export const batchApproveAlerts = (alertIds = []) =>
+  api.post('/notifications/alerts/batch-approve', { alertIds });
+
+/**
+ * batchDismissAlerts
+ *
+ * Purpose:
+ *   Dismisses multiple notification alerts in a single batch call.
+ *
+ * @param {Array<number>} alertIds - Array of notification_alerts.id
+ * @returns {Promise<Object>} { success, message }
+ */
+export const batchDismissAlerts = (alertIds = []) =>
+  api.post('/notifications/alerts/batch-dismiss', { alertIds });

@@ -57,3 +57,22 @@ export const findCaseById = async (caseId) => {
   const [rows] = await pool.execute(query, [caseId]);
   return rows.length > 0 ? rows[0] : null;
 };
+
+/**
+ * Retrieves all open reconciliation cases with their payment and matched company info.
+ */
+export const findOpenCases = async (limit = 50) => {
+  const query = `
+    SELECT rc.id, rc.status, rc.priority, rc.created_at,
+           p.id as payment_id, p.transaction_id, p.amount, p.payment_date, p.sender_name, p.sender_account, p.reference,
+           c.id as company_id, c.company_name
+    FROM reconciliation_cases rc
+    JOIN payments p ON rc.payment_id = p.id
+    LEFT JOIN companies c ON p.sender_name = c.company_name OR p.sender_name LIKE CONCAT('%', c.company_name, '%')
+    WHERE rc.status = 'open'
+    ORDER BY rc.id DESC
+    LIMIT ?;
+  `;
+  const [rows] = await pool.query(query, [limit]);
+  return rows;
+};

@@ -367,7 +367,7 @@ export const PipelineVisualizer = ({ pipeline, onClose, onRefresh }) => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                  Pipeline #{pipeline.id}: {pipeline.workflow_name || 'Autonomous Multi-Agent Workflow'}
+                  Pipeline #{pipeline.id}: {pipeline.pipeline_name?.replace(/_/g, ' ') || pipeline.workflow_name || 'Autonomous Multi-Agent Workflow'}
                 </h2>
                 <span style={{
                   padding: '4px 10px',
@@ -382,7 +382,24 @@ export const PipelineVisualizer = ({ pipeline, onClose, onRefresh }) => {
                   {pipeline.status}
                 </span>
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px', display: 'flex', gap: '12px' }}>
+              
+              {/* Linked Transaction, Case & Borrower Context */}
+              <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {pipeline.linked_company_name && (
+                  <span style={{ background: '#f1f5f9', color: '#1e293b', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                    🏢 Borrower: {pipeline.linked_company_name}
+                  </span>
+                )}
+                {pipeline.linked_transaction_id && (
+                  <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                    💳 Transaction: {pipeline.linked_transaction_id}
+                  </span>
+                )}
+                {pipeline.linked_case_id && (
+                  <span style={{ background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                    📄 Reconciliation Case #{pipeline.linked_case_id}
+                  </span>
+                )}
                 <span>Trigger: <strong>{pipeline.trigger_source || 'manual'}</strong></span>
                 {pipeline.correlation_id && <span># <code>{pipeline.correlation_id}</code></span>}
               </div>

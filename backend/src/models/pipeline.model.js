@@ -180,6 +180,62 @@ export const finalizePipelineExecution = async (pipelineId, finalData) => {
  * @param {number} pipelineId - Pipeline execution ID
  * @returns {Promise<Object|null>} Detailed pipeline execution object with `steps: []`
  */
+/**
+ * Enriches pipeline executions with linked payment, transaction, and company context.
+ */
+const _enrichPipelineRecords = async (pipelines) => {
+  if (!Array.isArray(pipelines) || pipelines.length === 0) return pipelines;
+
+  for (const p of pipelines) {
+    let ctx = p.context_data;
+    if (typeof ctx === 'string') {
+      try { ctx = JSON.parse(ctx); } catch (e) { ctx = {}; }
+    }
+    if (!ctx) ctx = {};
+
+    const caseId = ctx.caseId || ctx.case_id;
+    const companyId = ctx.companyId || ctx.company_id;
+
+    if (caseId) {
+      const [caseRows] = await pool.query(`
+        SELECT rc.id, rc.status as case_status,
+               p.transaction_id, p.amount as payment_amount, p.sender_name,
+               c.id as company_id, c.company_name
+        FROM reconciliation_cases rc
+        LEFT JOIN payments p ON rc.payment_id = p.id
+        LEFT JOIN companies c ON (p.sender_name = c.company_name OR p.sender_name LIKE CONCAT('%', c.company_name, '%'))
+        WHERE rc.id = ?
+        LIMIT 1
+      `, [caseId]);
+
+      if (caseRows && caseRows.length > 0) {
+        const row = caseRows[0];
+        p.linked_case_id = row.id;
+        p.linked_transaction_id = row.transaction_id || null;
+        p.linked_payment_amount = row.payment_amount || null;
+        p.linked_sender_name = row.sender_name || null;
+        p.linked_company_name = row.company_name || null;
+      }
+    }
+
+    if (!p.linked_company_name && companyId) {
+      const [compRows] = await pool.query(`SELECT id, company_name FROM companies WHERE id = ? LIMIT 1`, [companyId]);
+      if (compRows && compRows.length > 0) {
+        p.linked_company_name = compRows[0].company_name;
+        p.linked_company_id = compRows[0].id;
+      }
+    }
+  }
+
+  return pipelines;
+};
+
+/**
+ * Retrieves a full pipeline execution details along with all ordered child steps.
+ * 
+ * @param {number} pipelineId - Pipeline execution ID
+ * @returns {Promise<Object|null>} Detailed pipeline execution object with `steps: []`
+ */
 export const findPipelineWithSteps = async (pipelineId) => {
   const [pipelineRows] = await pool.execute(
     `SELECT * FROM pipeline_executions WHERE id = ? LIMIT 1;`,
@@ -187,7 +243,8 @@ export const findPipelineWithSteps = async (pipelineId) => {
   );
 
   if (pipelineRows.length === 0) return null;
-  const pipeline = pipelineRows[0];
+  const enriched = await _enrichPipelineRecords(pipelineRows);
+  const pipeline = enriched[0];
 
   const [stepRows] = await pool.execute(
     `SELECT * FROM pipeline_steps WHERE pipeline_id = ? ORDER BY step_index ASC;`,
@@ -226,6 +283,7 @@ export const findHistoricalPipelines = async ({ page = 1, limit = 20, status = n
   const total = countRows[0]?.total || 0;
 
   const [dataRows] = await pool.query(dataQuery, [...params, Number(limit), Number(offset)]);
+  const enrichedRows = await _enrichPipelineRecords(dataRows);
 
-  return { data: dataRows, total };
+  return { data: enrichedRows, total };
 };

@@ -10,6 +10,7 @@ import {
   findPipelineWithSteps,
   findHistoricalPipelines
 } from '../models/pipeline.model.js';
+import { findOpenCases } from '../models/reconciliationCase.model.js';
 import { runPipelineWorkflow, PIPELINE_WORKFLOWS } from '../services/orchestrator.service.js';
 import { agentQueue, PRIORITY } from '../services/agentQueue.service.js';
 import { sendSuccessResponse, sendErrorResponse } from '../utils/apiResponse.js';
@@ -213,6 +214,70 @@ export const getQueueStatus = async (req, res, next) => {
   try {
     const status = agentQueue.getStatus();
     return sendSuccessResponse(res, 200, 'Agent queue status retrieved', status);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Returns available pending / open targets (cases/payments) that can be processed by pipelines.
+ * GET /api/v1/agents/pipeline/pending-targets
+ */
+export const getPendingPipelineTargets = async (req, res, next) => {
+  try {
+    const openCases = await findOpenCases(50);
+    return sendSuccessResponse(res, 200, 'Pending pipeline targets retrieved', openCases);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Executes a multi-agent pipeline across all pending cases or a specified list of case IDs in batch.
+ * POST /api/v1/agents/pipeline/batch-run
+ */
+export const batchTriggerPipeline = async (req, res, next) => {
+  try {
+    const {
+      workflow = PIPELINE_WORKFLOWS.RECONCILIATION_AND_RISK,
+      caseIds = [],
+      priority = PRIORITY.HIGH
+    } = req.body;
+
+    const userId = req.user?.id || 1;
+
+    let targetCases = [];
+    if (Array.isArray(caseIds) && caseIds.length > 0) {
+      targetCases = caseIds.map(id => ({ id: Number(id) }));
+    } else {
+      targetCases = await findOpenCases(50);
+    }
+
+    if (targetCases.length === 0) {
+      return sendSuccessResponse(res, 200, 'No pending cases available for batch execution.', { executed: 0, pipelines: [] });
+    }
+
+    const results = [];
+    for (const target of targetCases) {
+      const execResult = await runPipelineWorkflow({
+        workflow,
+        contextData: { caseId: target.id },
+        userId,
+        priority,
+        triggerSource: 'batch_ui'
+      });
+      results.push({
+        caseId: target.id,
+        pipelineId: execResult.id,
+        status: execResult.status,
+        duration_ms: execResult.duration_ms
+      });
+    }
+
+    return sendSuccessResponse(res, 200, `Batch execution completed for ${results.length} cases`, {
+      executed: results.length,
+      pipelines: results
+    });
   } catch (error) {
     return next(error);
   }
