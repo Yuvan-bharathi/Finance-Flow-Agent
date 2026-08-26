@@ -17,6 +17,111 @@ import { emitSocketEvent } from '../config/socket.js';
  * Approves an AI Recommendation and executes official financial ledger allocation.
  * Uses a MySQL ACID transaction.
  */
+/**
+ * Executes a deterministic, decimal-safe continuous waterfall allocation
+ * across open repayment schedule installments (oldest due_date first).
+ *
+ * @param {Object} params
+ * @param {Object} params.payment - The raw payment record ({ id, amount, transaction_id }).
+ * @param {number} params.targetLoanId - The target loan facility ID.
+ * @param {number} params.userId - Approving / Settling user ID.
+ * @param {string} params.allocationType - 'ai_approved' | 'ai_overridden'
+ * @param {Object} params.connection - MySQL ACID transaction connection.
+ *
+ * @returns {Promise<Object>} Summary of waterfall allocation results.
+ */
+export const executeContinuousWaterfall = async ({
+  payment,
+  targetLoanId,
+  userId,
+  allocationType = 'ai_approved',
+  connection
+}) => {
+  // 1. Convert incoming payment to integer paisa (cents) for 100% precision
+  let remainingPaisa = Math.round(parseFloat(payment.amount) * 100);
+  const totalIncomingPaisa = remainingPaisa;
+
+  // 2. Fetch all open installments for this loan, sorted chronologically: oldest due date first
+  const [openSchedules] = await connection.query(`
+    SELECT id, installment_number, due_date, scheduled_amount, paid_amount, status
+    FROM repayment_schedules
+    WHERE loan_id = ? AND status IN ('pending', 'partially_paid', 'overdue')
+    ORDER BY due_date ASC, installment_number ASC;
+  `, [targetLoanId]);
+
+  const createdAllocations = [];
+  let totalAllocatedPaisa = 0;
+
+  for (const schedule of openSchedules) {
+    if (remainingPaisa <= 0) break;
+
+    const scheduledPaisa = Math.round(parseFloat(schedule.scheduled_amount) * 100);
+    const paidPaisa = Math.round(parseFloat(schedule.paid_amount || 0) * 100);
+    const neededPaisa = scheduledPaisa - paidPaisa;
+
+    if (neededPaisa <= 0) continue;
+
+    // Slicing: allocate up to what this installment needs
+    const allocatePaisa = Math.min(remainingPaisa, neededPaisa);
+    const newPaidPaisa = paidPaisa + allocatePaisa;
+    const isFullyPaid = newPaidPaisa >= scheduledPaisa;
+    const newStatus = isFullyPaid ? 'paid' : 'partially_paid';
+
+    const allocatedAmountStr = (allocatePaisa / 100).toFixed(2);
+    const newPaidStr = (newPaidPaisa / 100).toFixed(2);
+
+    // A. Insert distinct ledger allocation row (1:N audit history)
+    const allocId = await insertPaymentAllocation({
+      payment_id: payment.id,
+      repayment_schedule_id: schedule.id,
+      allocated_amount: allocatedAmountStr,
+      approved_by: userId,
+      allocation_type: allocationType
+    }, connection);
+
+    // B. Update repayment schedule milestone
+    await connection.execute(`
+      UPDATE repayment_schedules
+      SET paid_amount = ?, status = ?
+      WHERE id = ?;
+    `, [newPaidStr, newStatus, schedule.id]);
+
+    createdAllocations.push({
+      allocation_id: allocId,
+      schedule_id: schedule.id,
+      installment_number: schedule.installment_number,
+      due_date: schedule.due_date,
+      allocated_amount: parseFloat(allocatedAmountStr),
+      new_paid_amount: parseFloat(newPaidStr),
+      status: newStatus
+    });
+
+    remainingPaisa -= allocatePaisa;
+    totalAllocatedPaisa += allocatePaisa;
+  }
+
+  const unallocatedPaisa = Math.max(0, totalIncomingPaisa - totalAllocatedPaisa);
+  const unallocatedAmountStr = (unallocatedPaisa / 100).toFixed(2);
+
+  // Update payment status
+  await connection.execute(`
+    UPDATE payments SET status = 'completed' WHERE id = ?;
+  `, [payment.id]);
+
+  return {
+    total_payment_amount: parseFloat(payment.amount),
+    total_allocated_amount: parseFloat((totalAllocatedPaisa / 100).toFixed(2)),
+    unallocated_amount: parseFloat(unallocatedAmountStr),
+    allocations_count: createdAllocations.length,
+    allocations: createdAllocations,
+    primary_schedule_id: createdAllocations.length > 0 ? createdAllocations[0].schedule_id : null
+  };
+};
+
+/**
+ * Approves an AI Recommendation and executes official financial ledger allocation
+ * using deterministic, decimal-safe continuous waterfall across open installments.
+ */
 export const approveRecommendationService = async (recommendationId, approvedByUserId, notes = null, ipAddress = null, correlationId = null) => {
   // 1. Retrieve recommendation details
   const rec = await findRecommendationById(recommendationId);
@@ -37,100 +142,70 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     };
   }
 
-  let targetScheduleId = rec.recommended_schedule_id;
-  if (!targetScheduleId && rec.recommended_loan_id) {
-    const [openSchedules] = await pool.query(
-      `SELECT id FROM repayment_schedules WHERE loan_id = ? ORDER BY CASE WHEN status = 'overdue' THEN 1 WHEN status = 'pending' THEN 2 ELSE 3 END, installment_number ASC LIMIT 1;`,
-      [rec.recommended_loan_id]
-    );
-    if (openSchedules.length > 0) {
-      targetScheduleId = openSchedules[0].id;
-    }
+  let targetLoanId = rec.recommended_loan_id;
+  if (!targetLoanId && rec.recommended_schedule_id) {
+    const schedule = await findScheduleById(rec.recommended_schedule_id);
+    targetLoanId = schedule?.loan_id;
   }
 
-  if (!targetScheduleId) {
-    const error = new Error(`Cannot approve AI Recommendation #${recommendationId} because no matching repayment schedule exists for this loan.`);
+  if (!targetLoanId) {
+    const error = new Error(`Cannot approve AI Recommendation #${recommendationId} because target loan facility could not be identified.`);
     error.statusCode = 400;
     throw error;
   }
 
   const payment = await findPaymentById(rec.payment_id);
-  const schedule = await findScheduleById(targetScheduleId);
-
-  if (!payment || !schedule) {
-    const error = new Error('Associated payment or repayment schedule record not found.');
+  if (!payment) {
+    const error = new Error('Associated payment record not found.');
     error.statusCode = 404;
     throw error;
   }
 
-  const allocatedAmount = parseFloat(payment.amount);
-
-  // 2. MySQL ACID Transaction
+  // 2. MySQL ACID Transaction with Continuous Waterfall
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    // A. Insert official ledger allocation
-    const allocId = await insertPaymentAllocation({
-      payment_id: rec.payment_id,
-      repayment_schedule_id: targetScheduleId,
-      allocated_amount: allocatedAmount.toFixed(2),
-      approved_by: approvedByUserId,
-      allocation_type: 'ai_approved'
-    }, connection);
+    const waterfallResult = await executeContinuousWaterfall({
+      payment,
+      targetLoanId,
+      userId: approvedByUserId,
+      allocationType: 'ai_approved',
+      connection
+    });
 
-    // B. Update Repayment Schedule balance & status
-    const currentPaid = parseFloat(schedule.paid_amount || 0);
-    const newPaid = currentPaid + allocatedAmount;
-    const scheduledTotal = parseFloat(schedule.scheduled_amount);
-    const newScheduleStatus = newPaid >= scheduledTotal ? 'paid' : 'partially_paid';
+    const primaryScheduleId = waterfallResult.primary_schedule_id || rec.recommended_schedule_id;
 
-    await connection.execute(
-      `UPDATE repayment_schedules SET paid_amount = ?, status = ? WHERE id = ?;`,
-      [newPaid.toFixed(2), newScheduleStatus, targetScheduleId]
-    );
+    // Update AI Recommendation status
+    await connection.execute(`
+      UPDATE ai_recommendations 
+      SET status = 'approved', recommended_schedule_id = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, review_comment = ?
+      WHERE id = ?;
+    `, [primaryScheduleId, approvedByUserId, notes || 'Approved by human accountant with waterfall allocation', recommendationId]);
 
-    // C. Update Payment status
-    const newPaymentStatus = allocatedAmount >= parseFloat(payment.amount) ? 'completed' : 'partially_allocated';
-    await connection.execute(
-      `UPDATE payments SET status = ? WHERE id = ?;`,
-      [newPaymentStatus, rec.payment_id]
-    );
+    // Update Reconciliation Case status
+    await connection.execute(`
+      UPDATE reconciliation_cases 
+      SET status = 'approved', resolved_at = CURRENT_TIMESTAMP
+      WHERE id = ?;
+    `, [rec.reconciliation_case_id]);
 
-    // D. Update AI Recommendation status
-    await connection.execute(
-      `UPDATE ai_recommendations 
-       SET status = 'approved', recommended_schedule_id = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, review_comment = ?
-       WHERE id = ?;`,
-      [targetScheduleId, approvedByUserId, notes || 'Approved by human accountant', recommendationId]
-    );
-
-    // E. Update Reconciliation Case status
-    await connection.execute(
-      `UPDATE reconciliation_cases 
-       SET status = 'approved', resolved_at = CURRENT_TIMESTAMP
-       WHERE id = ?;`,
-      [rec.reconciliation_case_id]
-    );
-
-    // F. Write to audit logs
+    // Write to audit logs
     await insertAuditLog({
       user_id: approvedByUserId,
-      action: 'APPROVE_AI_RECOMMENDATION',
+      action: 'APPROVE_AI_RECOMMENDATION_WATERFALL',
       entity_type: 'payment_allocations',
-      entity_id: allocId,
+      entity_id: waterfallResult.allocations[0]?.allocation_id || 0,
       old_values: {
         recommendation_status: rec.status,
-        schedule_paid_amount: currentPaid,
-        schedule_status: schedule.status,
         payment_status: payment.status
       },
       new_values: {
-        allocation_id: allocId,
-        allocated_amount: allocatedAmount,
-        schedule_new_paid: newPaid,
-        schedule_new_status: newScheduleStatus,
-        payment_new_status: newPaymentStatus
+        total_payment_amount: waterfallResult.total_payment_amount,
+        total_allocated_amount: waterfallResult.total_allocated_amount,
+        unallocated_amount: waterfallResult.unallocated_amount,
+        allocations_count: waterfallResult.allocations_count,
+        allocations: waterfallResult.allocations
       },
       ip_address: ipAddress,
       correlation_id: correlationId
@@ -139,25 +214,29 @@ export const approveRecommendationService = async (recommendationId, approvedByU
     await connection.commit();
     connection.release();
 
-    // Invalidate cache tags
-    cacheService.invalidateByTag('payments');
-    cacheService.invalidateByTag('reconciliations');
-    cacheService.invalidateByTag('reports');
+    // Cache invalidation and real-time socket events
+    await cacheService.delByPattern('loans:*');
+    await cacheService.delByPattern('dashboard:*');
+    await cacheService.delByPattern('reconciliations:*');
 
-    // Broadcast real-time allocation event
-    emitSocketEvent('PAYMENT_ALLOCATED', {
-      allocation_id: allocId,
+    emitSocketEvent('RECONCILIATION_COMPLETED', {
+      reconciliation_case_id: rec.reconciliation_case_id,
       payment_id: rec.payment_id,
-      repayment_schedule_id: targetScheduleId,
-      allocated_amount: allocatedAmount,
-      timestamp: new Date().toISOString()
+      status: 'APPROVED',
+      waterfall: waterfallResult
+    });
+
+    emitSocketEvent('LOAN_PAYMENT_ALLOCATED', {
+      loan_id: targetLoanId,
+      payment_id: rec.payment_id,
+      waterfall: waterfallResult
     });
 
     return {
-      allocation_id: allocId,
+      recommendation_id: recommendationId,
+      case_id: rec.reconciliation_case_id,
       payment_id: rec.payment_id,
-      repayment_schedule_id: targetScheduleId,
-      allocated_amount: allocatedAmount,
+      waterfall: waterfallResult,
       status: 'APPROVED'
     };
   } catch (error) {

@@ -32,10 +32,9 @@ export const executeCollectionTool = async (name, args) => {
       JOIN loans l ON rs.loan_id = l.id
       JOIN companies c ON l.company_id = c.id
       WHERE l.company_id = ?
-        AND (
-          LOWER(rs.status) = 'overdue'
-          OR (rs.due_date < CURRENT_DATE AND (rs.paid_amount IS NULL OR rs.paid_amount < rs.scheduled_amount) AND LOWER(rs.status) != 'paid')
-        )
+        AND rs.due_date < CURDATE()
+        AND rs.status NOT IN ('paid', 'cancelled')
+        AND (rs.scheduled_amount - COALESCE(rs.paid_amount, 0)) > 0
       ORDER BY rs.due_date ASC;
     `, [args.companyId]);
     return rows;

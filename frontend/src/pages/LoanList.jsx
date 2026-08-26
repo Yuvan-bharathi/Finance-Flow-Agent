@@ -881,7 +881,8 @@ export const LoanList = ({ onAskAI }) => {
                   <tbody>
                     {selectedLoan.schedules.map(s => {
                       const isPaid = s.status === 'paid';
-                      const isOverdue = !isPaid && s.days_overdue > 0;
+                      const isPartial = s.status === 'partially_paid' || (parseFloat(s.paid_amount || 0) > 0 && parseFloat(s.paid_amount || 0) < parseFloat(s.scheduled_amount));
+                      const isOverdue = !isPaid && !isPartial && s.days_overdue > 0;
                       const remaining = parseFloat(s.remaining_amount || 0);
 
                       return (
@@ -895,7 +896,7 @@ export const LoanList = ({ onAskAI }) => {
                           <td style={{ padding: '12px', fontWeight: '800', color: '#0f172a' }}>
                             {formatINR(s.scheduled_amount)}
                           </td>
-                          <td style={{ padding: '12px', fontWeight: '700', color: isPaid ? '#059669' : '#64748b' }}>
+                          <td style={{ padding: '12px', fontWeight: '700', color: isPaid ? '#059669' : isPartial ? '#d97706' : '#64748b' }}>
                             {formatINR(s.paid_amount || 0)}
                             {s.transaction_id && (
                               <div style={{ fontSize: '0.65rem', color: '#4f46e5' }}>TXN: {s.transaction_id}</div>
@@ -908,6 +909,10 @@ export const LoanList = ({ onAskAI }) => {
                             {isPaid ? (
                               <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: '800' }}>
                                 PAID
+                              </span>
+                            ) : isPartial ? (
+                              <span style={{ background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: '800' }}>
+                                PARTIAL ({formatINR(s.paid_amount)})
                               </span>
                             ) : isOverdue ? (
                               <span style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: '800' }}>
