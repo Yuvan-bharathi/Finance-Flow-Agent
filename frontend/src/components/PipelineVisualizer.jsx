@@ -225,6 +225,65 @@ const StepBusinessView = ({ step, user }) => {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
+  // AGENT 7: ANOMALY DETECTION CARD
+  // ───────────────────────────────────────────────────────────────────────────
+  if (step.agent_name === 'AnomalyDetectionAgent') {
+    const severity = output.severity || 'CLEAR';
+    const isAnomaly = severity === 'HIGH' || severity === 'CRITICAL' || severity === 'MEDIUM';
+    const types = Array.isArray(output.anomaly_types) ? output.anomaly_types : [];
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{
+          background: isAnomaly ? '#fff7ed' : '#f0fdf4',
+          border: `1.5px solid ${isAnomaly ? '#fed7aa' : '#86efac'}`,
+          borderRadius: '14px',
+          padding: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: isAnomaly ? '#9a3412' : '#166534', textTransform: 'uppercase' }}>
+              Transaction Anomaly Check (Agent 7)
+            </div>
+            <div style={{ fontSize: '1.05rem', fontWeight: '800', color: isAnomaly ? '#c2410c' : '#15803d', marginTop: '2px' }}>
+              {severity} SEVERITY
+            </div>
+          </div>
+          <div style={{
+            background: isAnomaly ? '#ffedd5' : '#dcfce7',
+            color: isAnomaly ? '#9a3412' : '#166534',
+            padding: '6px 14px', borderRadius: '20px',
+            fontSize: '0.825rem', fontWeight: '800'
+          }}>
+            Score: {Math.round(Number(output.anomaly_score || 0))}/100
+          </div>
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '0.825rem', color: '#334155' }}>
+            <strong>Analysis:</strong> {output.explanation || (severity === 'CLEAR' ? 'Payment cleared all behavioral and financial anomaly checks.' : 'Flagged for operational review.')}
+          </div>
+          {types.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+              {types.map(t => (
+                <span key={t} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#374151', fontSize: '0.68rem', fontWeight: '700', padding: '2px 8px', borderRadius: '6px' }}>
+                  {t.replace(/_/g, ' ')}
+                </span>
+              ))}
+            </div>
+          )}
+          {output.recommendation && (
+            <div style={{ fontSize: '0.825rem', color: '#1e40af', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '8px 12px', borderRadius: '8px', marginTop: '4px' }}>
+              <strong>Recommendation:</strong> {output.recommendation}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
   // 4. AGENT 2: RISK ASSESSMENT CARD
   // ───────────────────────────────────────────────────────────────────────────
   if (step.agent_name === 'RepaymentRiskAssessmentAgent') {

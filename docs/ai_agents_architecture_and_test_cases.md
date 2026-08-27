@@ -14,20 +14,20 @@ Agent 6 → Who needs to be notified/escalated?
 
 **FinanceFlow AI** is an enterprise-grade agentic financial operating platform designed for non-banking financial companies (NBFCs), debt syndicates, and corporate loan service desks. It automates high-volume bank statement reconciliation, credit risk surveillance, borrower communications, document OCR, portfolio concentration analytics, and executive escalation governance.
 
-The platform orchestrates **6 Autonomous AI Operational Agents** alongside a **Copilot Conversational Assistant**, combining deterministic SQL/financial math engines with Groq-powered large language models (**`llama-3.3-70b-versatile`** and **`qwen-2.5-32b`**) for human-in-the-loop agentic workflows.
+The platform orchestrates **7 Autonomous AI Operational Agents** alongside a **Copilot Conversational Assistant**, combining deterministic SQL/financial math engines with Groq-powered large language models (**`llama-3.3-70b-versatile`** and **`qwen-2.5-32b`**) for human-in-the-loop agentic workflows.
 
 ```
                                   ┌──────────────────────────────────────────────┐
                                   │      FinanceFlow AI Orchestration Core       │
                                   └──────────────────────┬───────────────────────┘
                                                          │
-         ┌───────────────────┬───────────────────┼───────────────────┬───────────────────┬───────────────────┐
-         ▼                   ▼                   ▼                   ▼                   ▼                   ▼
-   ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐
-   │  AGENT 1  │       │  AGENT 2  │       │  AGENT 3  │       │  AGENT 4  │       │  AGENT 5  │       │  AGENT 6  │
-   │Reconcile &│       │Credit Risk│       │Collection │       │ Document  │       │ Portfolio │       │Escalation │
-   │Settlement │       │  & EWS    │       │ & Notices │       │ Extraction│       │ Analytics │       │Governance │
-   └───────────┘       └───────────┘       └───────────┘       └───────────┘       └───────────┘       └───────────┘
+         ┌───────────────────┬───────────────────┼───────────────────┬───────────────────┬───────────────────┬───────────────────┐
+         ▼                   ▼                   ▼                   ▼                   ▼                   ▼                   ▼
+   ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐
+   │  AGENT 1  │       │  AGENT 7  │       │  AGENT 2  │       │  AGENT 3  │       │  AGENT 4  │       │  AGENT 5  │       │  AGENT 6  │
+   │Reconcile &│       │Transaction│       │Credit Risk│       │Collection │       │ Document  │       │ Portfolio │       │Escalation │
+   │ Matching  │       │  Anomaly  │       │  & EWS    │       │ & Notices │       │ Extraction│       │ Analytics │       │Governance │
+   └───────────┘       └───────────┘       └───────────┘       └───────────┘       └───────────┘       └───────────┘       └───────────┘
 ```
 
 ---
@@ -42,7 +42,8 @@ The platform orchestrates **6 Autonomous AI Operational Agents** alongside a **C
 6. [Agent 5: Portfolio Health & Concentration Risk Analytics Agent](#agent-5-portfolio-health--concentration-risk-analytics-agent)
 7. [Agent 6: Notification & SLA Escalation Governance Agent](#agent-6-notification--sla-escalation-governance-agent)
 8. [AI Copilot: Conversational Natural Language Assistant](#ai-copilot-conversational-natural-language-assistant)
-9. [Comprehensive Test Scenarios & Assessment Matrix](#comprehensive-test-scenarios--assessment-matrix)
+9. [Multi-Agent Pipeline Orchestration Architecture](#multi-agent-pipeline-orchestration-architecture)
+10. [Comprehensive Test Scenarios & Assessment Matrix](#comprehensive-test-scenarios--assessment-matrix)
 
 ---
 
@@ -359,6 +360,54 @@ When high-value accounts breach 30, 60, or 90-day delinquency milestones, escala
   - Answering queries like: _"Which borrowers are more than 30 days overdue?"_
   - Generating ad-hoc summaries: _"Give me the repayment status of XYZ Logistics Corp."_
   - Proposing safe actions with human approval confirmation.
+
+---
+
+# Multi-Agent Pipeline Orchestration Architecture
+
+FinanceFlow AI coordinates its autonomous agents through versioned, transactional multi-agent orchestration pipelines. Rather than executing isolated agent runs, operational teams can trigger composite pipelines with priority queueing and step-by-step observability.
+
+```text
+                                PAYMENT
+                                   ↓
+                             Agent 1
+                          Reconciliation
+                      "Who does this belong to?"
+                                   ↓
+                             Agent 7
+                        Anomaly Detection
+                      "Is this payment unusual?"
+                                   ↓
+                        Waterfall Settlement
+                      "How should money be allocated?"
+                                   ↓
+                         ┌─────────┴─────────┐
+                         ↓                   ↓
+                      Agent 2             Agent 3
+                   Risk Assessment      Collection
+                  "How risky is the       "What collection
+                     borrower?"             action?"
+                         │                   │
+                         └─────────┬─────────┘
+                                   ↓
+                                Agent 6
+                         Notification/
+                           Escalation
+```
+
+### Supported Multi-Agent Pipelines:
+
+1. **Payment Reconciliation & Risk Pipeline (`RECONCILIATION_AND_RISK`)**:
+   - **Sequence**: `Agent 1` (Reconciliation) $\rightarrow$ `Agent 7` (Anomaly Detection) $\rightarrow$ `Waterfall Settlement` $\rightarrow$ `Agent 2` (Credit Risk) $\rightarrow$ `Agent 3` (Collection Notice)
+   - **Use Case**: Primary loan servicing workflow triggered on incoming bank deposits.
+
+2. **Portfolio & Escalation Pipeline (`PORTFOLIO_AND_ESCALATION`)**:
+   - **Sequence**: `Agent 5` (Portfolio Analytics) $\rightarrow$ `Agent 6` (Escalation & SLA Scanner)
+   - **Use Case**: Periodic macro portfolio risk assessment and executive SLA governance.
+
+3. **Full 7-Agent Compliance Pipeline (`END_TO_END_COMPLIANCE`)**:
+   - **Sequence**: `Agent 1` $\rightarrow$ `Agent 7` $\rightarrow$ `Agent 2` $\rightarrow$ `Agent 3` $\rightarrow$ `Agent 4` $\rightarrow$ `Agent 5` $\rightarrow$ `Agent 6`
+   - **Use Case**: Comprehensive sequential audit across all 7 operational agents for regulatory compliance and periodic portfolio review.
 
 ---
 

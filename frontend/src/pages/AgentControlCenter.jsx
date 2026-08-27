@@ -688,7 +688,7 @@ export const AgentControlCenter = () => {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
           
-          {/* Pipeline 1: Reconcile & Risk Pipeline */}
+          {/* Pipeline 1: Payment Reconciliation & Risk Pipeline */}
           <div style={{
             background: '#ffffff',
             border: '1px solid #e2e8f0',
@@ -703,10 +703,10 @@ export const AgentControlCenter = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <Zap size={18} color="#4f46e5" />
-                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a' }}>Reconcile & Risk Pipeline</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a' }}>Payment Reconciliation & Risk Pipeline</span>
               </div>
               <p style={{ fontSize: '0.775rem', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
-                <strong>Agent 1</strong> (Reconciliation) ➔ <strong>Agent 2</strong> (Risk Scoring) ➔ <strong>Agent 3</strong> (Collection Notice).
+                <strong>Agent 1</strong> (Reconcile) ➔ <strong>Agent 7</strong> (Anomaly Detection) ➔ <strong>Agent 2</strong> (Risk Scoring) ➔ <strong>Agent 3</strong> (Collection Notice).
               </p>
             </div>
             
@@ -803,7 +803,7 @@ export const AgentControlCenter = () => {
             </button>
           </div>
 
-          {/* Pipeline 3: Full 6-Agent Audit Pipeline */}
+          {/* Pipeline 3: Full 7-Agent Compliance Pipeline */}
           <div style={{
             background: '#ffffff',
             border: '1px solid #e2e8f0',
@@ -818,10 +818,10 @@ export const AgentControlCenter = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <Shield size={18} color="#7c3aed" />
-                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a' }}>Full 6-Agent Audit Pipeline</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a' }}>Full 7-Agent Compliance Pipeline</span>
               </div>
               <p style={{ fontSize: '0.775rem', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
-                Comprehensive sequential orchestration across all 6 specialized agents for periodic regulatory audit.
+                Sequential end-to-end orchestration across all 7 autonomous AI agents for periodic governance and audit.
               </p>
             </div>
             

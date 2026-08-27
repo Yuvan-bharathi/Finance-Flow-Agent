@@ -15,6 +15,7 @@ import { runPipelineWorkflow, PIPELINE_WORKFLOWS } from '../services/orchestrato
 import { agentQueue, PRIORITY } from '../services/agentQueue.service.js';
 import { sendSuccessResponse, sendErrorResponse } from '../utils/apiResponse.js';
 import { parsePagination, buildPaginatedResponse } from '../utils/paginationHelper.js';
+import pool from '../config/db.js';
 
 /**
  * Controller: Agent Control Center & Multi-Agent Orchestrator Controller
@@ -34,6 +35,7 @@ export const getAgentStatus = async (req, res, next) => {
 
     const defaultMetric = { total_runs: 0, successful_runs: 0, failed_runs: 0, success_rate: 100, avg_confidence: 0, avg_duration_ms: 320, total_tokens: 0 };
     const agent1Stats = statsMap['agent_1_reconciliation'] || defaultMetric;
+    const agent7Stats = statsMap['agent_7_anomaly'] || defaultMetric;
     const agent2Stats = statsMap['agent_2_risk'] || defaultMetric;
     const agent3Stats = statsMap['agent_3_collection'] || defaultMetric;
     const agent4Stats = statsMap['agent_4_document'] || defaultMetric;
@@ -47,6 +49,13 @@ export const getAgentStatus = async (req, res, next) => {
         status: 'READY',
         is_active: true,
         metrics: agent1Stats
+      },
+      {
+        id: 'agent_7_anomaly',
+        name: 'Anomaly Detection Agent',
+        status: 'READY',
+        is_active: true,
+        metrics: agent7Stats
       },
       {
         id: 'agent_2_risk',
@@ -130,6 +139,85 @@ export const getRecentAgentActivity = async (req, res, next) => {
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
     const activity = await getRecentActivity(limit);
     return sendSuccessResponse(res, 200, 'Recent agent activity retrieved', activity);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Triggers a single agent manually by ID.
+ * POST /api/v1/agents/:agentId/trigger (also mapped to /api/agents/:agentId/trigger)
+ */
+export const triggerSingleAgent = async (req, res, next) => {
+  try {
+    const { agentId } = req.params;
+    const userId = req.user ? req.user.id : null;
+
+    let result;
+    switch (agentId) {
+      case 'agent_1_reconciliation':
+      case '1': {
+        const { analyzeAllPendingService } = await import('../services/reconciliation.service.js');
+        result = await analyzeAllPendingService(userId);
+        break;
+      }
+      case 'agent_7_anomaly':
+      case '7': {
+        const [recentPayments] = await pool.query(
+          `SELECT p.id, rc.id AS case_id FROM payments p
+           LEFT JOIN reconciliation_cases rc ON rc.payment_id = p.id
+           ORDER BY p.id DESC LIMIT 5`
+        );
+        const { runAnomalyAgentStageB } = await import('../agents/anomalyAgent.js');
+        const anomalyResults = [];
+        for (const p of recentPayments) {
+          const resB = await runAnomalyAgentStageB(p.id, p.case_id, userId).catch(() => null);
+          if (resB) anomalyResults.push(resB);
+        }
+        result = {
+          scanned: recentPayments.length,
+          anomalies_evaluated: anomalyResults.length,
+          results: anomalyResults
+        };
+        break;
+      }
+      case 'agent_2_risk':
+      case '2': {
+        const { runRiskAssessmentAgent } = await import('../agents/riskAgent.js');
+        const [comps] = await pool.query(`SELECT id FROM companies LIMIT 1`);
+        result = await runRiskAssessmentAgent(comps[0]?.id || 1, userId);
+        break;
+      }
+      case 'agent_3_collection':
+      case '3': {
+        const { runCollectionAgent } = await import('../agents/collectionAgent.js');
+        const [comps] = await pool.query(`SELECT id FROM companies LIMIT 1`);
+        result = await runCollectionAgent(comps[0]?.id || 1, userId);
+        break;
+      }
+      case 'agent_4_document':
+      case '4': {
+        const { runDocumentIntelligenceAgent } = await import('../agents/documentAgent.js');
+        result = await runDocumentIntelligenceAgent(1, userId);
+        break;
+      }
+      case 'agent_5_portfolio':
+      case '5': {
+        const { triggerPortfolioAnalysisService } = await import('../services/portfolio.service.js');
+        result = await triggerPortfolioAnalysisService(userId);
+        break;
+      }
+      case 'agent_6_notification':
+      case '6': {
+        const { triggerEscalationScanService } = await import('../services/notification.service.js');
+        result = await triggerEscalationScanService(userId);
+        break;
+      }
+      default:
+        return sendErrorResponse(res, 400, `Unknown agent ID: ${agentId}`);
+    }
+
+    return sendSuccessResponse(res, 200, `Agent ${agentId} executed successfully`, result);
   } catch (error) {
     return next(error);
   }

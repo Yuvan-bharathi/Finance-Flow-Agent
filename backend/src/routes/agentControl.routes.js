@@ -9,7 +9,8 @@ import {
   getPendingPipelineTargets,
   getPipelineExecutions,
   getPipelineExecutionById,
-  getQueueStatus
+  getQueueStatus,
+  triggerSingleAgent
 } from '../controllers/agentControl.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requirePermission } from '../middleware/permission.middleware.js';
@@ -160,5 +161,6 @@ router.get('/pipeline/executions/:id', requirePermission(PERMISSIONS.AGENT_VIEW)
 
 router.get('/:agentId/runs', requirePermission(PERMISSIONS.AGENT_VIEW), getAgentRunHistory);
 router.get('/:agentId/runs/:runId', requirePermission(PERMISSIONS.AGENT_VIEW), getRunDetail);
+router.post('/:agentId/trigger', requirePermission(PERMISSIONS.AGENT_RUN), triggerSingleAgent);
 
 export default router;

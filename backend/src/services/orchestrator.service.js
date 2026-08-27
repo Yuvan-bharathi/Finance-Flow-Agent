@@ -13,6 +13,7 @@ import { runCollectionAgent } from '../agents/collectionAgent.js';
 import { runDocumentIntelligenceAgent } from '../agents/documentAgent.js';
 import { runPortfolioAnalyticsAgent } from '../agents/portfolioAgent.js';
 import { runNotificationAgent } from '../agents/notificationAgent.js';
+import { runAnomalyAgentStageB } from '../agents/anomalyAgent.js';
 import { emitSocketEvent } from '../config/socket.js';
 import { logger } from '../utils/logger.js';
 import { findCaseById } from '../models/reconciliationCase.model.js';
@@ -303,6 +304,19 @@ const _dispatchAgentStep = async (agentName, context, userId, correlationId) => 
       return await runReconciliationAgent(caseId, userId, 'auto');
     }
 
+    case 'AnomalyDetectionAgent': {
+      let paymentId = context.paymentId || context.payment_id;
+      const caseId = context.caseId || context.case_id;
+      if (!paymentId && caseId) {
+        const c = await findCaseById(caseId);
+        paymentId = c?.payment_id;
+      }
+      if (!paymentId) {
+        return { skipped: true, reason: 'No payment ID available for anomaly inspection.' };
+      }
+      return await runAnomalyAgentStageB(paymentId, caseId, userId);
+    }
+
     case 'RepaymentRiskAssessmentAgent': {
       // Resolve company ID from context or lookup from case
       let companyId = context.companyId || context.company_id || context.recommended_company_id;
@@ -345,8 +359,9 @@ const _getPlannedSteps = (workflow, context) => {
     case PIPELINE_WORKFLOWS.RECONCILIATION_AND_RISK:
       return [
         { step_index: 1, agent_id: 1, agent_name: 'PaymentReconciliationAgent', input_payload: { caseId: context.caseId } },
-        { step_index: 2, agent_id: 2, agent_name: 'RepaymentRiskAssessmentAgent', input_payload: { companyId: context.companyId } },
-        { step_index: 3, agent_id: 3, agent_name: 'AutomatedCollectionFollowUpAgent', input_payload: { companyId: context.companyId } }
+        { step_index: 2, agent_id: 7, agent_name: 'AnomalyDetectionAgent', input_payload: { caseId: context.caseId, paymentId: context.paymentId } },
+        { step_index: 3, agent_id: 2, agent_name: 'RepaymentRiskAssessmentAgent', input_payload: { companyId: context.companyId } },
+        { step_index: 4, agent_id: 3, agent_name: 'AutomatedCollectionFollowUpAgent', input_payload: { companyId: context.companyId } }
       ];
 
     case PIPELINE_WORKFLOWS.PORTFOLIO_AND_ESCALATION:
@@ -358,11 +373,12 @@ const _getPlannedSteps = (workflow, context) => {
     case PIPELINE_WORKFLOWS.END_TO_END_COMPLIANCE:
       return [
         { step_index: 1, agent_id: 1, agent_name: 'PaymentReconciliationAgent', input_payload: { caseId: context.caseId } },
-        { step_index: 2, agent_id: 2, agent_name: 'RepaymentRiskAssessmentAgent', input_payload: { companyId: context.companyId } },
-        { step_index: 3, agent_id: 3, agent_name: 'AutomatedCollectionFollowUpAgent', input_payload: { companyId: context.companyId } },
-        { step_index: 4, agent_id: 4, agent_name: 'DocumentIntelligenceAgent', input_payload: { documentId: context.documentId } },
-        { step_index: 5, agent_id: 5, agent_name: 'PortfolioAnalyticsAgent', input_payload: {} },
-        { step_index: 6, agent_id: 6, agent_name: 'NotificationEscalationAgent', input_payload: {} }
+        { step_index: 2, agent_id: 7, agent_name: 'AnomalyDetectionAgent', input_payload: { caseId: context.caseId, paymentId: context.paymentId } },
+        { step_index: 3, agent_id: 2, agent_name: 'RepaymentRiskAssessmentAgent', input_payload: { companyId: context.companyId } },
+        { step_index: 4, agent_id: 3, agent_name: 'AutomatedCollectionFollowUpAgent', input_payload: { companyId: context.companyId } },
+        { step_index: 5, agent_id: 4, agent_name: 'DocumentIntelligenceAgent', input_payload: { documentId: context.documentId } },
+        { step_index: 6, agent_id: 5, agent_name: 'PortfolioAnalyticsAgent', input_payload: {} },
+        { step_index: 7, agent_id: 6, agent_name: 'NotificationEscalationAgent', input_payload: {} }
       ];
 
     default:
