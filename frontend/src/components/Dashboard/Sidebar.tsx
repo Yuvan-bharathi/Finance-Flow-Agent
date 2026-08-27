@@ -1,6 +1,6 @@
 import { useState, useEffect, type ComponentType } from 'react';
 import {
-  Zap, CreditCard, Building2, FileSpreadsheet, History,
+  LayoutDashboard, CreditCard, Building2, FileSpreadsheet, History,
   BarChart3, FileText, Bell, Settings,
   PanelLeftClose, PanelLeftOpen, ChevronRight, Bot, LogOut
 } from 'lucide-react';
@@ -24,7 +24,7 @@ interface SidebarProps {
 }
 
 const navItems: NavItem[] = [
-  { id: 'reconciliations', label: 'Action Center AI',    icon: Zap },
+  { id: 'reconciliations', label: 'Reconciliation Hub',  icon: LayoutDashboard },
   { id: 'payments',       label: 'Payment Ingestion',    icon: CreditCard },
   { id: 'companies',      label: 'Borrowing Companies',  icon: Building2 },
   { id: 'loans',          label: 'Loans & Schedules',    icon: FileSpreadsheet },

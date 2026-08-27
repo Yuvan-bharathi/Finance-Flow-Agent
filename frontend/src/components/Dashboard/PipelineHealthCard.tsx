@@ -53,9 +53,7 @@ export const PipelineHealthCard = ({ pipelineHealth = [], onNavigatePipeline }: 
         <span style={{
           background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0',
           padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '800',
-          display: 'inline-flex', alignItems: 'center', gap: '4px',
         }}>
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }} />
           7/7 Healthy
         </span>
       </div>

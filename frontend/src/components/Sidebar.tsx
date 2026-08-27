@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Zap, CreditCard, Building2, FileSpreadsheet, History } from 'lucide-react';
+import { LayoutDashboard, CreditCard, Building2, FileSpreadsheet, History } from 'lucide-react';
 
 interface MenuItem {
   id: string;
@@ -14,7 +14,7 @@ interface SidebarProps {
 }
 
 const menuItems: MenuItem[] = [
-  { id: 'reconciliations', label: 'Action Center AI', icon: Zap },
+  { id: 'reconciliations', label: 'Reconciliation Hub', icon: LayoutDashboard },
   { id: 'payments', label: 'Payment Ingestion', icon: CreditCard },
   { id: 'companies', label: 'Borrowing Companies', icon: Building2 },
   { id: 'loans', label: 'Loans & Schedules', icon: FileSpreadsheet },

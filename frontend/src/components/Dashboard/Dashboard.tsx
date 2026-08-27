@@ -242,8 +242,8 @@ export const Dashboard = ({
                 />
               </div>
 
-              {/* 2-Card Row: Pipeline Health + Attention Required */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+              {/* 2-Column Row: Pipeline Health (Left) + Attention Required 2x2 Matrix (Right) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 1fr) 2fr', gap: '20px', marginBottom: '24px', alignItems: 'stretch' }}>
                 <PipelineHealthCard pipelineHealth={stats.pipeline_health} onNavigatePipeline={() => setActiveTab('agents')} />
                 <AttentionRequiredSection
                   cases={stats.attention_required}

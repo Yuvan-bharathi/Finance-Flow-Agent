@@ -13,6 +13,9 @@ import {
   Zap,
   Key,
   Server,
+  Database,
+  Radio,
+  HardDrive,
   CheckCircle2,
   UserPlus,
   Copy,
@@ -912,8 +915,8 @@ export const Settings = () => {
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px' }}>
-                          <span style={{ color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} /> Active
+                          <span style={{ color: '#059669', fontWeight: '700', fontSize: '0.75rem' }}>
+                            Active
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', color: '#64748b', fontSize: '0.75rem' }}>
@@ -966,19 +969,25 @@ export const Settings = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
               {[
-                { name: 'Backend API', status: 'Operational' },
-                { name: 'MySQL DB', status: 'Connected' },
-                { name: 'Groq AI Model', status: 'Connected' },
-                { name: 'WebSocket Server', status: 'Connected' },
-                { name: 'File Storage', status: 'Operational' },
-              ].map((sys, idx) => (
-                <div key={idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569' }}>{sys.name}</div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#059669', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} /> {sys.status}
+                { name: 'Backend API', status: 'Operational', icon: Server },
+                { name: 'MySQL DB', status: 'Connected', icon: Database },
+                { name: 'Groq AI Model', status: 'Connected', icon: Bot },
+                { name: 'WebSocket Server', status: 'Connected', icon: Radio },
+                { name: 'File Storage', status: 'Operational', icon: HardDrive },
+              ].map((sys, idx) => {
+                const IconComponent = sys.icon;
+                return (
+                  <div key={idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
+                      <IconComponent size={14} color="#6366f1" />
+                      <span style={{ fontSize: '0.75rem', fontWeight: '800' }}>{sys.name}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>
+                      {sys.status}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

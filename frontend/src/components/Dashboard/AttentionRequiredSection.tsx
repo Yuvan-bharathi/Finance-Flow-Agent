@@ -70,18 +70,23 @@ export const AttentionRequiredSection = ({ cases = [], onSelectCase, onViewAll }
         </button>
       </div>
 
-      {/* Case Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
-        {cases.map((item) => {
+      {/* Case Cards 2x2 Grid (4 cards total) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+        {cases.slice(0, 4).map((item, idx) => {
           const isHigh = item.severity === 'HIGH' || item.severity === 'CRITICAL';
-          const rawTags = item.anomaly_types ?? [];
-          const tags: string[] = Array.isArray(rawTags) ? rawTags : [String(rawTags) || 'ANOMALY'];
+          const caseNum = item.id ?? (item as unknown as { case_id?: number }).case_id ?? item.payment_id ?? (idx + 1);
+          const paymentNum = item.payment_id ?? caseNum;
+          const rawTags = item.anomaly_types ?? (item as unknown as { anomaly_type?: string }).anomaly_type ?? [];
+          const tags: string[] = Array.isArray(rawTags)
+            ? rawTags
+            : [String(rawTags) || 'ANOMALY'];
+          const primaryAnomaly = tags.length > 0 ? tags[0] : 'PAYMENT ANOMALY';
 
           const playbookTitle = (item.playbook as { title?: string; estimatedDuration?: string } | undefined)?.title;
           const playbookDuration = (item.playbook as { title?: string; estimatedDuration?: string } | undefined)?.estimatedDuration;
 
           return (
-            <div key={item.id} style={{
+            <div key={item.id || idx} style={{
               background: '#fafbfc',
               border: `1.5px solid ${isHigh ? '#fecaca' : '#fed7aa'}`,
               borderRadius: '12px', padding: '14px 16px',
@@ -98,15 +103,19 @@ export const AttentionRequiredSection = ({ cases = [], onSelectCase, onViewAll }
                       fontSize: '0.65rem', fontWeight: '900', padding: '2px 6px',
                       borderRadius: '4px', textTransform: 'uppercase',
                     }}>
-                      {item.severity ?? item.priority}
+                      {item.severity ?? item.priority ?? 'HIGH'}
                     </span>
-                    <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>Case #{item.id}</strong>
+                    <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>Case #{caseNum}</strong>
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px', display: 'flex', gap: '8px' }}>
-                    <span>Payment #{item.payment_id}</span>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Payment #{paymentNum}</span>
                     <span>•</span>
-                    <code style={{ color: '#4338ca', background: '#e0e7ff', padding: '1px 4px', borderRadius: '3px' }}>
-                      {item.transaction_id}
+                    <code style={{
+                      color: '#4338ca', background: '#e0e7ff', padding: '1px 5px',
+                      borderRadius: '3px', maxWidth: '140px', overflow: 'hidden',
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block',
+                    }}>
+                      {item.transaction_id || `TXN-${paymentNum}`}
                     </code>
                   </div>
                 </div>
@@ -114,21 +123,21 @@ export const AttentionRequiredSection = ({ cases = [], onSelectCase, onViewAll }
                   <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0f172a' }}>
                     ₹{Number(item.amount ?? 0).toLocaleString('en-IN')}
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '600' }}>{item.sender_name}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '600' }}>{item.sender_name || 'Counterparty'}</div>
                 </div>
               </div>
 
-              {/* Middle Row: Anomaly Badges */}
+              {/* Middle Row: Single Primary Agent 7 Anomaly Result */}
               <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem' }}>
                   <span style={{ color: '#64748b', fontWeight: '700' }}>Agent 7 Anomaly:</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {tags.map((t, idx) => (
-                      <span key={idx} style={{ background: '#fee2e2', color: '#991b1b', fontSize: '0.65rem', fontWeight: '800', padding: '1px 6px', borderRadius: '4px' }}>
-                        {String(t).replace(/_/g, ' ')}
-                      </span>
-                    ))}
-                  </div>
+                  <span style={{
+                    background: '#fee2e2', color: '#991b1b', fontSize: '0.68rem',
+                    fontWeight: '800', padding: '2px 8px', borderRadius: '4px',
+                    whiteSpace: 'nowrap', textTransform: 'uppercase',
+                  }}>
+                    {String(primaryAnomaly).replace(/_/g, ' ')}
+                  </span>
                 </div>
 
                 {/* Compact Playbook Indicator */}
@@ -139,17 +148,24 @@ export const AttentionRequiredSection = ({ cases = [], onSelectCase, onViewAll }
                 }}>
                   <span style={{ color: '#6d28d9', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span>📖</span>
-                    <span>{playbookTitle ?? 'Operational Playbook Available'}</span>
+                    <span>{playbookTitle ?? 'Duplicate Payment Verification & Hold'}</span>
                   </span>
                   <span style={{ color: '#7c3aed', fontWeight: '700', fontSize: '0.65rem' }}>
-                    {playbookDuration ?? '3 min'}
+                    {playbookDuration ?? '3-5 min'}
                   </span>
                 </div>
               </div>
 
               {/* Action Button */}
               <button
-                onClick={() => onSelectCase?.({ id: item.id, payment_id: item.payment_id, amount: item.amount, sender_name: item.sender_name, transaction_id: item.transaction_id, status: item.status })}
+                onClick={() => onSelectCase?.({
+                  id: caseNum,
+                  payment_id: paymentNum,
+                  amount: item.amount,
+                  sender_name: item.sender_name,
+                  transaction_id: item.transaction_id,
+                  status: item.status,
+                })}
                 style={{
                   background: isHigh ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #f97316, #ea580c)',
                   color: '#ffffff', border: 'none', borderRadius: '8px',
@@ -160,7 +176,7 @@ export const AttentionRequiredSection = ({ cases = [], onSelectCase, onViewAll }
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                <span>Review Case #{item.id}</span>
+                <span>Review Case #{caseNum}</span>
                 <ChevronRight size={14} />
               </button>
             </div>

@@ -826,9 +826,9 @@ export const AgentControlCenter = () => {
               <span>{batchRunning ? 'Dispatching Batch...' : 'Batch Run All Pending Cases'}</span>
             </button>
 
-            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#4f46e5', background: '#e0e7ff', padding: '4px 12px', borderRadius: '999px' }}>
+            {/* <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#4f46e5', background: '#e0e7ff', padding: '4px 12px', borderRadius: '999px' }}>
               Phase 5 Orchestrator Active
-            </span>
+            </span> */}
           </div>
         </div>
 
