@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { clientCache } from './cacheService.js';
 
 /**
- * Axios Instance Configuration (Phase 4 Enterprise Edition)
+ * Axios Instance Configuration (Phase 6 Enterprise Cache Architecture)
  * Uses VITE_API_URL or defaults to Render backend in production and localhost in development.
- * Automatically injects X-Correlation-ID and Authorization headers on all requests.
+ * Automatically injects X-Correlation-ID, Authorization headers, and coordinates with clientCache.
  */
 const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://finance-flow-agent-1.onrender.com/api' : 'http://localhost:5000/api');
 
@@ -44,9 +45,20 @@ api.interceptors.request.use((reqConfig) => {
   return reqConfig;
 });
 
-// Response Interceptor: Handling 401 & 403 PBAC Authorization errors globally
+// Response Interceptor: Handling Caching, Invalidation, and 401 & 403 PBAC Authorization errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = (response.config.method || 'get').toLowerCase();
+    const url = response.config.url || '';
+
+    // Automatic Client-Side Cache Invalidation on Mutations
+    if (['post', 'put', 'patch', 'delete'].includes(method)) {
+      const tags = clientCache.inferTagsFromUrl(url);
+      tags.forEach(tag => clientCache.invalidateByTag(tag));
+    }
+
+    return response;
+  },
   (error) => {
     if (error.response) {
       const status = error.response.status;
@@ -54,6 +66,7 @@ api.interceptors.response.use(
 
       if (status === 401) {
         localStorage.removeItem('ff_auth_token');
+        clientCache.clear();
       }
 
       if (status === 403 || status === 401) {
@@ -68,6 +81,42 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Cached GET API wrapper.
+ * Checks clientCache before making a network call.
+ * 
+ * @param {string} url - API Endpoint
+ * @param {Object} [options] - Options ({ params, ttl, bypassCache, tags })
+ * @returns {Promise<Object>} Axios-compatible response
+ */
+export const cachedGet = async (url, options = {}) => {
+  const { params = {}, ttl = 60, bypassCache = false, tags } = options;
+  const cacheKey = clientCache.generateKey(url, params);
+
+  if (!bypassCache) {
+    const cached = clientCache.get(cacheKey);
+    if (cached) {
+      return {
+        data: cached,
+        status: 200,
+        statusText: 'OK (Client Cache)',
+        headers: { 'x-client-cache': 'HIT', 'x-cache-key': cacheKey },
+        config: { url, params }
+      };
+    }
+  }
+
+  // Network fetch
+  const res = await api.get(url, { params });
+  const inferredTags = tags || clientCache.inferTagsFromUrl(url);
+  clientCache.set(cacheKey, res.data, ttl, inferredTags);
+
+  return {
+    ...res,
+    headers: { ...res.headers, 'x-client-cache': 'MISS', 'x-cache-key': cacheKey }
+  };
+};
 
 /**
  * Utility helper to perform an idempotent POST request.
@@ -87,4 +136,6 @@ export const createIdempotentPost = (url, data, customKey = null) => {
   });
 };
 
+export { clientCache };
 export default api;
+

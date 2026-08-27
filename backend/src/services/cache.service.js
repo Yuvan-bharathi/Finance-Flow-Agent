@@ -19,9 +19,12 @@ import logger from '../utils/logger.js';
  */
 
 class MemoryCacheAdapter {
-  constructor() {
+  constructor(maxSize = 1000) {
     this.store = new Map();        // key -> { value, expiresAt, tags }
     this.tagIndex = new Map();     // tag -> Set of keys
+    this.maxSize = maxSize;        // Maximum number of cached items
+    this.hits = 0;
+    this.misses = 0;
     
     // Periodic background cleanup for expired keys every 60 seconds
     this.cleanupInterval = setInterval(() => this.purgeExpired(), 60000);
@@ -38,13 +41,21 @@ class MemoryCacheAdapter {
    */
   get(key) {
     const item = this.store.get(key);
-    if (!item) return null;
-
-    if (Date.now() > item.expiresAt) {
-      this.delete(key);
+    if (!item) {
+      this.misses++;
       return null;
     }
 
+    if (Date.now() > item.expiresAt) {
+      this.delete(key);
+      this.misses++;
+      return null;
+    }
+
+    this.hits++;
+    // Move key to end to maintain LRU order in Map
+    this.store.delete(key);
+    this.store.set(key, item);
     return item.value;
   }
 
@@ -57,6 +68,12 @@ class MemoryCacheAdapter {
    * @param {Array<string>} [tags=[]] - Tags for group invalidation (e.g. ['payments', 'reports'])
    */
   set(key, value, ttlSeconds = 60, tags = []) {
+    // Evict oldest item if capacity is reached
+    if (this.store.size >= this.maxSize && !this.store.has(key)) {
+      const oldestKey = this.store.keys().next().value;
+      if (oldestKey) this.delete(oldestKey);
+    }
+
     const expiresAt = Date.now() + (ttlSeconds * 1000);
     
     // Clean old tag associations if key exists
@@ -140,11 +157,17 @@ class MemoryCacheAdapter {
   }
 
   /**
-   * Returns cache stats (size, active tags).
+   * Returns cache stats (size, hits, misses, hit ratio, active tags).
    */
   getStats() {
+    const totalRequests = this.hits + this.misses;
+    const hitRatio = totalRequests > 0 ? ((this.hits / totalRequests) * 100).toFixed(1) + '%' : '0.0%';
     return {
       totalKeys: this.store.size,
+      maxSize: this.maxSize,
+      hits: this.hits,
+      misses: this.misses,
+      hitRatio,
       totalTags: this.tagIndex.size,
       tags: Array.from(this.tagIndex.keys())
     };

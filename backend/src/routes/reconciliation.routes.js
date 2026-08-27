@@ -14,6 +14,7 @@ import {
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requirePermission } from '../middleware/permission.middleware.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware.js';
+import { cacheMiddleware } from '../middleware/cache.middleware.js';
 import { PERMISSIONS } from '../config/permissions.js';
 
 /**
@@ -38,7 +39,7 @@ router.use(authenticate);
  *       200:
  *         description: Reconciliation case statistics.
  */
-router.get('/stats', requirePermission(PERMISSIONS.CASE_VIEW), getStats);
+router.get('/stats', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({ ttlSeconds: 60, tag: 'reconciliations' }), getStats);
 
 /**
  * @openapi
@@ -54,9 +55,9 @@ router.get('/stats', requirePermission(PERMISSIONS.CASE_VIEW), getStats);
  *       200:
  *         description: Paginated reconciliation cases.
  */
-router.get('/cases', requirePermission(PERMISSIONS.CASE_VIEW), getCases);
-router.get('/cases/:caseId', requirePermission(PERMISSIONS.CASE_VIEW), getCaseById);
-router.get('/allocations', requirePermission(PERMISSIONS.CASE_VIEW), getAllocations);
+router.get('/cases', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({ ttlSeconds: 45, tag: 'reconciliations' }), getCases);
+router.get('/cases/:caseId', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({ ttlSeconds: 60, tag: 'reconciliations' }), getCaseById);
+router.get('/allocations', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({ ttlSeconds: 60, tag: 'reconciliations' }), getAllocations);
 
 // Trigger AI Agent 1
 router.post('/analyze/:caseId', requirePermission(PERMISSIONS.AGENT_RUN), analyzeCase);

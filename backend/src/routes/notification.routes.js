@@ -9,6 +9,7 @@ import {
 } from '../controllers/notification.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/rbac.middleware.js';
+import { cacheMiddleware } from '../middleware/cache.middleware.js';
 
 /**
  * Express Router: Notification & Escalation Routes
@@ -22,8 +23,8 @@ router.use(authenticate);
 // Trigger Agent 6 — Manual escalation scan (Restricted to owner, super_admin, admin, manager)
 router.post('/escalate', authorize(['owner', 'super_admin', 'admin', 'manager']), triggerEscalationScan);
 
-// Read escalation alerts (All authenticated users can view)
-router.get('/alerts', getAlerts);
+// Read escalation alerts (All authenticated users can view - Cached for 30s under 'notifications' tag)
+router.get('/alerts', cacheMiddleware({ ttlSeconds: 30, tag: 'notifications' }), getAlerts);
 
 // Human-in-the-loop approval actions (Restricted to owner, super_admin, admin, manager, senior_accountant)
 router.put('/alerts/:id/approve', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), approveAlert);

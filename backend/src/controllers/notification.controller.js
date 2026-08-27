@@ -1,6 +1,7 @@
 import { runNotificationAgent } from '../agents/notificationAgent.js';
 import pool from '../config/db.js';
 import { sendEscalationNoticeEmail } from '../utils/emailService.js';
+import { cacheService } from '../services/cache.service.js';
 
 /**
  * Controller: Notification & Escalation Agent
@@ -51,6 +52,9 @@ export const triggerEscalationScan = async (req, res) => {
   try {
     const triggeredBy = req.user?.id || null;
     const result = await runNotificationAgent(triggeredBy);
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
 
     return res.status(200).json({
       success: true,
@@ -188,6 +192,9 @@ export const approveAlert = async (req, res) => {
       VALUES (?, 'APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
     `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
 
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
+
     return res.status(200).json({
       success: true,
       message: `Escalation notice approved & email successfully triggered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`,
@@ -224,6 +231,9 @@ export const dismissAlert = async (req, res) => {
       SET notification_status = 'dismissed', approved_by = ?, approved_at = NOW()
       WHERE id = ?
     `, [dismissedBy, alertId]);
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
 
     return res.status(200).json({ success: true, message: 'Alert dismissed.' });
 
@@ -301,6 +311,9 @@ export const batchApproveAlerts = async (req, res) => {
       });
     }
 
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
+
     return res.status(200).json({
       success: true,
       message: `Batch dispatched ${dispatched.length} follow-up notices successfully!`,
@@ -342,6 +355,9 @@ export const batchDismissAlerts = async (req, res) => {
       SET notification_status = 'dismissed', approved_by = ?, approved_at = NOW()
       WHERE id IN (?)
     `, [dismissedBy, targetIds]);
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
 
     return res.status(200).json({
       success: true,

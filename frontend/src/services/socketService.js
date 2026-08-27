@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { clientCache } from './cacheService.js';
 
 /**
  * Frontend WebSocket Service (Phase 6 Real-Time Event Layer)
@@ -42,6 +43,40 @@ export const connectSocket = () => {
 
     socket.on('reconnect_error', (error) => {
       console.warn('⚠️ [Socket Reconnect Error]:', error.message);
+    });
+
+    // Real-Time Local Cache Invalidation Listeners
+    socket.on('PAYMENT_INGESTED', () => {
+      clientCache.invalidateByTag('payments');
+      clientCache.invalidateByTag('loans');
+      clientCache.invalidateByTag('reports');
+      clientCache.invalidateByTag('reconciliations');
+    });
+
+    socket.on('COMPANY_CREATED', () => {
+      clientCache.invalidateByTag('companies');
+      clientCache.invalidateByTag('reports');
+    });
+
+    socket.on('COMPANY_UPDATED', () => {
+      clientCache.invalidateByTag('companies');
+      clientCache.invalidateByTag('reports');
+    });
+
+    socket.on('COMPANY_DELETED', () => {
+      clientCache.invalidateByTag('companies');
+      clientCache.invalidateByTag('reports');
+    });
+
+    socket.on('ALERT_RESOLVED', () => {
+      clientCache.invalidateByTag('notifications');
+      clientCache.invalidateByTag('reports');
+    });
+
+    socket.on('RECONCILIATION_COMPLETED', () => {
+      clientCache.invalidateByTag('reconciliations');
+      clientCache.invalidateByTag('payments');
+      clientCache.invalidateByTag('reports');
     });
   }
   return socket;

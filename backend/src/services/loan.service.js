@@ -6,6 +6,7 @@ import {
 } from '../models/loan.model.js';
 import { insertRepaymentScheduleBatch, findScheduleByLoanId } from '../models/repayment.model.js';
 import { findCompanyById } from '../models/company.model.js';
+import { cacheService } from './cache.service.js';
 
 /**
  * Service: Loan Service
@@ -155,6 +156,15 @@ export const createLoanService = async (loanData) => {
 
     await connection.commit();
     connection.release();
+
+    // Invalidate related cache tags
+    try {
+      cacheService.invalidateByTag('loans');
+      cacheService.invalidateByTag('companies');
+      cacheService.invalidateByTag('reports');
+    } catch (e) {
+      console.warn('[Loan Service] Cache invalidation warning:', e.message);
+    }
 
     return await getLoanByIdService(loanId);
   } catch (error) {
