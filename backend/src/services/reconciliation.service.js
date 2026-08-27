@@ -177,14 +177,34 @@ export const getCasesService = async (status = null, priority = null) => {
 
   const [cases] = await pool.execute(query, params);
 
-  // Attach latest AI recommendation and waterfall plan preview for each case
-  for (const item of cases) {
-    const recs = await findRecommendationsByCaseId(item.id);
-    const latestRec = recs.length > 0 ? recs[0] : null;
-    if (latestRec && latestRec.recommended_loan_id) {
-      latestRec.waterfall_preview = await previewWaterfallAllocation(item.amount, latestRec.recommended_loan_id);
+  if (!cases || cases.length === 0) {
+    return [];
+  }
+
+  // High-performance batch fetch of latest AI recommendations (1 single DB query instead of N+1 sequential loops)
+  try {
+    const caseIds = cases.map(c => c.id);
+    const [recs] = await pool.query(`
+      SELECT r.* 
+      FROM ai_recommendations r
+      INNER JOIN (
+        SELECT case_id, MAX(id) as max_id
+        FROM ai_recommendations
+        WHERE case_id IN (?)
+        GROUP BY case_id
+      ) latest ON r.id = latest.max_id
+    `, [caseIds]);
+
+    const recMap = {};
+    for (const r of recs) {
+      recMap[r.case_id] = r;
     }
-    item.latest_recommendation = latestRec;
+
+    for (const item of cases) {
+      item.latest_recommendation = recMap[item.id] || null;
+    }
+  } catch (err) {
+    console.warn('[Reconciliation Service] Batch recommendation mapping skipped:', err.message);
   }
 
   return cases;

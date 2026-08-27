@@ -70,12 +70,15 @@ export const findOpenCases = async (limit = 50) => {
   const query = `
     SELECT rc.id, rc.status, rc.priority, rc.created_at,
            p.id as payment_id, p.transaction_id, p.amount, p.payment_date, p.sender_name, p.sender_account, p.reference,
-           (SELECT c.company_name FROM companies c WHERE p.sender_name = c.company_name OR p.sender_name LIKE CONCAT('%', c.company_name, '%') LIMIT 1) as company_name,
+           COALESCE(
+             (SELECT c.company_name FROM companies c WHERE p.sender_name = c.company_name OR p.sender_name LIKE CONCAT('%', c.company_name, '%') LIMIT 1),
+             p.sender_name
+           ) as company_name,
            (SELECT c.id FROM companies c WHERE p.sender_name = c.company_name OR p.sender_name LIKE CONCAT('%', c.company_name, '%') LIMIT 1) as company_id
     FROM reconciliation_cases rc
     JOIN payments p ON rc.payment_id = p.id
-    WHERE rc.status IN ('new', 'open', 'pending_review', 'ai_processing')
-       OR rc.status NOT IN ('resolved', 'approved')
+    WHERE rc.status IN ('new', 'open')
+      AND (SELECT COUNT(*) FROM ai_recommendations ar WHERE ar.case_id = rc.id) = 0
     ORDER BY rc.created_at DESC, rc.id DESC
     LIMIT ?;
   `;

@@ -262,6 +262,8 @@ export const AgentControlCenter = () => {
 
   // Activity filter state
   const [agentFilter, setAgentFilter] = useState('');
+  const [triggerFilter, setTriggerFilter] = useState('');
+
   const fetchControlCenterData = async (isBackground = false) => {
     try {
       if (!isBackground && agents.every(a => (a.metrics?.total_runs || 0) === 0)) {
@@ -327,12 +329,25 @@ export const AgentControlCenter = () => {
     };
 
     if (socketInstance) {
+      // Pipeline orchestration events
+      socketInstance.on('PIPELINE_COMPLETED', handleEvent);
+      socketInstance.on('PIPELINE_STEP_COMPLETED', handleEvent);
+      socketInstance.on('PIPELINE_STARTED', handleEvent);
       socketInstance.on('pipeline_completed', handleEvent);
       socketInstance.on('pipeline_step_completed', handleEvent);
+
+      // Individual agent execution events
+      socketInstance.on('RECONCILIATION_COMPLETED', handleEvent);
+      socketInstance.on('RISK_ASSESSMENT_COMPLETED', handleEvent);
+      socketInstance.on('COLLECTION_DRAFTED', handleEvent);
+      socketInstance.on('PORTFOLIO_SNAPSHOT_READY', handleEvent);
+      socketInstance.on('ESCALATION_SCAN_COMPLETE', handleEvent);
+      socketInstance.on('NEW_ESCALATION_ALERTS', handleEvent);
       socketInstance.on('agent_executed', handleEvent);
       socketInstance.on('agent_status_updated', handleEvent);
       socketInstance.on('portfolio_recalculated', handleEvent);
       socketInstance.on('escalation_alert_created', handleEvent);
+
       socketInstance.on('ANOMALY_DETECTED', (payload) => {
         clientCache.invalidateByTag('anomalies');
         setAnomalyFlags(prev => {
@@ -356,8 +371,17 @@ export const AgentControlCenter = () => {
 
     return () => {
       if (socketInstance) {
+        socketInstance.off('PIPELINE_COMPLETED', handleEvent);
+        socketInstance.off('PIPELINE_STEP_COMPLETED', handleEvent);
+        socketInstance.off('PIPELINE_STARTED', handleEvent);
         socketInstance.off('pipeline_completed', handleEvent);
         socketInstance.off('pipeline_step_completed', handleEvent);
+        socketInstance.off('RECONCILIATION_COMPLETED', handleEvent);
+        socketInstance.off('RISK_ASSESSMENT_COMPLETED', handleEvent);
+        socketInstance.off('COLLECTION_DRAFTED', handleEvent);
+        socketInstance.off('PORTFOLIO_SNAPSHOT_READY', handleEvent);
+        socketInstance.off('ESCALATION_SCAN_COMPLETE', handleEvent);
+        socketInstance.off('NEW_ESCALATION_ALERTS', handleEvent);
         socketInstance.off('agent_executed', handleEvent);
         socketInstance.off('agent_status_updated', handleEvent);
         socketInstance.off('portfolio_recalculated', handleEvent);
@@ -447,8 +471,10 @@ export const AgentControlCenter = () => {
       const res = await triggerPipelineWorkflow({
         workflow: targetModalWorkflow,
         contextData: {
-          caseId: selectedCaseId || 20,
-          companyId: chosenCase?.company_id || 1,
+          caseId: selectedCaseId || chosenCase?.id,
+          companyId: chosenCase?.company_id || null,
+          senderName: chosenCase?.sender_name || null,
+          paymentId: chosenCase?.payment_id || null,
           documentId: 1
         },
         priority: 1
@@ -632,12 +658,7 @@ export const AgentControlCenter = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
       {/* Header Banner */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px',
+      <div className="telemetry-banner" style={{
         background: '#ffffff',
         padding: '20px 24px',
         borderRadius: '16px',
@@ -668,7 +689,7 @@ export const AgentControlCenter = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <div className="telemetry-stats-group">
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
               Total Tokens Consumed
@@ -820,7 +841,7 @@ export const AgentControlCenter = () => {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+        <div className="pipelines-grid">
           
           {/* Pipeline 1: Payment Reconciliation & Risk Pipeline */}
           <div style={{
@@ -1253,11 +1274,7 @@ export const AgentControlCenter = () => {
 
       {/* ── AGENT PERFORMANCE TELEMETRY SECTION (8-Card Modern Grid) ── */}
       <div style={{ marginBottom: '32px' }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '20px'
-        }}>
+        <div className="agent-cards-grid">
           {agents.map((agentItem) => {
             const isRunningThis = triggeringAgentId === agentItem.id;
             const isComingSoon = !agentItem.is_active;
@@ -1457,8 +1474,8 @@ export const AgentControlCenter = () => {
 
           {/* ── CARD 8: AGENTS OVERVIEW CARD (Spans 2 columns next to Notification Agent) ── */}
           <div
+            className="agent-overview-card"
             style={{
-              gridColumn: 'span 2',
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '20px',
@@ -1479,11 +1496,7 @@ export const AgentControlCenter = () => {
             </div>
 
             {/* 4 Mini Stat Boxes */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '12px'
-            }}>
+            <div className="overview-stats-grid">
               {/* Box 1: Total Agents */}
               <div style={{
                 background: '#f8fafc',
@@ -1693,7 +1706,7 @@ export const AgentControlCenter = () => {
           </div>
         </div>
 
-        <div style={{ maxHeight: '280px', overflowY: 'auto', overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+        <div style={{ maxHeight: '400px', minHeight: '280px', overflowY: 'auto', overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
           <table className="responsive-table" style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f8fafc' }}>
               <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>

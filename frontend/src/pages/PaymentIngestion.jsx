@@ -324,10 +324,19 @@ export const PaymentIngestion = ({ onAskAI }) => {
     }
   };
 
-  // Format exact date + time timestamp
+  // Format exact date + time timestamp with UTC -> Local browser timezone conversion
   const formatDateTime = (dateStr, createdAtStr) => {
-    if (createdAtStr) {
-      const d = new Date(createdAtStr);
+    const raw = createdAtStr || dateStr;
+    if (raw) {
+      let str = String(raw).trim();
+      if (!str.endsWith('Z') && !str.includes('+')) {
+        if (str.includes(' ')) {
+          str = str.replace(' ', 'T') + 'Z';
+        } else if (str.length === 10) {
+          str = str + 'T00:00:00Z';
+        }
+      }
+      const d = new Date(str);
       if (!isNaN(d.getTime())) {
         return d.toLocaleString('en-IN', {
           year: 'numeric',
@@ -339,9 +348,9 @@ export const PaymentIngestion = ({ onAskAI }) => {
           hour12: true
         });
       }
-      return createdAtStr;
+      return raw;
     }
-    return dateStr || 'N/A';
+    return 'N/A';
   };
 
   return (

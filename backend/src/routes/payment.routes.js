@@ -68,6 +68,13 @@ router.use(authenticate);
  *         $ref: '#/components/responses/ForbiddenError'
  */
 router.post(
+  '/',
+  requirePermission(PERMISSIONS.PAYMENT_CREATE),
+  idempotencyMiddleware({ required: false }),
+  ingestPayment
+);
+
+router.post(
   '/ingest',
   requirePermission(PERMISSIONS.PAYMENT_CREATE),
   idempotencyMiddleware({ required: false }),

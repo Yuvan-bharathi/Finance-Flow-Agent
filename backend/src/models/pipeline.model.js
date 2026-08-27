@@ -222,7 +222,7 @@ const _enrichPipelineRecords = async (pipelines) => {
         p.linked_transaction_id = row.transaction_id || null;
         p.linked_payment_amount = row.payment_amount || null;
         p.linked_sender_name = row.sender_name || null;
-        p.linked_company_name = row.company_name || null;
+        p.linked_company_name = row.company_name || row.sender_name || null;
       }
     }
 

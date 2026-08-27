@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Activity, CheckCircle2, AlertCircle, Clock, Zap, Cpu, ChevronDown, ChevronUp, Layers, Terminal, RefreshCw } from 'lucide-react';
 import { getAgentRuns, getRunDetail } from '../services/agentService';
+import { connectSocket } from '../services/socketService';
 
 /**
  * Slide-Over Drawer: Agent Run History & Execution Log Inspector
@@ -29,6 +30,38 @@ export const AgentRunHistoryDrawer = ({ agent, agentId, agentName, onClose }) =>
   useEffect(() => {
     if (currentAgentId) {
       fetchRuns();
+
+      // Real-time auto-refresh when agent finishes execution
+      const socket = connectSocket();
+      if (socket) {
+        const handleRefresh = () => {
+          getAgentRuns(currentAgentId, 30).then(data => {
+            if (data) setRuns(data);
+          }).catch(() => {});
+        };
+
+        socket.on('RECONCILIATION_COMPLETED', handleRefresh);
+        socket.on('RISK_ASSESSMENT_COMPLETED', handleRefresh);
+        socket.on('COLLECTION_DRAFTED', handleRefresh);
+        socket.on('PORTFOLIO_SNAPSHOT_READY', handleRefresh);
+        socket.on('ESCALATION_SCAN_COMPLETE', handleRefresh);
+        socket.on('ANOMALY_DETECTED', handleRefresh);
+        socket.on('PIPELINE_STEP_COMPLETED', handleRefresh);
+        socket.on('PIPELINE_COMPLETED', handleRefresh);
+        socket.on('agent_executed', handleRefresh);
+
+        return () => {
+          socket.off('RECONCILIATION_COMPLETED', handleRefresh);
+          socket.off('RISK_ASSESSMENT_COMPLETED', handleRefresh);
+          socket.off('COLLECTION_DRAFTED', handleRefresh);
+          socket.off('PORTFOLIO_SNAPSHOT_READY', handleRefresh);
+          socket.off('ESCALATION_SCAN_COMPLETE', handleRefresh);
+          socket.off('ANOMALY_DETECTED', handleRefresh);
+          socket.off('PIPELINE_STEP_COMPLETED', handleRefresh);
+          socket.off('PIPELINE_COMPLETED', handleRefresh);
+          socket.off('agent_executed', handleRefresh);
+        };
+      }
     }
   }, [currentAgentId]);
 

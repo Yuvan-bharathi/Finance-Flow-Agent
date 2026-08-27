@@ -270,31 +270,100 @@ aside {
   gap: 16px;
 }
 
-/* Responsive Media Queries */
-@media (max-width: 1200px) {
-  .kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+/* Responsive Grid Utilities for Agent Control Center & Dashboards */
+.agent-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.agent-overview-card {
+  grid-column: span 2;
+}
+
+.pipelines-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.telemetry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.telemetry-stats-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.overview-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+/* Tablet Breakpoint (768px - 1100px) */
+@media (max-width: 1100px) {
+  .agent-cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px !important;
+  }
+  .agent-overview-card {
+    grid-column: span 2 !important;
+  }
+  .pipelines-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 
-@media (max-width: 1024px) {
-  .header-search-box {
-    width: 220px !important;
-  }
-  .dashboard-main-content {
-    padding: 16px !important;
-  }
-}
-
+/* Mobile Breakpoint (< 768px) */
 @media (max-width: 768px) {
+  .dashboard-header {
+    padding: 14px 16px !important;
+  }
   .header-content {
     flex-direction: column !important;
     align-items: flex-start !important;
     gap: 12px !important;
-    padding: 14px 16px !important;
+  }
+  .header-controls-wrap {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
   }
   .header-search-box {
     width: 100% !important;
+    min-width: 100% !important;
+  }
+  .agent-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .agent-overview-card {
+    grid-column: span 1 !important;
+  }
+  .pipelines-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .telemetry-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 16px !important;
+  }
+  .telemetry-stats-group {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+  }
+  .overview-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
   }
   .drawer-panel {
     width: 100vw !important;
@@ -302,8 +371,13 @@ aside {
     border-radius: 0 !important;
   }
   .kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+    gap: 10px !important;
+  }
+  .table-responsive-wrapper {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 }
 

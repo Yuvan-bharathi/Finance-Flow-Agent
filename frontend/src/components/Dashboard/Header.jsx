@@ -53,7 +53,7 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
     : 'U';
 
   return (
-    <header style={{
+    <header className="dashboard-header header-content" style={{
       background: '#ffffff',
       borderBottom: '1px solid #e2e8f0',
       padding: '18px 32px',
@@ -77,13 +77,14 @@ export const Header = ({ searchQuery = '', setSearchQuery }) => {
       </div>
 
       {/* Right Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      <div className="header-controls-wrap" style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
 
         {/* Search Input */}
         <div style={{ position: 'relative' }}>
           <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
+            className="header-search-box"
             placeholder="Search by sender, reference, or TXN ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
