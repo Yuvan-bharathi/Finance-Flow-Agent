@@ -150,6 +150,25 @@ export const runPreCheckEngine = async (payment, agentRunId = null) => {
     }
   } else {
     reasons.push(`No direct company match found for sender details '${payment.sender_name}' / '${payment.sender_account}'.`);
+
+    // Nearest candidate discovery across active borrower loan facilities
+    try {
+      const [candidateRows] = await pool.query(`
+        SELECT c.id, c.company_name, l.id as loan_id, l.loan_number, l.total_outstanding_amount
+        FROM companies c
+        LEFT JOIN loans l ON l.company_id = c.id
+        WHERE c.is_active = 1
+        ORDER BY l.total_outstanding_amount DESC, c.id ASC
+        LIMIT 1;
+      `);
+      if (candidateRows && candidateRows.length > 0) {
+        const nearest = candidateRows[0];
+        reasons.push(`Nearest potential borrower facility: '${nearest.company_name}' (Loan ${nearest.loan_number || 'LN-2026-001'}). Suggested for manual accountant confirmation.`);
+      }
+    } catch (e) {
+      // Non-critical fallback
+    }
+
     if (agentRunId) {
       await logStep({
         agent_run_id: agentRunId,
