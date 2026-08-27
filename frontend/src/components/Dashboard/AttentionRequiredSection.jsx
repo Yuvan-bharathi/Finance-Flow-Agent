@@ -171,9 +171,25 @@ export const AttentionRequiredSection = ({ cases = [], onSelectCase, onViewAll }
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-                  <span style={{ color: '#64748b', fontWeight: '700' }}>Recommended:</span>
-                  <strong style={{ color: '#0f172a' }}>{String(item.recommended_action || 'MANUAL_REVIEW').replace(/_/g, ' ')}</strong>
+                {/* Compact Playbook Indicator */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: '#f5f3ff',
+                  border: '1px solid #ddd6fe',
+                  borderRadius: '6px',
+                  padding: '4px 8px',
+                  fontSize: '0.68rem',
+                  marginTop: '2px'
+                }}>
+                  <span style={{ color: '#6d28d9', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>📖</span>
+                    <span>{item.playbook?.title || 'Operational Playbook Available'}</span>
+                  </span>
+                  <span style={{ color: '#7c3aed', fontWeight: '700', fontSize: '0.65rem' }}>
+                    {item.playbook?.estimatedDuration || '3 min'}
+                  </span>
                 </div>
               </div>
 

@@ -5,6 +5,7 @@ import { findCaseById } from '../models/reconciliationCase.model.js';
 import { previewWaterfallAllocation } from './settlement.service.js';
 import { AGENT_CONFIG } from '../config/agentConfig.js';
 import { createAgentRun } from '../models/agentRun.model.js';
+import { selectPlaybookForAnomaly } from '../engine/playbookEngine.js';
 
 /**
  * Service: Reconciliation Service
@@ -387,19 +388,46 @@ export const getStatsService = async () => {
         p.amount DESC
       LIMIT 5;
     `);
-    attentionRequired = attnRows.map(r => ({
-      case_id: r.case_id,
-      payment_id: r.payment_id,
-      transaction_id: r.transaction_id,
-      amount: parseFloat(r.amount) || 0,
-      sender_name: r.sender_name || 'Unassigned Sender',
-      priority: (r.priority || 'medium').toUpperCase(),
-      severity: r.anomaly_severity || (r.priority === 'critical' ? 'HIGH' : r.priority === 'high' ? 'HIGH' : 'MEDIUM'),
-      anomaly_score: r.anomaly_score !== null ? parseFloat(r.anomaly_score) : 65,
-      anomaly_types: r.anomaly_types ? (typeof r.anomaly_types === 'string' ? JSON.parse(r.anomaly_types) : r.anomaly_types) : ['UNALLOCATED_DEPOSIT'],
-      recommended_action: r.anomaly_recommendation || 'MANUAL_REVIEW',
-      status: r.status
-    }));
+    attentionRequired = attnRows.map(r => {
+      let rawTypes = r.anomaly_types;
+      if (typeof rawTypes === 'string') {
+        try { rawTypes = JSON.parse(rawTypes); } catch (_) { rawTypes = [rawTypes]; }
+      }
+      const types = Array.isArray(rawTypes) ? rawTypes : ['UNALLOCATED_DEPOSIT'];
+      const sev = r.anomaly_severity || (r.priority === 'critical' ? 'HIGH' : r.priority === 'high' ? 'HIGH' : 'MEDIUM');
+
+      const pb = selectPlaybookForAnomaly({
+        anomalyTypes: types,
+        severity: sev,
+        recommendation: r.anomaly_recommendation,
+        priority: r.priority,
+        caseId: r.case_id
+      });
+
+      return {
+        case_id: r.case_id,
+        payment_id: r.payment_id,
+        transaction_id: r.transaction_id,
+        amount: parseFloat(r.amount) || 0,
+        sender_name: r.sender_name || 'Unassigned Sender',
+        priority: (r.priority || 'medium').toUpperCase(),
+        severity: sev,
+        anomaly_score: r.anomaly_score !== null ? parseFloat(r.anomaly_score) : 65,
+        anomaly_types: types,
+        recommended_action: r.anomaly_recommendation || 'MANUAL_REVIEW',
+        playbook: {
+          id: pb.id,
+          title: pb.title,
+          trigger: pb.primaryTrigger,
+          severity: pb.severity,
+          estimatedDuration: pb.estimatedDuration,
+          safeToAllocate: pb.safeToAllocate,
+          requiresManualReview: pb.requiresManualReview,
+          requiresAgent6Escalation: pb.requiresAgent6Escalation
+        },
+        status: r.status
+      };
+    });
   } catch (err) {
     console.warn('[Stats Service] Attention required query skipped:', err.message);
   }

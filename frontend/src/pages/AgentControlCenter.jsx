@@ -13,6 +13,7 @@ import {
 import { triggerPortfolioAnalysis, getLatestPortfolioSnapshot } from '../services/portfolioService';
 import { triggerEscalationScan, getAlerts, approveAlert, dismissAlert } from '../services/notificationService';
 import { getAnomalyList, dismissAnomaly, escalateAnomaly } from '../services/anomalyService';
+import { getStandardPlaybooks } from '../services/reconciliationService';
 import { useAuth } from '../context/AuthContext';
 import { AgentRunHistoryDrawer } from '../components/AgentRunHistoryDrawer';
 import { PipelineVisualizer } from '../components/PipelineVisualizer';
@@ -56,7 +57,8 @@ import {
   ShieldCheck,
   MessageSquare,
   Percent,
-  TrendingUp
+  TrendingUp,
+  BookOpen
 } from 'lucide-react';
 
 const formatAuditTimestamp = (dateStr) => {
@@ -251,14 +253,16 @@ export const AgentControlCenter = () => {
   const [expandedAlertId, setExpandedAlertId] = useState(null);
   const [mailSuccessToast, setMailSuccessToast] = useState(null);
   const [authErrorToast, setAuthErrorToast] = useState(null);
-
-  // Agent 7: Anomaly flags
+  
+  // Agent 7: Anomaly flags & Standardized Operational Playbooks (SOP)
   const [anomalyFlags, setAnomalyFlags] = useState([]);
   const [anomalyLoading, setAnomalyLoading] = useState(false);
   const [actioningAnomalyId, setActioningAnomalyId] = useState(null);
   const [dismissModalId, setDismissModalId] = useState(null);
   const [dismissReason, setDismissReason] = useState('');
   const [expandedAnomalyId, setExpandedAnomalyId] = useState(null);
+  const [showPlaybooksModal, setShowPlaybooksModal] = useState(false);
+  const [standardPlaybooks, setStandardPlaybooks] = useState([]);
 
   // Activity filter state
   const [agentFilter, setAgentFilter] = useState('');
@@ -266,6 +270,12 @@ export const AgentControlCenter = () => {
 
   const fetchControlCenterData = async (isBackground = false) => {
     try {
+      if (!isBackground) setLoading(true);
+
+      getStandardPlaybooks().then(pbs => {
+        if (Array.isArray(pbs) && pbs.length > 0) setStandardPlaybooks(pbs);
+      }).catch(() => {});
+
       if (!isBackground && agents.every(a => (a.metrics?.total_runs || 0) === 0)) {
         setLoading(true);
       }
@@ -819,6 +829,21 @@ export const AgentControlCenter = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={() => setShowPlaybooksModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: '#ffffff',
+                color: '#4338ca', border: '1.5px solid #c7d2fe',
+                borderRadius: '8px', padding: '6px 14px',
+                fontSize: '0.75rem', fontWeight: '800', cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <BookOpen size={14} color="#6366f1" />
+              <span>Standardized SOP Playbooks</span>
+            </button>
+
             <button
               onClick={() => handleExecuteBatch('RECONCILIATION_AND_RISK')}
               disabled={batchRunning}
@@ -2163,6 +2188,182 @@ export const AgentControlCenter = () => {
           agentName={getAgentDisplayName(selectedAgentForHistory)}
           onClose={() => setSelectedAgentForHistory(null)}
         />
+      )}
+
+      {/* 📖 Standardized Operational Playbooks (SOP) Library Modal */}
+      {showPlaybooksModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '860px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
+            overflow: 'hidden',
+            border: '1px solid #cbd5e1'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#f8fafc'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '38px', height: '38px', borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+                }}>
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                    Standardized Operational Playbooks (SOP)
+                  </h3>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '2px 0 0' }}>
+                    Deterministic Standard Operating Procedures matched by <strong>Agent 7 Anomaly Engine</strong>.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPlaybooksModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body: Playbook Cards List */}
+            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{
+                background: '#f5f3ff',
+                border: '1px solid #ddd6fe',
+                borderRadius: '12px',
+                padding: '12px 16px',
+                fontSize: '0.8rem',
+                color: '#5b21b6',
+                lineHeight: 1.45
+              }}>
+                <strong>🛡️ Operational Determinism:</strong> Playbooks are selected deterministically from Agent 7's detected anomaly flags. All verification steps require human sign-off before financial allocation or Agent 6 escalation.
+              </div>
+
+              {standardPlaybooks.map((pb, idx) => (
+                <div
+                  key={pb.id || idx}
+                  style={{
+                    background: '#ffffff',
+                    border: `1.5px solid ${pb.severity === 'CRITICAL' ? '#fca5a5' : pb.severity === 'HIGH' ? '#fed7aa' : '#e2e8f0'}`,
+                    borderRadius: '14px',
+                    padding: '16px 18px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          background: pb.severity === 'CRITICAL' ? '#fee2e2' : pb.severity === 'HIGH' ? '#ffedd5' : '#f1f5f9',
+                          color: pb.severity === 'CRITICAL' ? '#991b1b' : pb.severity === 'HIGH' ? '#9a3412' : '#475569',
+                          fontSize: '0.65rem',
+                          fontWeight: '900',
+                          padding: '2px 6px',
+                          borderRadius: '4px'
+                        }}>
+                          {pb.severity}
+                        </span>
+                        <h4 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                          {pb.title}
+                        </h4>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
+                        <strong>Trigger:</strong> {pb.trigger} • <strong>Est. Duration:</strong> {pb.estimatedDuration}
+                      </div>
+                    </div>
+
+                    <span style={{
+                      background: '#ecfdf5',
+                      color: '#059669',
+                      border: '1px solid #a7f3d0',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.7rem',
+                      fontWeight: '800'
+                    }}>
+                      ✓ ACTIVE SOP
+                    </span>
+                  </div>
+
+                  <p style={{ fontSize: '0.78rem', color: '#475569', margin: 0, lineHeight: 1.4 }}>
+                    {pb.description}
+                  </p>
+
+                  {/* Steps list */}
+                  <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '10px', padding: '10px 14px' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
+                      Standard Investigation Steps ({pb.steps?.length || 0})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {pb.steps && pb.steps.map(s => (
+                        <div key={s.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.76rem' }}>
+                          <span style={{ fontWeight: '800', color: '#4f46e5' }}>{s.id}.</span>
+                          <div>
+                            <strong style={{ color: '#1e293b' }}>{s.label}: </strong>
+                            <span style={{ color: '#64748b' }}>{s.desc}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '14px 24px',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              background: '#f8fafc'
+            }}>
+              <button
+                onClick={() => setShowPlaybooksModal(false)}
+                style={{
+                  background: '#4f46e5',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '9px 18px',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Close Playbooks Library
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

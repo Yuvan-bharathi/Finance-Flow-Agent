@@ -14,6 +14,7 @@ import { createAgentRun, updateAgentRun } from '../models/agentRun.model.js';
 import { logStep } from '../models/agentExecutionLog.model.js';
 import { acquireAgentLock, releaseAgentLock } from '../utils/agentLock.js';
 import { emitSocketEvent } from '../config/socket.js';
+import { selectPlaybookForAnomaly } from '../engine/playbookEngine.js';
 
 /**
  * Agent 7: Financial Transaction Anomaly Detection Agent
@@ -681,6 +682,14 @@ export const runAnomalyAgentStageB = async (paymentId, caseId = null, triggeredB
       result_summary: `Stage B: ${anomalyDetected ? `${severity} anomaly [${recommendedAction}]` : 'CLEAR'} — Score: ${finalScore}`
     });
 
+    const activeTypes = Object.keys(checks).filter(k => checks[k].triggered);
+    const playbook = selectPlaybookForAnomaly({
+      anomalyTypes: activeTypes,
+      severity,
+      recommendation: recommendedAction,
+      caseId
+    });
+
     if (anomalyDetected) {
       emitSocketEvent('ANOMALY_DETECTED', {
         payment_id: paymentId,
@@ -691,10 +700,21 @@ export const runAnomalyAgentStageB = async (paymentId, caseId = null, triggeredB
         anomaly_id: anomalyId,
         severity,
         anomaly_score: finalScore,
-        anomaly_types: Object.keys(checks).filter(k => checks[k].triggered),
+        anomaly_types: activeTypes,
         recommended_action: recommendedAction,
         safe_to_allocate: safeToAllocate,
         requires_manual_review: requiresManualReview,
+        playbook: {
+          id: playbook.id,
+          title: playbook.title,
+          trigger: playbook.primaryTrigger,
+          severity: playbook.severity,
+          estimatedDuration: playbook.estimatedDuration,
+          safeToAllocate: playbook.safeToAllocate,
+          requiresManualReview: playbook.requiresManualReview,
+          requiresAgent6Escalation: playbook.requiresAgent6Escalation,
+          steps: playbook.steps
+        },
         evidence,
         explanation,
         recommendation,
@@ -702,16 +722,17 @@ export const runAnomalyAgentStageB = async (paymentId, caseId = null, triggeredB
       });
     }
 
-    console.log(`[Anomaly Agent] Stage B complete for payment #${paymentId} — Score: ${finalScore} (${severity}, Action: ${recommendedAction})`);
+    console.log(`[Anomaly Agent] Stage B complete for payment #${paymentId} — Score: ${finalScore} (${severity}, Action: ${recommendedAction}, Playbook: ${playbook.title})`);
     return {
       anomaly_id: anomalyId,
       anomaly_score: finalScore,
       severity,
       anomaly_detected: anomalyDetected,
-      anomaly_types: Object.keys(checks).filter(k => checks[k].triggered),
+      anomaly_types: activeTypes,
       recommended_action: recommendedAction,
       safe_to_allocate: safeToAllocate,
       requires_manual_review: requiresManualReview,
+      playbook,
       evidence,
       explanation,
       recommendation,

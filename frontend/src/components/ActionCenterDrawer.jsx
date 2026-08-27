@@ -12,9 +12,24 @@ import {
   ArrowRight,
   RefreshCw,
   ShieldAlert,
-  Bot
+  Bot,
+  BookOpen,
+  CheckSquare,
+  Square,
+  Send,
+  AlertOctagon,
+  Clock
 } from 'lucide-react';
-import { analyzeCase, approveRecommendation, rejectRecommendation, overrideRecommendation, getCaseById } from '../services/reconciliationService';
+import {
+  analyzeCase,
+  approveRecommendation,
+  rejectRecommendation,
+  overrideRecommendation,
+  getCaseById,
+  getCasePlaybook,
+  updatePlaybookStep,
+  updatePlaybookStatus
+} from '../services/reconciliationService';
 import { StatusBadge } from './Dashboard/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 
@@ -63,6 +78,8 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
   
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [playbook, setPlaybook] = useState(null);
+  const [togglingStepId, setTogglingStepId] = useState(null);
 
   useEffect(() => {
     setActiveCase(caseItem);
@@ -74,8 +91,70 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
           }
         })
         .catch(err => console.warn('[ActionCenterDrawer] Failed to fetch full case details:', err));
+
+      getCasePlaybook(caseItem.id)
+        .then(pbData => {
+          if (pbData) setPlaybook(pbData);
+        })
+        .catch(err => console.warn('[ActionCenterDrawer] Playbook fetch skipped:', err.message));
     }
   }, [caseItem?.id]);
+
+  // Handle Playbook Step Checkbox Toggle
+  const handleTogglePlaybookStep = async (stepId, currentCompleted) => {
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only.');
+      return;
+    }
+    try {
+      setTogglingStepId(stepId);
+      const updatedPb = await updatePlaybookStep(caseItem.id, stepId, !currentCompleted);
+      if (updatedPb) setPlaybook(updatedPb);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Failed to update playbook step progress.');
+    } finally {
+      setTogglingStepId(null);
+    }
+  };
+
+  // Complete Playbook Verification
+  const handleCompletePlaybookReview = async () => {
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only.');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const updatedPb = await updatePlaybookStatus(caseItem.id, 'COMPLETED');
+      if (updatedPb) setPlaybook(updatedPb);
+      setSuccessMsg('Operational Playbook review marked as COMPLETED.');
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Failed to mark playbook as completed.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Escalate Playbook to Agent 6
+  const handleEscalatePlaybook = async () => {
+    if (isViewer) {
+      setErrorMsg('⛔ Access Restricted: Viewer role is read-only.');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const updatedPb = await updatePlaybookStatus(caseItem.id, 'ESCALATED');
+      if (updatedPb) setPlaybook(updatedPb);
+      setSuccessMsg('Case has been flagged and escalated to Agent 6 Notification Dispatcher.');
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Failed to escalate playbook to Agent 6.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // Handle Escape key press to close drawer
   useEffect(() => {
@@ -397,6 +476,172 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
               </div>
             </div>
           </div>
+
+          {/* 📖 1.5 Recommended Operational Playbook & Auditable Verification Checklist */}
+          {playbook && (
+            <div style={{
+              background: '#ffffff',
+              border: `1.5px solid ${playbook.severity === 'CRITICAL' ? '#fca5a5' : playbook.severity === 'HIGH' ? '#fed7aa' : '#e2e8f0'}`,
+              borderRadius: '16px',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)'
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    color: '#ffffff',
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 6px rgba(99,102,241,0.25)'
+                  }}>
+                    <BookOpen size={16} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Recommended Operational Playbook
+                    </div>
+                    <h3 style={{ fontSize: '0.98rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                      {playbook.title}
+                    </h3>
+                  </div>
+                </div>
+
+                <span style={{
+                  background: playbook.overallStatus === 'COMPLETED' ? '#dcfce7' : playbook.overallStatus === 'ESCALATED' ? '#fee2e2' : '#fef3c7',
+                  color: playbook.overallStatus === 'COMPLETED' ? '#15803d' : playbook.overallStatus === 'ESCALATED' ? '#991b1b' : '#b45309',
+                  border: `1px solid ${playbook.overallStatus === 'COMPLETED' ? '#bbf7d0' : playbook.overallStatus === 'ESCALATED' ? '#fecaca' : '#fde68a'}`,
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.7rem',
+                  fontWeight: '800'
+                }}>
+                  {playbook.overallStatus} ({playbook.completedStepsCount}/{playbook.totalStepsCount})
+                </span>
+              </div>
+
+              {/* Description / Why triggered */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 12px', fontSize: '0.78rem', color: '#475569', lineHeight: 1.4 }}>
+                <strong style={{ color: '#0f172a' }}>Why this playbook? </strong>
+                {playbook.description}
+              </div>
+
+              {/* Operational Guardrails & Evidence */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.72rem' }}>
+                <div style={{ background: '#fafbfc', border: '1px solid #f1f5f9', borderRadius: '8px', padding: '8px 10px' }}>
+                  <span style={{ color: '#64748b', fontWeight: '700' }}>Safe to Allocate: </span>
+                  <strong style={{ color: playbook.safeToAllocate ? '#059669' : '#dc2626' }}>
+                    {playbook.safeToAllocate ? 'YES (Policy Permitted)' : 'NO (Hold Required)'}
+                  </strong>
+                </div>
+                <div style={{ background: '#fafbfc', border: '1px solid #f1f5f9', borderRadius: '8px', padding: '8px 10px' }}>
+                  <span style={{ color: '#64748b', fontWeight: '700' }}>Escalation: </span>
+                  <strong style={{ color: playbook.requiresAgent6Escalation ? '#b45309' : '#059669' }}>
+                    {playbook.requiresAgent6Escalation ? 'Agent 6 Notification Required' : 'Standard Resolution'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Step Checklist */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>
+                  Verification Checklist ({playbook.completedStepsCount} of {playbook.totalStepsCount} completed)
+                </div>
+
+                {playbook.steps && playbook.steps.map((step) => (
+                  <div
+                    key={step.id}
+                    onClick={() => handleTogglePlaybookStep(step.id, step.isCompleted)}
+                    style={{
+                      background: step.isCompleted ? '#f0fdf4' : '#fafbfc',
+                      border: `1px solid ${step.isCompleted ? '#bbf7d0' : '#e2e8f0'}`,
+                      borderRadius: '10px',
+                      padding: '10px 12px',
+                      cursor: isViewer ? 'default' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ marginTop: '2px', color: step.isCompleted ? '#16a34a' : '#94a3b8' }}>
+                      {step.isCompleted ? <CheckSquare size={18} /> : <Square size={18} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: step.isCompleted ? '#15803d' : '#1e293b', textDecoration: step.isCompleted ? 'line-through' : 'none' }}>
+                        {step.id}. {step.label}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                        {step.desc}
+                      </div>
+                      {step.isCompleted && step.completedBy && (
+                        <div style={{ fontSize: '0.68rem', color: '#059669', fontWeight: '600', marginTop: '4px' }}>
+                          ✓ Completed by {step.completedBy} at {formatAuditTimestamp(step.completedAt)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Playbook Review Action Buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+                <button
+                  onClick={handleCompletePlaybookReview}
+                  disabled={isViewer || playbook.overallStatus === 'COMPLETED'}
+                  style={{
+                    flex: 1,
+                    background: playbook.overallStatus === 'COMPLETED' ? '#f1f5f9' : '#4f46e5',
+                    color: playbook.overallStatus === 'COMPLETED' ? '#94a3b8' : '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '9px 14px',
+                    fontSize: '0.78rem',
+                    fontWeight: '800',
+                    cursor: isViewer || playbook.overallStatus === 'COMPLETED' ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <CheckCircle size={15} />
+                  <span>{playbook.overallStatus === 'COMPLETED' ? 'Review Completed' : 'Complete Review'}</span>
+                </button>
+
+                {playbook.requiresAgent6Escalation && (
+                  <button
+                    onClick={handleEscalatePlaybook}
+                    disabled={isViewer || playbook.overallStatus === 'ESCALATED'}
+                    style={{
+                      background: playbook.overallStatus === 'ESCALATED' ? '#fef2f2' : '#fee2e2',
+                      color: '#dc2626',
+                      border: '1px solid #fca5a5',
+                      borderRadius: '8px',
+                      padding: '9px 14px',
+                      fontSize: '0.78rem',
+                      fontWeight: '800',
+                      cursor: isViewer ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <Send size={14} />
+                    <span>{playbook.overallStatus === 'ESCALATED' ? 'Escalated to Agent 6' : 'Escalate to Agent 6'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 2. AI Candidate Match Recommendation Section */}
           {rec ? (
