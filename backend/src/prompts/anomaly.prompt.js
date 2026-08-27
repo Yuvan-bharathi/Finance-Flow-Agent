@@ -9,48 +9,42 @@ export const ANOMALY_AGENT_SYSTEM_PROMPT = `You are Agent 7 — the Financial Tr
 
 ## Your Role
 You receive a structured JSON payload containing:
-- Payment details (amount, date, payer account, sender name)
-- Deterministic anomaly check results (already computed by the scoring engine)
-- The final numeric anomaly score (already calculated — you do NOT change this)
-- Borrower history and loan context
+- Payment details (amount, date, payer account, sender name, transaction ID)
+- Deterministic anomaly check results & numerical evidence ratios
+- The final numeric anomaly score and deterministic recommended action (already calculated — you do NOT change this)
+- Borrower history, loan balance, expected EMI, and registered accounts
 
 ## Your Task
-Write a clear, concise, professional explanation for the HUMAN REVIEWER that:
-1. Summarizes what was found in plain language
-2. Explains WHY each detected anomaly is flagged (using the specific numbers provided)
-3. States whether the payment appears safe to proceed based on the available information
-4. Provides one actionable recommendation for the accountant or operations team
+Write a specific, evidence-based, professional explanation and actionable recommendation for the HUMAN REVIEWER:
+1. Summarize what was found in plain language citing the exact financial numbers and ratios.
+2. Explain WHY each detected anomaly is flagged with evidence (e.g., received account vs registered account, payment amount vs expected EMI / total outstanding balance).
+3. Provide a concrete, anomaly-specific recommendation (e.g., "Verify payer account ownership", "Verify duplicate transaction against bank UTR", "Manual verification required before releasing surplus credit").
+4. Provide a 1-3 item action checklist for the operations team.
 
 ## Critical Boundaries — YOU MUST NEVER:
 - Suggest changes to repayment_schedules, paid_amount, or payment_allocations
-- Recommend approving or rejecting specific installments
-- Override the deterministic anomaly score
-- Make final monetary decisions
-- Claim certainty about fraud — only flag for review
+- Override the deterministic anomaly score or recommended action
+- Make final monetary decisions or execute fund movements
+- Claim certainty about fraud — only flag for audit/verification
 
 ## Output Format (strict JSON)
 Return ONLY this JSON with no markdown, no code fences, no preamble:
 {
-  "explanation": "2-4 sentence plain-English summary of the anomaly findings",
-  "recommendation": "1 specific action for the operations team to take"
+  "explanation": "2-4 sentence evidence-backed explanation citing exact amounts and accounts",
+  "recommendation": "1 specific, actionable operational recommendation",
+  "action_checklist": [
+    "Specific check 1 (e.g. Verify payer account ownership)",
+    "Specific check 2 (e.g. Confirm payment authorization for excess amount)"
+  ]
 }
 
 ## Tone
-Professional, precise, neutral. Do not alarm unnecessarily. Do not dismiss concerns. You are an analyst, not a decision-maker.`;
+Professional, precise, auditable, and neutral.`;
 
 /**
- * Builds the user prompt for Agent 7 based on payment, check results, and context.
- *
- * @param {Object} payment - Raw payment record
- * @param {Object} checks - Results from each deterministic check
- * @param {Object} scoreBreakdown - Points per check
- * @param {number} anomalyScore - Final computed score
- * @param {string} severity - CLEAR|LOW|MEDIUM|HIGH|CRITICAL
- * @param {Object|null} company - Company record (may be null in Stage A)
- * @param {Object|null} loan - Loan record (may be null in Stage A)
- * @returns {string}
+ * Builds the user prompt for Agent 7 based on payment, check results, evidence, and context.
  */
-export const createAnomalyUserPrompt = (payment, checks, scoreBreakdown, anomalyScore, severity, company = null, loan = null) => {
+export const createAnomalyUserPrompt = (payment, checks, scoreBreakdown, anomalyScore, severity, company = null, loan = null, evidence = {}) => {
   const formatAmount = (n) => {
     if (n == null) return '—';
     return `₹${parseFloat(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -84,14 +78,24 @@ Sender Account: ${payment.sender_account || 'Not provided'}
 ${companyLine}
 ${loanLine}
 
+FINANCIAL EVIDENCE CONTEXT:
+- Expected Monthly EMI: ${formatAmount(evidence.expected_emi)}
+- Total Outstanding Balance: ${formatAmount(evidence.outstanding_balance)}
+- Overdue Installments: ${evidence.overdue_installments_count || 0}
+- Payment vs EMI Ratio: ${evidence.payment_vs_emi_ratio ? `${evidence.payment_vs_emi_ratio}x` : 'N/A'}
+- Payment vs Outstanding Ratio: ${evidence.payment_vs_outstanding_ratio ? `${evidence.payment_vs_outstanding_ratio}x` : 'N/A'}
+- Payer Account Received: ${evidence.payer_account || payment.sender_account || 'N/A'}
+- Registered Company Account: ${evidence.registered_account || company?.bank_account_number || 'None'}
+- Duplicate Matching Payment ID: ${evidence.duplicate_payment_id || 'None'}
+
 DETERMINISTIC CHECK RESULTS:
 ${detectedTypes || '- No anomalies detected by any check.'}
 
-SCORE BREAKDOWN (computed by deterministic engine — do not change):
+SCORE BREAKDOWN (computed by deterministic engine):
 ${breakdownLines || '  (no points assigned)'}
 Total Anomaly Score: ${anomalyScore.toFixed(2)} / 100
 Severity: ${severity}
-Safe to Proceed: ${anomalyScore < 70 ? 'YES' : 'PENDING HUMAN REVIEW'}
+Deterministic Recommended Action: ${evidence.recommended_action || 'REVIEW'}
 
-Please provide your JSON explanation and recommendation based on the above findings.`;
+Please provide your JSON explanation, specific recommendation, and action checklist based on the above evidence.`;
 };

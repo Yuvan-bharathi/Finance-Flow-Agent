@@ -16,12 +16,14 @@ const DateFilterContext = createContext(null);
  */
 export const calculateDateBounds = (preset) => {
   const now = new Date();
+  const currentYear = now.getFullYear();
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   switch (preset) {
+    case 'all':
+      return { startDate: '', endDate: '' };
     case 'today':
-      // start and end are today
       break;
     case '7d':
       start.setDate(end.getDate() - 6);
@@ -32,12 +34,16 @@ export const calculateDateBounds = (preset) => {
     case '30d':
       start.setDate(end.getDate() - 29);
       break;
+    case '2026':
+      return { startDate: '2026-01-01', endDate: '2026-12-31' };
+    case '2025':
+      return { startDate: '2025-01-01', endDate: '2025-12-31' };
     case 'ytd':
-      start = new Date(now.getFullYear(), 0, 1);
-      break;
+    case 'this_year':
+      start = new Date(currentYear, 0, 1);
+      return { startDate: `${currentYear}-01-01`, endDate: `${currentYear}-12-31` };
     default:
-      start.setDate(end.getDate() - 6);
-      break;
+      return { startDate: '', endDate: '' };
   }
 
   const format = (d) => {
@@ -61,20 +67,27 @@ export const formatDisplayLabel = (preset, startDate, endDate) => {
   };
 
   switch (preset) {
+    case 'all':
+      return 'All Time';
     case 'today':
       return 'Today';
     case '7d':
-      return `${formatShort(startDate)} – ${formatShort(endDate)}`;
+      return `Last 7 Days (${formatShort(startDate)} – ${formatShort(endDate)})`;
     case 'this_month':
       return 'This Month';
     case '30d':
       return 'Last 30 Days';
+    case '2026':
+      return 'FY 2026';
+    case '2025':
+      return 'FY 2025';
     case 'ytd':
+    case 'this_year':
       return 'Year-to-Date (YTD)';
     case 'custom':
       return `${formatShort(startDate)} – ${formatShort(endDate)}`;
     default:
-      return `${formatShort(startDate)} – ${formatShort(endDate)}`;
+      return startDate && endDate ? `${formatShort(startDate)} – ${formatShort(endDate)}` : 'All Time';
   }
 };
 
@@ -82,9 +95,9 @@ export const DateFilterProvider = ({ children }) => {
   const [activePreset, setActivePreset] = useState(() => {
     try {
       const saved = sessionStorage.getItem('ff_date_preset');
-      return saved || '7d';
+      return saved || 'all';
     } catch {
-      return '7d';
+      return 'all';
     }
   });
 
@@ -92,11 +105,11 @@ export const DateFilterProvider = ({ children }) => {
     try {
       const savedStart = sessionStorage.getItem('ff_date_start');
       const savedEnd = sessionStorage.getItem('ff_date_end');
-      if (savedStart && savedEnd) {
+      if (savedStart !== null && savedEnd !== null) {
         return { startDate: savedStart, endDate: savedEnd };
       }
     } catch {}
-    return calculateDateBounds('7d');
+    return calculateDateBounds('all');
   });
 
   const setPreset = (preset) => {

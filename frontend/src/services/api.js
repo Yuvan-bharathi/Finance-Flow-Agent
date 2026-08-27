@@ -28,7 +28,7 @@ const api = axios.create({
   }
 });
 
-// Request Interceptor: Attach Auth Token & Correlation ID
+// Request Interceptor: Attach Auth Token, Correlation ID & Transparent Client Cache
 api.interceptors.request.use((reqConfig) => {
   // 1. Attach JWT Authorization token from localStorage if present
   const token = localStorage.getItem('ff_auth_token');
@@ -42,6 +42,25 @@ api.interceptors.request.use((reqConfig) => {
     reqConfig.headers['X-Correlation-ID'] = generateCorrelationId();
   }
 
+  // 3. Transparent Client-Side Cache Lookup for GET requests
+  const method = (reqConfig.method || 'get').toLowerCase();
+  const bypassCache = reqConfig.headers?.['x-bypass-cache'] || reqConfig.params?._nocache;
+
+  if (method === 'get' && !bypassCache) {
+    const cacheKey = clientCache.generateKey(reqConfig.url || '', reqConfig.params);
+    const cached = clientCache.get(cacheKey);
+    if (cached) {
+      reqConfig.adapter = async () => ({
+        data: cached,
+        status: 200,
+        statusText: 'OK (Client Cache)',
+        headers: { 'x-client-cache': 'HIT', 'x-cache-key': cacheKey },
+        config: reqConfig,
+        request: {}
+      });
+    }
+  }
+
   return reqConfig;
 });
 
@@ -50,6 +69,13 @@ api.interceptors.response.use(
   (response) => {
     const method = (response.config.method || 'get').toLowerCase();
     const url = response.config.url || '';
+
+    // Store successful GET responses in clientCache
+    if (method === 'get' && response.status === 200 && response.headers?.['x-client-cache'] !== 'HIT') {
+      const cacheKey = clientCache.generateKey(url, response.config.params);
+      const tags = clientCache.inferTagsFromUrl(url);
+      clientCache.set(cacheKey, response.data, 60, tags);
+    }
 
     // Automatic Client-Side Cache Invalidation on Mutations
     if (['post', 'put', 'patch', 'delete'].includes(method)) {

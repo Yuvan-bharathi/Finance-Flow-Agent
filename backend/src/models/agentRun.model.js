@@ -82,6 +82,17 @@ export const updateAgentRun = async (runId, updates) => {
  */
 export const getRunsByAgent = async (agentId, limit = 50) => {
   const safeLimit = parseInt(limit, 10) || 50;
+
+  // Auto-heal any stale running executions older than 5 minutes
+  await pool.query(`
+    UPDATE agent_runs
+    SET status = 'failed',
+        error_message = 'Execution timed out or process was restarted',
+        updated_at = NOW()
+    WHERE status = 'running'
+      AND created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE);
+  `).catch(() => {});
+
   const query = `
     SELECT ar.*, u.name AS triggered_by_name, rc.payment_id
     FROM agent_runs ar

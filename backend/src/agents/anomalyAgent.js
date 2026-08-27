@@ -60,14 +60,68 @@ const getSeverity = (score) => {
   return 'CLEAR';
 };
 
+/**
+ * Deterministic recommended_action mapper
+ */
+export const getRecommendedAction = (checks, totalScore) => {
+  if (totalScore >= 70 || (checks.DUPLICATE_PAYMENT?.triggered && checks.AMOUNT_ANOMALY?.triggered)) {
+    return 'ESCALATE';
+  }
+  if (checks.DUPLICATE_PAYMENT?.triggered) {
+    return 'VERIFY_DUPLICATE';
+  }
+  if (checks.UNKNOWN_PAYER?.triggered) {
+    return 'VERIFY_PAYER';
+  }
+  if (checks.AMOUNT_ANOMALY?.triggered || checks.OVERPAYMENT?.triggered) {
+    return 'VERIFY_AMOUNT';
+  }
+  if (totalScore >= 20) {
+    return 'REVIEW';
+  }
+  return 'NO_ACTION';
+};
+
+/**
+ * Builds specific, evidence-backed fallback recommendation if Groq fails or is offline
+ */
+export const buildSpecificRecommendation = (checks, evidence, recommendedAction) => {
+  const parts = [];
+  if (checks.DUPLICATE_PAYMENT?.triggered) {
+    parts.push(`Verify duplicate transaction: Near-identical payment previously detected (Payment #${evidence.duplicate_payment_id || 'duplicate'}). Confirm whether this is a genuine second payment or duplicate feed.`);
+  }
+  if (checks.UNKNOWN_PAYER?.triggered) {
+    parts.push(`Verify payer account ownership: Received from account ${evidence.payer_account || 'unregistered'}, which is not on file. Confirm source of funds before ledger settlement.`);
+  }
+  if (checks.AMOUNT_ANOMALY?.triggered) {
+    parts.push(`Manual verification required: Payment of ₹${parseFloat(evidence.payment_amount || 0).toLocaleString('en-IN')} is ${evidence.payment_vs_emi_ratio || 0}× expected EMI. Verify payment source and customer authorization.`);
+  }
+  if (checks.OVERPAYMENT?.triggered && !checks.AMOUNT_ANOMALY?.triggered) {
+    parts.push(`Verify surplus allocation: Payment exceeds outstanding balance. Waterfall allocation will safely hold the excess amount as unallocated credit.`);
+  }
+  if (checks.PARTIAL_PAYMENT_PATTERN?.triggered) {
+    parts.push(`Review borrower payment health: Borrower displays repeated sub-EMI partial payment pattern.`);
+  }
+  if (checks.TIMING_DEVIATION?.triggered) {
+    parts.push(`Check arrival timing: Payment arrival deviates by more than 10 days from historical baseline.`);
+  }
+
+  if (parts.length === 0) {
+    return 'No action required. Payment cleared all behavioral and financial anomaly checks.';
+  }
+
+  return parts.join(' ');
+};
+
 // ─── Helper: Save/upsert anomaly record to DB ────────────────────────────────
 const saveAnomalyRecord = async ({
   paymentId, caseId = null, companyId = null, loanId = null,
   detectionStage, anomalyDetected, anomalyTypes, anomalyScore,
   deterministic_score, scoreBreakdown, severity, explanation,
-  recommendation, safeToProced, runId, triggeredBy
+  recommendation, recommended_action = 'NO_ACTION',
+  safe_to_allocate = true, requires_manual_review = false,
+  evidence = {}, safeToProceed = true, runId, triggeredBy
 }) => {
-  // Upsert: update existing record for same payment_id, or insert new
   const [existing] = await pool.query(
     `SELECT id FROM payment_anomalies WHERE payment_id = ? AND detection_stage = ? LIMIT 1`,
     [paymentId, detectionStage]
@@ -83,7 +137,11 @@ const saveAnomalyRecord = async ({
     severity,
     explanation || null,
     recommendation || null,
-    safeToProced ? 1 : 0,
+    recommended_action,
+    safe_to_allocate ? 1 : 0,
+    requires_manual_review ? 1 : 0,
+    JSON.stringify(evidence),
+    safeToProceed ? 1 : 0,
     anomalyDetected ? 'pending' : 'cleared',
     runId || null,
     triggeredBy || null
@@ -96,6 +154,7 @@ const saveAnomalyRecord = async ({
          anomaly_detected=?, anomaly_types=?, anomaly_score=?,
          deterministic_score=?, score_breakdown=?,
          severity=?, explanation=?, recommendation=?,
+         recommended_action=?, safe_to_allocate=?, requires_manual_review=?, evidence=?,
          safe_to_proceed=?, status=?,
          agent_run_id=?, triggered_by=?,
          detection_stage=?,
@@ -111,9 +170,10 @@ const saveAnomalyRecord = async ({
           anomaly_detected, anomaly_types, anomaly_score,
           deterministic_score, score_breakdown,
           severity, explanation, recommendation,
+          recommended_action, safe_to_allocate, requires_manual_review, evidence,
           safe_to_proceed, status,
           agent_run_id, triggered_by, detection_stage)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [paymentId, ...payload, detectionStage]
     );
     return result.insertId;
@@ -121,9 +181,9 @@ const saveAnomalyRecord = async ({
 };
 
 // ─── Groq Explanation (read-only, non-scoring) ───────────────────────────────
-const callGroqForExplanation = async (payment, checks, scoreBreakdown, anomalyScore, severity, company, loan) => {
+const callGroqForExplanation = async (payment, checks, scoreBreakdown, anomalyScore, severity, company, loan, evidence = {}) => {
   try {
-    const userPrompt = createAnomalyUserPrompt(payment, checks, scoreBreakdown, anomalyScore, severity, company, loan);
+    const userPrompt = createAnomalyUserPrompt(payment, checks, scoreBreakdown, anomalyScore, severity, company, loan, evidence);
 
     const completion = await groq.chat.completions.create({
       model: GROQ_MODEL,
@@ -146,13 +206,19 @@ const callGroqForExplanation = async (payment, checks, scoreBreakdown, anomalySc
     return {
       explanation: parsed.explanation || null,
       recommendation: parsed.recommendation || null,
+      action_checklist: Array.isArray(parsed.action_checklist) ? parsed.action_checklist : [],
       tokens: completion.usage?.total_tokens || 0
     };
   } catch (err) {
     console.warn(`[Anomaly Agent] Groq explanation failed (non-critical): ${err.message}`);
+    const recAction = evidence.recommended_action || 'REVIEW';
     return {
-      explanation: 'Automated anomaly analysis completed. Manual review recommended based on the flagged checks.',
-      recommendation: 'Review payment details with operations team before proceeding with waterfall allocation.',
+      explanation: `Automated anomaly analysis flagged ${Object.keys(scoreBreakdown).join(', ')} with a deterministic score of ${anomalyScore.toFixed(0)}/100 (${severity}).`,
+      recommendation: buildSpecificRecommendation(checks, evidence, recAction),
+      action_checklist: [
+        'Verify payer account ownership with company master',
+        'Confirm payment authorization and intent with customer'
+      ],
       tokens: 0
     };
   }
@@ -243,16 +309,42 @@ export const runAnomalyAgentStageA = async (paymentId, triggeredBy = null) => {
 
     const severity = getSeverity(totalScore);
     const anomalyDetected = totalScore >= 20;
+    const recommendedAction = getRecommendedAction(checks, totalScore);
+    const requiresManualReview = totalScore >= 20;
+    const safeToAllocate = !(totalScore >= 70 || unknownPayer || duplicates.length > 0);
+
+    const evidence = {
+      payment_amount: parseFloat(payment.amount),
+      expected_emi: null,
+      outstanding_balance: null,
+      overdue_installments_count: 0,
+      payment_vs_emi_ratio: null,
+      payment_vs_outstanding_ratio: null,
+      payer_account: senderAccount || null,
+      registered_account: payment.registered_account || null,
+      duplicate_payment_id: duplicates.length > 0 ? duplicates[0].id : null,
+      duplicate_case_id: null,
+      recommended_action: recommendedAction,
+      action_checklist: []
+    };
 
     // Groq explanation only if anomaly detected
-    let explanation = null, recommendation = null, tokens = 0;
+    let explanation = null, recommendation = null, actionChecklist = [], tokens = 0;
     if (anomalyDetected) {
-      ({ explanation, recommendation, tokens } = await callGroqForExplanation(
+      ({ explanation, recommendation, action_checklist: actionChecklist, tokens } = await callGroqForExplanation(
         payment, checks, scoreBreakdown, totalScore, severity,
         payment.company_id ? { id: payment.company_id, company_name: payment.company_name, bank_account_number: payment.registered_account } : null,
-        null
+        null,
+        evidence
       ));
+      if (!recommendation) {
+        recommendation = buildSpecificRecommendation(checks, evidence, recommendedAction);
+      }
+    } else {
+      explanation = 'Payment cleared pre-match anomaly checks (no duplicate fingerprint or unknown account flags).';
+      recommendation = 'No action required. Safe to proceed to ledger reconciliation.';
     }
+    evidence.action_checklist = actionChecklist || [];
 
     const anomalyId = await saveAnomalyRecord({
       paymentId, caseId: null,
@@ -266,7 +358,11 @@ export const runAnomalyAgentStageA = async (paymentId, triggeredBy = null) => {
       severity,
       explanation,
       recommendation,
-      safeToProced: totalScore < 90,
+      recommended_action: recommendedAction,
+      safe_to_allocate: safeToAllocate,
+      requires_manual_review: requiresManualReview,
+      evidence,
+      safeToProceed: totalScore < 90,
       runId,
       triggeredBy
     });
@@ -278,7 +374,7 @@ export const runAnomalyAgentStageA = async (paymentId, triggeredBy = null) => {
       groq_called: anomalyDetected ? 1 : 0,
       total_tokens: tokens,
       confidence_score: totalScore,
-      result_summary: `Stage A: ${anomalyDetected ? `${severity} anomaly detected` : 'CLEAR'} (score: ${totalScore.toFixed(0)})`
+      result_summary: `Stage A: ${anomalyDetected ? `${severity} anomaly [${recommendedAction}]` : 'CLEAR'} (score: ${totalScore.toFixed(0)})`
     });
 
     if (anomalyDetected) {
@@ -288,12 +384,30 @@ export const runAnomalyAgentStageA = async (paymentId, triggeredBy = null) => {
         severity,
         anomaly_score: totalScore,
         anomaly_types: Object.keys(checks).filter(k => checks[k].triggered),
+        recommended_action: recommendedAction,
+        safe_to_allocate: safeToAllocate,
+        requires_manual_review: requiresManualReview,
+        evidence,
+        explanation,
+        recommendation,
         stage: 'A'
       });
     }
 
-    console.log(`[Anomaly Agent] Stage A complete for payment #${paymentId} — Score: ${totalScore} (${severity})`);
-    return { anomaly_id: anomalyId, anomaly_score: totalScore, severity, anomaly_detected: anomalyDetected, stage: 'A' };
+    console.log(`[Anomaly Agent] Stage A complete for payment #${paymentId} — Score: ${totalScore} (${severity}, Action: ${recommendedAction})`);
+    return {
+      anomaly_id: anomalyId,
+      anomaly_score: totalScore,
+      severity,
+      anomaly_detected: anomalyDetected,
+      recommended_action: recommendedAction,
+      safe_to_allocate: safeToAllocate,
+      requires_manual_review: requiresManualReview,
+      evidence,
+      explanation,
+      recommendation,
+      stage: 'A'
+    };
 
   } catch (err) {
     console.error(`[Anomaly Agent] Stage A error for payment #${paymentId}:`, err.message);
@@ -499,16 +613,42 @@ export const runAnomalyAgentStageB = async (paymentId, caseId = null, triggeredB
     const finalScore  = Math.min(100, totalScore);
     const severity    = getSeverity(finalScore);
     const anomalyDetected = finalScore >= 20;
+    const recommendedAction = getRecommendedAction(checks, finalScore);
+    const requiresManualReview = finalScore >= 20;
+    const safeToAllocate = !(finalScore >= 70 || checks.UNKNOWN_PAYER?.triggered || checks.DUPLICATE_PAYMENT?.triggered);
+
+    const evidence = {
+      payment_amount: paymentAmount,
+      expected_emi: emiAmount,
+      outstanding_balance: totalOutstanding,
+      overdue_installments_count: overdueCount,
+      payment_vs_emi_ratio: emiAmount > 0 ? parseFloat((paymentAmount / emiAmount).toFixed(2)) : null,
+      payment_vs_outstanding_ratio: totalOutstanding > 0 ? parseFloat((paymentAmount / totalOutstanding).toFixed(2)) : null,
+      payer_account: senderAccount || null,
+      registered_account: knownAccounts.length > 0 ? knownAccounts.join(', ') : (payment.registered_account || null),
+      duplicate_payment_id: duplicates.length > 0 ? duplicates[0].id : null,
+      duplicate_case_id: duplicates.length > 0 ? duplicates[0].case_id : null,
+      recommended_action: recommendedAction,
+      action_checklist: []
+    };
 
     // Groq explanation
-    let explanation = null, recommendation = null, tokens = 0;
+    let explanation = null, recommendation = null, actionChecklist = [], tokens = 0;
     if (anomalyDetected) {
-      ({ explanation, recommendation, tokens } = await callGroqForExplanation(
+      ({ explanation, recommendation, action_checklist: actionChecklist, tokens } = await callGroqForExplanation(
         payment, checks, scoreBreakdown, finalScore, severity,
         { id: payment.company_id, company_name: payment.company_name, bank_account_number: payment.registered_account },
-        { id: payment.loan_id, loan_number: payment.loan_number, principal_amount: payment.principal_amount }
+        { id: payment.loan_id, loan_number: payment.loan_number, principal_amount: payment.principal_amount },
+        evidence
       ));
+      if (!recommendation) {
+        recommendation = buildSpecificRecommendation(checks, evidence, recommendedAction);
+      }
+    } else {
+      explanation = 'Payment cleared all behavioral and financial anomaly checks.';
+      recommendation = 'No action required. Safe to proceed with automated waterfall allocation.';
     }
+    evidence.action_checklist = actionChecklist || [];
 
     const anomalyId = await saveAnomalyRecord({
       paymentId, caseId,
@@ -522,7 +662,11 @@ export const runAnomalyAgentStageB = async (paymentId, caseId = null, triggeredB
       severity,
       explanation,
       recommendation,
-      safeToProced: finalScore < 90,
+      recommended_action: recommendedAction,
+      safe_to_allocate: safeToAllocate,
+      requires_manual_review: requiresManualReview,
+      evidence,
+      safeToProceed: finalScore < 90,
       runId,
       triggeredBy
     });
@@ -534,7 +678,7 @@ export const runAnomalyAgentStageB = async (paymentId, caseId = null, triggeredB
       groq_called: anomalyDetected ? 1 : 0,
       total_tokens: tokens,
       confidence_score: finalScore,
-      result_summary: `Stage B: ${anomalyDetected ? `${severity} anomaly (${Object.keys(scoreBreakdown).join(', ')})` : 'CLEAR'} — Score: ${finalScore}`
+      result_summary: `Stage B: ${anomalyDetected ? `${severity} anomaly [${recommendedAction}]` : 'CLEAR'} — Score: ${finalScore}`
     });
 
     if (anomalyDetected) {
@@ -543,22 +687,34 @@ export const runAnomalyAgentStageB = async (paymentId, caseId = null, triggeredB
         case_id: caseId,
         company_id: payment.company_id,
         company_name: payment.company_name,
+        transaction_id: payment.transaction_id,
         anomaly_id: anomalyId,
         severity,
         anomaly_score: finalScore,
         anomaly_types: Object.keys(checks).filter(k => checks[k].triggered),
+        recommended_action: recommendedAction,
+        safe_to_allocate: safeToAllocate,
+        requires_manual_review: requiresManualReview,
+        evidence,
         explanation,
+        recommendation,
         stage: 'B'
       });
     }
 
-    console.log(`[Anomaly Agent] Stage B complete for payment #${paymentId} — Score: ${finalScore} (${severity})`);
+    console.log(`[Anomaly Agent] Stage B complete for payment #${paymentId} — Score: ${finalScore} (${severity}, Action: ${recommendedAction})`);
     return {
       anomaly_id: anomalyId,
       anomaly_score: finalScore,
       severity,
       anomaly_detected: anomalyDetected,
       anomaly_types: Object.keys(checks).filter(k => checks[k].triggered),
+      recommended_action: recommendedAction,
+      safe_to_allocate: safeToAllocate,
+      requires_manual_review: requiresManualReview,
+      evidence,
+      explanation,
+      recommendation,
       safe_to_proceed: finalScore < 90,
       stage: 'B'
     };

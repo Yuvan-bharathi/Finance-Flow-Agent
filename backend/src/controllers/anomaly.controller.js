@@ -58,6 +58,7 @@ export const getAnomalyReport = async (req, res, next) => {
     const [rows] = await pool.query(
       `SELECT
          pa.*,
+         COALESCE(pa.case_id, rc.id) AS case_id,
          p.transaction_id,
          p.sender_name,
          p.sender_account,
@@ -68,6 +69,7 @@ export const getAnomalyReport = async (req, res, next) => {
          COALESCE(u.name, u.email) AS reviewed_by_name
        FROM payment_anomalies pa
        LEFT JOIN payments p ON p.id = pa.payment_id
+       LEFT JOIN reconciliation_cases rc ON rc.payment_id = pa.payment_id
        LEFT JOIN companies c ON c.id = pa.company_id
        LEFT JOIN loans l ON l.id = pa.loan_id
        LEFT JOIN users u ON u.id = pa.reviewed_by
@@ -106,9 +108,13 @@ export const getAnomalyList = async (req, res, next) => {
 
     const [rows] = await pool.query(
       `SELECT
-         pa.id, pa.payment_id, pa.case_id, pa.company_id, pa.loan_id,
+         pa.id, pa.payment_id,
+         COALESCE(pa.case_id, rc.id) AS case_id,
+         pa.company_id, pa.loan_id,
          pa.anomaly_types, pa.anomaly_score, pa.severity, pa.status,
-         pa.safe_to_proceed, pa.explanation, pa.recommendation,
+         pa.safe_to_proceed, pa.safe_to_allocate, pa.requires_manual_review,
+         pa.recommended_action, pa.evidence,
+         pa.explanation, pa.recommendation,
          pa.score_breakdown, pa.deterministic_score,
          pa.detection_stage, pa.reviewed_by, pa.reviewed_at,
          pa.dismiss_reason, pa.created_at,
@@ -117,6 +123,7 @@ export const getAnomalyList = async (req, res, next) => {
          l.loan_number
        FROM payment_anomalies pa
        LEFT JOIN payments p ON p.id = pa.payment_id
+       LEFT JOIN reconciliation_cases rc ON rc.payment_id = pa.payment_id
        LEFT JOIN companies c ON c.id = pa.company_id
        LEFT JOIN loans l ON l.id = pa.loan_id
        ${where}
@@ -206,7 +213,12 @@ export const escalateAnomaly = async (req, res, next) => {
     }
 
     const [existing] = await pool.query(
-      'SELECT id, payment_id, company_id, severity, explanation FROM payment_anomalies WHERE id = ? LIMIT 1',
+      `SELECT pa.*, COALESCE(pa.case_id, rc.id) AS case_id, p.transaction_id, p.amount, c.company_name
+       FROM payment_anomalies pa
+       LEFT JOIN payments p ON p.id = pa.payment_id
+       LEFT JOIN reconciliation_cases rc ON rc.payment_id = pa.payment_id
+       LEFT JOIN companies c ON c.id = pa.company_id
+       WHERE pa.id = ? LIMIT 1`,
       [anomalyId]
     );
     if (existing.length === 0) {
@@ -215,6 +227,8 @@ export const escalateAnomaly = async (req, res, next) => {
     if (existing[0].status === 'escalated') {
       return res.status(409).json({ success: false, message: 'Anomaly already escalated.' });
     }
+
+    const anomaly = existing[0];
 
     await pool.query(
       `UPDATE payment_anomalies SET
@@ -226,15 +240,53 @@ export const escalateAnomaly = async (req, res, next) => {
       [reviewedBy, anomalyId]
     );
 
+    // Create structured executive alert for Agent 6
+    const alertTitle = `🚨 Transaction Anomaly: ${anomaly.company_name || 'Borrower'} (Score: ${parseFloat(anomaly.anomaly_score || 0).toFixed(0)}/100)`;
+    const alertMessage = `High anomaly detected on Case #${anomaly.case_id || 'N/A'} (Payment #${anomaly.payment_id}, TXN: ${anomaly.transaction_id || 'N/A'}). Recommended Action: ${anomaly.recommended_action || 'ESCALATE'}. Details: ${anomaly.recommendation || anomaly.explanation}`;
+
+    await pool.query(
+      `INSERT INTO notification_alerts
+         (company_id, loan_id, case_id, title, message, severity,
+          outstanding_amount, recommended_recipient, recommended_action,
+          ai_reasoning, escalation_level, notification_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [
+        anomaly.company_id || 1,
+        anomaly.loan_id || null,
+        anomaly.case_id || null,
+        alertTitle,
+        alertMessage,
+        anomaly.severity === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+        anomaly.amount || 0.00,
+        'OPERATIONS_HEAD',
+        anomaly.recommended_action || 'ESCALATE',
+        JSON.stringify({
+          evidence: typeof anomaly.evidence === 'string' ? JSON.parse(anomaly.evidence) : anomaly.evidence,
+          anomaly_types: anomaly.anomaly_types,
+          score_breakdown: anomaly.score_breakdown
+        }),
+        'EXECUTIVE'
+      ]
+    );
+
+    const { emitSocketEvent } = await import('../config/socket.js');
+    emitSocketEvent('escalation_alert_created', {
+      anomaly_id: anomalyId,
+      case_id: anomaly.case_id,
+      payment_id: anomaly.payment_id,
+      severity: anomaly.severity,
+      recommended_action: anomaly.recommended_action
+    });
+
     cacheService.invalidateByTag('anomalies');
     cacheService.invalidateByTag('notifications');
 
     return res.status(200).json({
       success: true,
-      message: `Anomaly #${anomalyId} escalated. Agent 6 will include this in the next escalation scan.`,
+      message: `Anomaly #${anomalyId} escalated to Agent 6 Executive Alerts successfully.`,
       anomaly_id: anomalyId,
-      company_id: existing[0].company_id,
-      severity: existing[0].severity
+      case_id: anomaly.case_id,
+      recommended_action: anomaly.recommended_action
     });
   } catch (err) {
     next(err);

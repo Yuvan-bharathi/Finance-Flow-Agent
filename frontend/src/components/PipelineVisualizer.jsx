@@ -231,6 +231,10 @@ const StepBusinessView = ({ step, user }) => {
     const severity = output.severity || 'CLEAR';
     const isAnomaly = severity === 'HIGH' || severity === 'CRITICAL' || severity === 'MEDIUM';
     const types = Array.isArray(output.anomaly_types) ? output.anomaly_types : [];
+    const recommendedAction = output.recommended_action || (severity === 'CLEAR' ? 'NO_ACTION' : 'REVIEW');
+    const safeToAllocate = output.safe_to_allocate !== false;
+    const requiresReview = output.requires_manual_review !== false && isAnomaly;
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{
@@ -250,17 +254,46 @@ const StepBusinessView = ({ step, user }) => {
               {severity} SEVERITY
             </div>
           </div>
-          <div style={{
-            background: isAnomaly ? '#ffedd5' : '#dcfce7',
-            color: isAnomaly ? '#9a3412' : '#166534',
-            padding: '6px 14px', borderRadius: '20px',
-            fontSize: '0.825rem', fontWeight: '800'
-          }}>
-            Score: {Math.round(Number(output.anomaly_score || 0))}/100
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              background: recommendedAction === 'ESCALATE' ? '#fee2e2' : recommendedAction.startsWith('VERIFY') ? '#fef3c7' : '#ecfdf5',
+              color: recommendedAction === 'ESCALATE' ? '#991b1b' : recommendedAction.startsWith('VERIFY') ? '#92400e' : '#065f46',
+              border: `1px solid ${recommendedAction === 'ESCALATE' ? '#fca5a5' : recommendedAction.startsWith('VERIFY') ? '#fde68a' : '#a7f3d0'}`,
+              fontSize: '0.72rem', fontWeight: '800', padding: '3px 8px', borderRadius: '6px'
+            }}>
+              {recommendedAction.replace(/_/g, ' ')}
+            </span>
+            <div style={{
+              background: isAnomaly ? '#ffedd5' : '#dcfce7',
+              color: isAnomaly ? '#9a3412' : '#166534',
+              padding: '6px 14px', borderRadius: '20px',
+              fontSize: '0.825rem', fontWeight: '800'
+            }}>
+              Score: {Math.round(Number(output.anomaly_score || 0))}/100
+            </div>
           </div>
         </div>
 
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{
+              background: safeToAllocate ? '#ecfdf5' : '#fef2f2',
+              color: safeToAllocate ? '#065f46' : '#991b1b',
+              border: `1px solid ${safeToAllocate ? '#a7f3d0' : '#fecaca'}`,
+              fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '5px'
+            }}>
+              {safeToAllocate ? '🟢 Safe for Waterfall' : '🔴 Holds Allocation'}
+            </span>
+            {requiresReview && (
+              <span style={{
+                background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+                fontSize: '0.68rem', fontWeight: '700', padding: '2px 7px', borderRadius: '5px'
+              }}>
+                🟡 Manual Review Required
+              </span>
+            )}
+          </div>
+
           <div style={{ fontSize: '0.825rem', color: '#334155' }}>
             <strong>Analysis:</strong> {output.explanation || (severity === 'CLEAR' ? 'Payment cleared all behavioral and financial anomaly checks.' : 'Flagged for operational review.')}
           </div>

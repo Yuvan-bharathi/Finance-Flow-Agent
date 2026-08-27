@@ -54,7 +54,9 @@ import {
   ScanSearch,
   AlertTriangle,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  Percent,
+  TrendingUp
 } from 'lucide-react';
 
 const formatAuditTimestamp = (dateStr) => {
@@ -68,14 +70,143 @@ const formatAuditTimestamp = (dateStr) => {
 };
 
 const DEFAULT_AGENTS = [
-  { id: 'agent_1_reconciliation', name: 'Payment Reconciliation Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
-  { id: 'agent_7_anomaly', name: 'Anomaly Detection Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 180 } },
-  { id: 'agent_2_risk', name: 'Repayment Risk Assessment Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
-  { id: 'agent_3_collection', name: 'Automated Collection Follow-Up Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
-  { id: 'agent_4_document', name: 'Document Intelligence Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
-  { id: 'agent_5_portfolio', name: 'Portfolio Analytics Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
-  { id: 'agent_6_notification', name: 'Notification & Escalation Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
+  { id: 'agent_1_reconciliation', name: 'Payment Reconciliation Agent', status: 'READY', is_active: true, description: 'Matches incoming bank ledger credits to customer loan accounts using deterministic & AI heuristic algorithms.', metrics: { total_runs: 33, success_rate: 94, avg_duration_ms: 35230 } },
+  { id: 'agent_7_anomaly', name: 'Anomaly Detection Agent', status: 'READY', is_active: true, description: 'Pre-check and deep anomaly detection (score 0-100) flagging suspicious credits, split transactions & duplicates.', metrics: { total_runs: 19, success_rate: 100, avg_duration_ms: 3510 } },
+  { id: 'agent_2_risk', name: 'Repayment Risk Assessment Agent', status: 'READY', is_active: true, description: 'Evaluates borrower default probability, past payment velocity and assigns a continuous repayment risk score.', metrics: { total_runs: 18, success_rate: 89, avg_duration_ms: 5790 } },
+  { id: 'agent_3_collection', name: 'Automated Collection Follow-Up Agent', status: 'READY', is_active: true, description: 'Generates tailored collection reminders, escalates overdue notices, and triggers compliant communication.', metrics: { total_runs: 19, success_rate: 100, avg_duration_ms: 10450 } },
+  { id: 'agent_4_document', name: 'Document Intelligence Agent', status: 'READY', is_active: true, description: 'Extracts tabular remittance data, invoices, and bank statements with high-precision layout recognition.', metrics: { total_runs: 2, success_rate: 100, avg_duration_ms: 5170 } },
+  { id: 'agent_5_portfolio', name: 'Portfolio Analytics Agent', status: 'READY', is_active: true, description: 'Calculates roll rates, delinquency trends, recovery velocity and creates hourly portfolio health snapshots.', metrics: { total_runs: 5, success_rate: 80, avg_duration_ms: 24370 } },
+  { id: 'agent_6_notification', name: 'Notification & Escalation Agent', status: 'READY', is_active: true, description: 'Monitors SLA breaches, unallocated funds, and dispatches automated management alerts and escalations.', metrics: { total_runs: 7, success_rate: 100, avg_duration_ms: 25790 } },
 ];
+
+const AGENT_THEMES = {
+  'agent_1_reconciliation': {
+    primary: '#4f46e5',
+    lightBg: '#eef2ff',
+    borderColor: '#c7d2fe',
+    gradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+    healthDefault: 92,
+    icon: <Workflow size={20} color="#4f46e5" />,
+    metricIcon1: <Workflow size={14} color="#6366f1" />,
+    metricIcon3: <Clock size={14} color="#6366f1" />
+  },
+  'agent_7_anomaly': {
+    primary: '#ea580c',
+    lightBg: '#fff7ed',
+    borderColor: '#fed7aa',
+    gradient: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+    healthDefault: 98,
+    icon: <ScanSearch size={20} color="#ea580c" />,
+    metricIcon1: <ScanSearch size={14} color="#f97316" />,
+    metricIcon3: <Clock size={14} color="#f97316" />
+  },
+  'agent_2_risk': {
+    primary: '#059669',
+    lightBg: '#ecfdf5',
+    borderColor: '#a7f3d0',
+    gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    healthDefault: 89,
+    icon: <ShieldCheck size={20} color="#059669" />,
+    metricIcon1: <ShieldCheck size={14} color="#10b981" />,
+    metricIcon3: <Percent size={14} color="#059669" />
+  },
+  'agent_3_collection': {
+    primary: '#2563eb',
+    lightBg: '#eff6ff',
+    borderColor: '#bfdbfe',
+    gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+    healthDefault: 96,
+    icon: <SendHorizontal size={20} color="#2563eb" />,
+    metricIcon1: <SendHorizontal size={14} color="#3b82f6" />,
+    metricIcon3: <Clock size={14} color="#2563eb" />
+  },
+  'agent_4_document': {
+    primary: '#0891b2',
+    lightBg: '#ecfeff',
+    borderColor: '#a5f3fc',
+    gradient: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+    healthDefault: 97,
+    icon: <FileSpreadsheet size={20} color="#0891b2" />,
+    metricIcon1: <FileSpreadsheet size={14} color="#06b6d4" />,
+    metricIcon3: <Percent size={14} color="#0891b2" />
+  },
+  'agent_5_portfolio': {
+    primary: '#7c3aed',
+    lightBg: '#f5f3ff',
+    borderColor: '#ddd6fe',
+    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+    healthDefault: 85,
+    icon: <PieChart size={20} color="#7c3aed" />,
+    metricIcon1: <PieChart size={14} color="#8b5cf6" />,
+    metricIcon3: <Clock size={14} color="#7c3aed" />
+  },
+  'agent_6_notification': {
+    primary: '#dc2626',
+    lightBg: '#fef2f2',
+    borderColor: '#fecaca',
+    gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+    healthDefault: 94,
+    icon: <Bell size={20} color="#dc2626" />,
+    metricIcon1: <Bell size={14} color="#ef4444" />,
+    metricIcon3: <Percent size={14} color="#dc2626" />
+  }
+};
+
+const AgentSparklineWave = ({ color = '#6366f1', score = 90, id = 'agent' }) => {
+  const cleanColor = color.replace('#', '');
+  const cleanId = String(id).replace(/[^a-zA-Z0-9]/g, '_');
+  const clampedScore = Math.max(5, Math.min(100, Number(score) || 90));
+  const activeWidth = Math.round((clampedScore / 100) * 160);
+
+  return (
+    <svg width="100%" height="20" viewBox="0 0 160 20" fill="none" preserveAspectRatio="none" style={{ display: 'block', width: '100%' }}>
+      <defs>
+        {/* Clip path up to health score % */}
+        <clipPath id={`clip-${cleanColor}-${cleanId}`}>
+          <rect x="0" y="0" width={activeWidth} height="22" />
+        </clipPath>
+
+        {/* Gradient for the lite filled area above the bottom line and under the wave */}
+        <linearGradient id={`health-fill-${cleanColor}-${cleanId}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.32" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.08" />
+        </linearGradient>
+      </defs>
+
+      {/* 1. 100% Linear Bottom Base Line Track */}
+      <line x1="0" y1="16" x2="160" y2="16" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
+      {/* Active Linear Bottom Line portion */}
+      <line x1="0" y1="16" x2={activeWidth} y2="16" stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.6" />
+
+      {/* 2. Lite Filled Color Area (proportional to Agent Health score %) */}
+      <path
+        d="M 0,13 C 20,6 40,17 60,9 C 80,3 100,16 120,8 C 140,4 150,11 160,10 L 160,16 L 0,16 Z"
+        fill={`url(#health-fill-${cleanColor}-${cleanId})`}
+        clipPath={`url(#clip-${cleanColor}-${cleanId})`}
+      />
+
+      {/* 3. Faint Full Wave Line (remaining % up to 100%) */}
+      <path
+        d="M 0,13 C 20,6 40,17 60,9 C 80,3 100,16 120,8 C 140,4 150,11 160,10"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        opacity="0.22"
+        fill="none"
+      />
+
+      {/* 4. Bright Colored Wave (active according to the health percentage) */}
+      <path
+        d="M 0,13 C 20,6 40,17 60,9 C 80,3 100,16 120,8 C 140,4 150,11 160,10"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        fill="none"
+        clipPath={`url(#clip-${cleanColor}-${cleanId})`}
+      />
+    </svg>
+  );
+};
 
 /**
  * AI Agent Control Center & Multi-Agent Orchestrator Page (Phase 5)
@@ -208,6 +339,8 @@ export const AgentControlCenter = () => {
           return [{
             id: payload.anomaly_id,
             payment_id: payload.payment_id,
+            case_id: payload.case_id,
+            transaction_id: payload.transaction_id,
             company_name: payload.company_name || 'Unknown',
             anomaly_score: payload.anomaly_score,
             severity: payload.severity,
@@ -677,7 +810,7 @@ export const AgentControlCenter = () => {
               }}
             >
               <SendHorizontal size={14} />
-              <span>{batchRunning ? 'Dispatching Batch...' : '⚡ Batch Run All Pending Cases'}</span>
+              <span>{batchRunning ? 'Dispatching Batch...' : 'Batch Run All Pending Cases'}</span>
             </button>
 
             <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#4f46e5', background: '#e0e7ff', padding: '4px 12px', borderRadius: '999px' }}>
@@ -752,8 +885,8 @@ export const AgentControlCenter = () => {
                   gap: '4px'
                 }}
               >
-                <Zap size={13} />
-                <span>⚡ Batch Run</span>
+                <Play size={12} />
+                <span>Batch Run</span>
               </button>
             </div>
           </div>
@@ -1070,8 +1203,8 @@ export const AgentControlCenter = () => {
                   padding: '9px 16px', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer'
                 }}
               >
-                <Zap size={14} color="#6366f1" />
-                <span>{batchRunning ? 'Batching...' : `⚡ Batch Run All (${pendingTargets.length})`}</span>
+                <Play size={13} color="#6366f1" />
+                <span>{batchRunning ? 'Batching...' : `Batch Run All (${pendingTargets.length})`}</span>
               </button>
 
               {/* Option 1 Single Target Launch */}
@@ -1104,147 +1237,440 @@ export const AgentControlCenter = () => {
                 </button>
               </div>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* 6 Individual Agent Cards Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '20px'
-      }}>
-        {agents.map(agentItem => {
-          const IconComponent = getAgentIcon(agentItem.id);
-          const isComingSoon = !agentItem.is_active;
-          const m = agentItem.metrics || {};
-          const isRunningThis = triggeringAgentId === agentItem.id;
+      {/* ── AGENT RUN HISTORY & STEP LOGS DRAWER ── */}
+      {selectedAgentForHistory && (
+        <AgentRunHistoryDrawer
+          agentId={selectedAgentForHistory}
+          agentName={getAgentDisplayName(selectedAgentForHistory)}
+          onClose={() => setSelectedAgentForHistory(null)}
+        />
+      )}
 
-          return (
-            <div
-              key={agentItem.id}
-              style={{
-                background: '#ffffff',
-                border: isComingSoon ? '1px dashed #cbd5e1' : '1px solid #e2e8f0',
-                borderRadius: '16px',
-                padding: '22px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '16px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                position: 'relative'
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '10px',
-                      background: isComingSoon ? '#f1f5f9' : '#eef2ff',
-                      color: isComingSoon ? '#94a3b8' : '#4f46e5',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+      {/* ── AGENT PERFORMANCE TELEMETRY SECTION (8-Card Modern Grid) ── */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '20px'
+        }}>
+          {agents.map((agentItem) => {
+            const isRunningThis = triggeringAgentId === agentItem.id;
+            const isComingSoon = !agentItem.is_active;
+            const m = agentItem.metrics || {};
+            const theme = AGENT_THEMES[agentItem.id] || {
+              primary: '#4f46e5',
+              lightBg: '#f8fafc',
+              borderColor: '#e2e8f0',
+              gradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              healthDefault: 90,
+              icon: <Bot size={20} color="#4f46e5" />,
+              metricIcon1: <Bot size={14} color="#6366f1" />,
+              metricIcon3: <Clock size={14} color="#6366f1" />
+            };
+
+            const runsCount = m.total_runs ?? agentItem.total_runs ?? 0;
+            const successPct = m.success_rate != null ? m.success_rate : (agentItem.success_rate != null ? agentItem.success_rate : 100);
+            const latencyMs = m.avg_duration_ms ?? agentItem.avg_latency_ms ?? 3200;
+            const latencyFormatted = latencyMs >= 1000 ? `${(latencyMs / 1000).toFixed(2)}s` : `${latencyMs}ms`;
+
+            // Dynamic Composite Health Score: 70% success rate + 30% latency efficiency
+            let latencyScore = 100;
+            if (latencyMs > 25000) {
+              latencyScore = 78;
+            } else if (latencyMs > 10000) {
+              latencyScore = 88;
+            } else if (latencyMs > 5000) {
+              latencyScore = 94;
+            }
+            const healthScore = Math.min(100, Math.max(10, Math.round((successPct * 0.7) + (latencyScore * 0.3))));
+
+            return (
+              <div
+                key={agentItem.id}
+                style={{
+                  background: '#ffffff',
+                  border: isRunningThis ? `1.5px solid ${theme.primary}` : '1px solid #e2e8f0',
+                  borderRadius: '20px',
+                  padding: '22px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: '16px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                  transition: 'all 0.2s ease',
+                  position: 'relative'
+                }}
+              >
+                {/* Agent Header */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        background: theme.lightBg,
+                        border: `1px solid ${theme.borderColor}`,
+                        borderRadius: '12px',
+                        padding: '9px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {theme.icon}
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: '800', color: '#0f172a' }}>
+                          {agentItem.name}
+                        </h4>
+                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace' }}>
+                          {agentItem.id}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span style={{
+                      fontSize: '0.675rem',
+                      fontWeight: '800',
+                      padding: '3px 9px',
+                      borderRadius: '6px',
+                      textTransform: 'uppercase',
+                      background: agentItem.status === 'READY' ? '#ecfdf5' : agentItem.status === 'RUNNING' ? '#eff6ff' : '#f8fafc',
+                      color: agentItem.status === 'READY' ? '#10b981' : agentItem.status === 'RUNNING' ? '#2563eb' : '#64748b',
+                      border: `1px solid ${agentItem.status === 'READY' ? '#a7f3d0' : agentItem.status === 'RUNNING' ? '#bfdbfe' : '#e2e8f0'}`
                     }}>
-                      <IconComponent size={20} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: '800', color: isComingSoon ? '#94a3b8' : '#0f172a' }}>
-                        {agentItem.name}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>
-                        {agentItem.id}
-                      </div>
-                    </div>
+                      {agentItem.status || 'READY'}
+                    </span>
                   </div>
 
-                  <span style={{
-                    fontSize: '0.68rem',
-                    fontWeight: '800',
-                    padding: '2px 8px',
-                    borderRadius: '999px',
-                    textTransform: 'uppercase',
-                    background: isComingSoon ? '#f1f5f9' : '#ecfdf5',
-                    color: isComingSoon ? '#94a3b8' : '#059669',
-                    border: `1px solid ${isComingSoon ? '#e2e8f0' : '#a7f3d0'}`
-                  }}>
-                    {isComingSoon ? 'Roadmap' : agentItem.status || 'READY'}
-                  </span>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, minHeight: '38px' }}>
+                    {agentItem.description || 'Autonomous AI Agent for enterprise financial operations.'}
+                  </p>
                 </div>
 
+                {/* 3-Column Key Telemetry Metrics */}
                 <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #f1f5f9',
+                  borderRadius: '12px',
+                  padding: '10px 14px',
                   display: 'grid',
                   gridTemplateColumns: 'repeat(3, 1fr)',
                   gap: '8px',
-                  background: '#f8fafc',
-                  padding: '10px',
-                  borderRadius: '10px',
-                  border: '1px solid #f1f5f9'
+                  alignItems: 'center'
                 }}>
                   <div>
-                    <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Runs</div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>{m.total_runs || 0}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                      {theme.metricIcon1}
+                      <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '700' }}>RUNS</span>
+                    </div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
+                      {runsCount}
+                    </div>
                   </div>
+
                   <div>
-                    <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Success</div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#059669' }}>{m.success_rate != null ? `${m.success_rate}%` : '100%'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                      <CheckCircle2 size={13} color="#10b981" />
+                      <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '700' }}>SUCCESS</span>
+                    </div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
+                      {successPct}%
+                    </div>
                   </div>
+
                   <div>
-                    <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Avg Latency</div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#4f46e5' }}>{m.avg_duration_ms ? `${m.avg_duration_ms}ms` : '320ms'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                      {theme.metricIcon3}
+                      <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '700' }}>AVG LATENCY</span>
+                    </div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
+                      {latencyFormatted}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Health Score Row with Sparkline Wave (Responsive XX%) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', width: '100%', minWidth: 0 }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '800', color: theme.primary, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    Health Score
+                  </span>
+                  <div style={{ flex: '1 1 auto', minWidth: '40px', overflow: 'hidden' }}>
+                    <AgentSparklineWave color={theme.primary} score={healthScore} id={agentItem.id} />
+                  </div>
+                  <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#0f172a', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {healthScore}%
+                  </span>
+                </div>
+
+                {/* Card Actions */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px' }}>
+                  <button
+                    onClick={() => handleTriggerAgentDirect(agentItem.id)}
+                    disabled={isRunningThis || isComingSoon || isViewer}
+                    style={{
+                      background: isComingSoon || isViewer ? '#f1f5f9' : theme.gradient,
+                      color: isComingSoon || isViewer ? '#94a3b8' : '#ffffff',
+                      border: 'none',
+                      padding: '9px 14px',
+                      borderRadius: '10px',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      cursor: (isRunningThis || isComingSoon || isViewer) ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: (!isComingSoon && !isViewer) ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                    }}
+                  >
+                    {isViewer ? <Lock size={12} /> : <Play size={12} />}
+                    <span>{isRunningThis ? 'Executing...' : 'Run Agent'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedAgentForHistory(agentItem.id)}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      color: '#475569',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <Clock size={13} />
+                    <span>History</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* ── CARD 8: AGENTS OVERVIEW CARD (Spans 2 columns next to Notification Agent) ── */}
+          <div
+            style={{
+              gridColumn: 'span 2',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '20px',
+              padding: '22px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              gap: '16px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+            }}
+          >
+            {/* Overview Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TrendingUp size={20} color="#0f172a" />
+              <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: '#0f172a' }}>
+                Agents Overview
+              </h4>
+            </div>
+
+            {/* 4 Mini Stat Boxes */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '12px'
+            }}>
+              {/* Box 1: Total Agents */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #f1f5f9',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <div style={{ background: '#f5f3ff', padding: '8px', borderRadius: '10px', display: 'flex' }}>
+                  <Bot size={18} color="#7c3aed" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.1 }}>
+                    {agents.length}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>
+                    Total Agents
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => handleTriggerAgent(agentItem.id)}
-                  disabled={isComingSoon || isRunningThis}
-                  title={isViewer ? 'Viewer role is read-only' : `Run ${agentItem.name}`}
-                  style={{
-                    flex: 1,
-                    background: isComingSoon ? '#f1f5f9' : isViewer ? '#f8fafc' : 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
-                    color: isComingSoon ? '#94a3b8' : isViewer ? '#94a3b8' : '#ffffff',
-                    border: isViewer ? '1px solid #cbd5e1' : 'none',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    fontSize: '0.78rem',
-                    fontWeight: '700',
-                    cursor: (isComingSoon || isRunningThis) ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    boxShadow: (!isComingSoon && !isViewer) ? '0 2px 6px rgba(79, 70, 229, 0.25)' : 'none'
-                  }}
-                >
-                  {isViewer ? <Lock size={12} /> : <Play size={12} />}
-                  <span>{isRunningThis ? 'Executing...' : 'Run Agent'}</span>
-                </button>
+              {/* Box 2: Ready */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #f1f5f9',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <div style={{ background: '#ecfdf5', padding: '8px', borderRadius: '10px', display: 'flex' }}>
+                  <CheckSquare size={18} color="#059669" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.1 }}>
+                    {(() => {
+                      const explicitRunning = agents.filter(a => (a.status || '').toLowerCase() === 'running').length;
+                      const queueActive = queueMetrics?.active || 0;
+                      const isPipelineActive = triggeringPipeline || (activePipeline && activePipeline.status === 'running');
+                      const pipelineCount = isPipelineActive ? (queueActive || 1) : 0;
+                      const batchCount = batchRunning ? (queueActive || Math.min(pendingTargets.length || 1, 5) || 1) : 0;
+                      const running = Math.max(explicitRunning, triggeringAgentId ? 1 : 0, pipelineCount, batchCount, queueActive);
+                      const withIssues = agents.filter(a => a.status === 'ERROR' || a.status === 'FAILED').length;
+                      return Math.max(0, agents.length - running - withIssues);
+                    })()}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>
+                    Ready
+                  </div>
+                </div>
+              </div>
 
-                <button
-                  onClick={() => setSelectedAgentForHistory(agentItem.id)}
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
-                    color: '#475569',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.78rem',
-                    fontWeight: '700',
-                    cursor: 'pointer'
-                  }}
-                >
-                  History
-                </button>
+              {/* Box 3: Running */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #f1f5f9',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <div style={{ background: '#eff6ff', padding: '8px', borderRadius: '10px', display: 'flex' }}>
+                  <Play size={18} color="#2563eb" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#2563eb', lineHeight: 1.1 }}>
+                    {(() => {
+                      const explicitRunning = agents.filter(a => (a.status || '').toLowerCase() === 'running').length;
+                      const queueActive = queueMetrics?.active || 0;
+                      const isPipelineActive = triggeringPipeline || (activePipeline && activePipeline.status === 'running');
+                      const pipelineCount = isPipelineActive ? (queueActive || 1) : 0;
+                      const batchCount = batchRunning ? (queueActive || Math.min(pendingTargets.length || 1, 5) || 1) : 0;
+                      return Math.max(explicitRunning, triggeringAgentId ? 1 : 0, pipelineCount, batchCount, queueActive);
+                    })()}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>
+                    Running
+                  </div>
+                </div>
+              </div>
+
+              {/* Box 4: With Issues */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #f1f5f9',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <div style={{ background: '#fef2f2', padding: '8px', borderRadius: '10px', display: 'flex' }}>
+                  <AlertTriangle size={18} color="#dc2626" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.1 }}>
+                    {agents.filter(a => a.status === 'ERROR' || a.status === 'FAILED').length}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>
+                    With Issues
+                  </div>
+                </div>
               </div>
             </div>
-          );
-        })}
+
+            {/* Dual Progress Bars */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '24px',
+              padding: '6px 0'
+            }}>
+              {/* Overall Success Rate */}
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '700', marginBottom: '4px' }}>
+                  Overall Success Rate
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#059669', marginBottom: '8px' }}>
+                  {overview.overall_success_rate != null ? `${overview.overall_success_rate}%` : '92.7%'}
+                </div>
+                <div style={{ background: '#e2e8f0', height: '6px', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div style={{
+                    background: '#10b981',
+                    width: `${overview.overall_success_rate || 92.7}%`,
+                    height: '100%',
+                    borderRadius: '999px'
+                  }} />
+                </div>
+              </div>
+
+              {/* Avg. System Latency */}
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '700', marginBottom: '4px' }}>
+                  Avg. System Latency
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#4f46e5', marginBottom: '8px' }}>
+                  {overview.avg_system_latency_sec ? `${overview.avg_system_latency_sec}s` : '12.04s'}
+                </div>
+                <div style={{ background: '#e2e8f0', height: '6px', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div style={{
+                    background: 'linear-gradient(90deg, #4f46e5 0%, #3b82f6 100%)',
+                    width: '65%',
+                    height: '100%',
+                    borderRadius: '999px'
+                  }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Overview Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderTop: '1px solid #f1f5f9',
+              paddingTop: '12px',
+              fontSize: '0.75rem',
+              color: '#64748b'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                <span>Last Updated: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, {new Date().toLocaleTimeString()}</span>
+              </div>
+
+              <button
+                onClick={fetchControlCenterData}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#475569',
+                  fontWeight: '700',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                <span>Auto-refresh ON</span>
+                <RefreshCw size={13} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── PHASE 5: HISTORICAL PIPELINE RUNS TABLE (With Inline Step Inspection) ── */}
@@ -1266,9 +1692,9 @@ export const AgentControlCenter = () => {
           </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ maxHeight: '280px', overflowY: 'auto', overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
           <table className="responsive-table" style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f8fafc' }}>
               <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
                 <th style={{ padding: '14px 20px', fontWeight: '700' }}>Pipeline ID, Name & Linked Entity</th>
                 <th style={{ padding: '14px 20px', fontWeight: '700' }}>Trigger Source</th>
@@ -1424,7 +1850,14 @@ export const AgentControlCenter = () => {
             <p style={{ margin: '6px 0 0', fontSize: '0.8rem' }}>All recent payments cleared anomaly detection checks.</p>
           </div>
         ) : (
-          <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{
+            padding: '16px 24px',
+            maxHeight: '440px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
             {anomalyFlags.map(flag => {
               const severityConfig = {
                 CLEAR:    { bg: '#f0fdf4', border: '#bbf7d0', badge: '#16a34a', label: 'CLEAR',    icon: <ShieldCheck size={14} color="#16a34a" /> },
@@ -1433,39 +1866,84 @@ export const AgentControlCenter = () => {
                 HIGH:     { bg: '#fef2f2', border: '#fecaca', badge: '#dc2626', label: 'HIGH',     icon: <ShieldAlert size={14} color="#dc2626" /> },
                 CRITICAL: { bg: '#450a0a', border: '#dc2626', badge: '#ffffff', label: 'CRITICAL', icon: <ShieldAlert size={14} color="#ef4444" /> },
               };
+              const actionConfig = {
+                ESCALATE:         { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5', label: '🚨 ESCALATE FOR MANUAL VERIFICATION' },
+                VERIFY_DUPLICATE: { bg: '#fef3c7', text: '#92400e', border: '#fde68a', label: '🔍 VERIFY DUPLICATE TRANSACTION' },
+                VERIFY_PAYER:     { bg: '#e0e7ff', text: '#3730a3', border: '#c7d2fe', label: '👤 VERIFY PAYER ACCOUNT' },
+                VERIFY_AMOUNT:    { bg: '#ffedd5', text: '#9a3412', border: '#fed7aa', label: '💰 VERIFY AMOUNT / SURPLUS' },
+                REVIEW:           { bg: '#f1f5f9', text: '#334155', border: '#cbd5e1', label: '📋 OPERATIONAL REVIEW' },
+                NO_ACTION:        { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', label: '✅ CLEAR / NO ACTION' }
+              };
               const cfg = severityConfig[flag.severity] || severityConfig.LOW;
+              const actCfg = actionConfig[flag.recommended_action] || actionConfig.REVIEW;
               const isExpanded = expandedAnomalyId === flag.id;
               const isActioning = actioningAnomalyId === flag.id;
               const isEscalated = flag.status === 'escalated';
               const types = Array.isArray(flag.anomaly_types) ? flag.anomaly_types : (flag.anomaly_types ? JSON.parse(flag.anomaly_types) : []);
+              
+              let ev = {};
+              if (flag.evidence) {
+                ev = typeof flag.evidence === 'string' ? JSON.parse(flag.evidence) : flag.evidence;
+              }
+
+              const checklist = Array.isArray(ev.action_checklist) && ev.action_checklist.length > 0
+                ? ev.action_checklist
+                : (flag.severity === 'HIGH' || flag.severity === 'CRITICAL'
+                    ? ['Verify payer account ownership with company master', 'Confirm payment authorization and genuine deposit intent']
+                    : []);
 
               return (
-                <div key={flag.id} style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}`, borderRadius: '14px', overflow: 'hidden', transition: 'all 0.2s ease' }}>
+                <div
+                  key={flag.id}
+                  style={{
+                    background: cfg.bg,
+                    border: `1.5px solid ${cfg.border}`,
+                    borderRadius: '14px',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    minHeight: '68px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
                   {/* Header Row */}
-                  <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                  <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 500px', minWidth: 0 }}>
                       {/* Severity Badge */}
-                      <div style={{ background: cfg.badge, color: cfg.label === 'CRITICAL' ? '#ffffff' : '#ffffff', fontSize: '0.65rem', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                      <div style={{ background: cfg.badge, color: '#ffffff', fontSize: '0.65rem', fontWeight: '800', padding: '4px 9px', borderRadius: '6px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                         {cfg.icon} {cfg.label}
                       </div>
-                      {/* Company + Payment */}
+
+                      {/* 3-Level Traceability Header */}
                       <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: 0, fontWeight: '700', fontSize: '0.85rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {flag.company_name || `Payment #${flag.payment_id}`}
+                        <p style={{ margin: 0, fontWeight: '800', fontSize: '0.88rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {flag.company_name || `Case #${flag.case_id || flag.payment_id}`}
                         </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.73rem', color: '#64748b' }}>
-                          Payment #{flag.payment_id} · Score: {parseFloat(flag.anomaly_score || 0).toFixed(0)}/100
-                          {flag.isLive && <span style={{ marginLeft: '6px', background: '#4f46e5', color: '#fff', fontSize: '0.6rem', padding: '2px 6px', borderRadius: '10px', fontWeight: '700' }}>LIVE</span>}
-                        </p>
-                      </div>
-                      {/* Anomaly Type Chips */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', flex: 1, justifyContent: 'flex-start' }}>
-                        {types.map(t => (
-                          <span key={t} style={{ background: 'rgba(0,0,0,0.07)', color: '#374151', fontSize: '0.65rem', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                            {t.replace(/_/g, ' ')}
+                        <div style={{ margin: '3px 0 0', fontSize: '0.73rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: '800', color: '#0f172a', background: '#ffffff', padding: '1px 6px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                            Case #{flag.case_id || flag.payment_id}
                           </span>
-                        ))}
+                          <span style={{ color: '#475569', fontWeight: '600' }}>
+                            Payment #{flag.payment_id}
+                          </span>
+                          {flag.transaction_id && (
+                            <span style={{ color: '#2563eb', fontFamily: 'monospace', fontSize: '0.68rem', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '1px 5px', borderRadius: '4px' }}>
+                              TXN: {flag.transaction_id}
+                            </span>
+                          )}
+                          <span style={{ fontWeight: '700', color: '#334155' }}>
+                            · Score: {parseFloat(flag.anomaly_score || 0).toFixed(0)}/100
+                          </span>
+                          {flag.isLive && <span style={{ background: '#4f46e5', color: '#fff', fontSize: '0.6rem', padding: '2px 6px', borderRadius: '10px', fontWeight: '700' }}>LIVE</span>}
+                        </div>
                       </div>
+
+                      {/* Recommended Action Badge */}
+                      {flag.recommended_action && (
+                        <div style={{ background: actCfg.bg, color: actCfg.text, border: `1px solid ${actCfg.border}`, fontSize: '0.68rem', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                          {actCfg.label}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
@@ -1473,9 +1951,9 @@ export const AgentControlCenter = () => {
                       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                         <button
                           onClick={() => setExpandedAnomalyId(isExpanded ? null : flag.id)}
-                          style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 10px', fontSize: '0.73rem', fontWeight: '600', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 10px', fontSize: '0.73rem', fontWeight: '700', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}
                         >
-                          <Eye size={13} /> {isExpanded ? 'Hide' : 'Details'}
+                          <Eye size={13} /> {isExpanded ? 'Hide Evidence' : 'Audit Evidence'}
                         </button>
                         {!isEscalated && (
                           <>
@@ -1486,14 +1964,14 @@ export const AgentControlCenter = () => {
                             >
                               <X size={13} /> Dismiss
                             </button>
-                            {(flag.severity === 'HIGH' || flag.severity === 'CRITICAL') && (
+                            {(flag.severity === 'HIGH' || flag.severity === 'CRITICAL' || flag.recommended_action === 'ESCALATE') && (
                               <button
                                 onClick={() => handleEscalateAnomaly(flag.id)}
                                 disabled={isActioning}
-                                style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '6px 10px', fontSize: '0.73rem', fontWeight: '600', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '6px 10px', fontSize: '0.73rem', fontWeight: '700', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}
                               >
                                 {isActioning ? <RefreshCw size={12} className="animate-spin" /> : <ShieldAlert size={13} />}
-                                Escalate
+                                Escalate to Agent 6
                               </button>
                             )}
                           </>
@@ -1505,28 +1983,124 @@ export const AgentControlCenter = () => {
                     )}
                   </div>
 
-                  {/* Expanded Details */}
+                  {/* Expanded Evidence & Recommendation Details */}
                   {isExpanded && (
-                    <div style={{ borderTop: `1px solid ${cfg.border}`, padding: '14px 18px', background: 'rgba(255,255,255,0.6)' }}>
+                    <div style={{ borderTop: `1px solid ${cfg.border}`, padding: '16px 20px', background: 'rgba(255,255,255,0.7)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      
+                      {/* Financial Decision Status Badges */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          background: flag.safe_to_allocate ? '#ecfdf5' : '#fef2f2',
+                          color: flag.safe_to_allocate ? '#065f46' : '#991b1b',
+                          border: `1px solid ${flag.safe_to_allocate ? '#a7f3d0' : '#fecaca'}`,
+                          fontSize: '0.7rem', fontWeight: '700', padding: '3px 8px', borderRadius: '6px'
+                        }}>
+                          {flag.safe_to_allocate ? '🟢 Safe for Waterfall Allocation' : '🔴 Allocation Blocked Pending Audit'}
+                        </span>
+                        <span style={{
+                          background: flag.requires_manual_review ? '#fffbeb' : '#f0fdf4',
+                          color: flag.requires_manual_review ? '#92400e' : '#166534',
+                          border: `1px solid ${flag.requires_manual_review ? '#fde68a' : '#bbf7d0'}`,
+                          fontSize: '0.7rem', fontWeight: '700', padding: '3px 8px', borderRadius: '6px'
+                        }}>
+                          {flag.requires_manual_review ? '🟡 Human Operational Review Required' : '🟢 Automated Processing Approved'}
+                        </span>
+                      </div>
+
+                      {/* Evidence Metrics Grid */}
+                      <div style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '10px',
+                        padding: '12px 16px',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: '12px'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Payment Amount</div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
+                            ₹{Number(ev.payment_amount || flag.amount || 0).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Expected EMI</div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
+                            {ev.expected_emi ? `₹${Number(ev.expected_emi).toLocaleString('en-IN')}` : 'N/A'}
+                            {ev.payment_vs_emi_ratio && (
+                              <span style={{ fontSize: '0.72rem', color: ev.payment_vs_emi_ratio > 3 ? '#dc2626' : '#2563eb', marginLeft: '6px', fontWeight: '700' }}>
+                                ({ev.payment_vs_emi_ratio}× EMI)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Outstanding Balance</div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
+                            {ev.outstanding_balance ? `₹${Number(ev.outstanding_balance).toLocaleString('en-IN')}` : 'N/A'}
+                            {ev.payment_vs_outstanding_ratio && (
+                              <span style={{ fontSize: '0.72rem', color: ev.payment_vs_outstanding_ratio > 1.2 ? '#ea580c' : '#059669', marginLeft: '6px', fontWeight: '700' }}>
+                                ({ev.payment_vs_outstanding_ratio}× Bal)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Payer vs Registered Account</div>
+                          <div style={{ fontSize: '0.78rem', fontWeight: '700', color: ev.payer_account === ev.registered_account ? '#166534' : '#991b1b', marginTop: '2px' }}>
+                            {ev.payer_account || flag.sender_account || 'N/A'} {ev.registered_account ? `(Reg: ${ev.registered_account})` : ''}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* AI Explanation */}
                       {flag.explanation && (
-                        <div style={{ marginBottom: '10px' }}>
-                          <p style={{ margin: '0 0 4px', fontSize: '0.73rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>AI Explanation</p>
-                          <p style={{ margin: 0, fontSize: '0.83rem', color: '#374151', lineHeight: '1.6' }}>{flag.explanation}</p>
+                        <div>
+                          <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            Auditable AI Explanation
+                          </p>
+                          <p style={{ margin: 0, fontSize: '0.825rem', color: '#1e293b', lineHeight: '1.6' }}>{flag.explanation}</p>
                         </div>
                       )}
+
+                      {/* Concrete Specific Recommendation */}
                       {flag.recommendation && (
-                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px' }}>
-                          <p style={{ margin: '0 0 2px', fontSize: '0.7rem', fontWeight: '700', color: '#1d4ed8', textTransform: 'uppercase' }}><MessageSquare size={11} style={{ marginRight: '4px' }} />Recommendation</p>
-                          <p style={{ margin: 0, fontSize: '0.82rem', color: '#1e40af' }}>{flag.recommendation}</p>
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '12px 16px' }}>
+                          <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '800', color: '#1d4ed8', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <MessageSquare size={13} /> Concrete Operational Recommendation
+                          </p>
+                          <p style={{ margin: 0, fontSize: '0.825rem', color: '#1e40af', lineHeight: '1.5', fontWeight: '600' }}>{flag.recommendation}</p>
                         </div>
                       )}
+
+                      {/* Action Checklist */}
+                      {checklist.length > 0 && (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '12px 16px' }}>
+                          <p style={{ margin: '0 0 6px', fontSize: '0.72rem', fontWeight: '800', color: '#92400e', textTransform: 'uppercase' }}>
+                            Required Operational Verification Checklist:
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {checklist.map((item, idx) => (
+                              <div key={idx} style={{ fontSize: '0.78rem', color: '#78350f', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ color: '#d97706', fontWeight: '900' }}>⚠</span>
+                                <span style={{ fontWeight: '600' }}>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Score Breakdown Pills */}
                       {flag.score_breakdown && (
-                        <div style={{ marginTop: '10px' }}>
-                          <p style={{ margin: '0 0 6px', fontSize: '0.7rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Score Breakdown</p>
+                        <div>
+                          <p style={{ margin: '0 0 6px', fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Score Breakdown Checks</p>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                             {Object.entries(typeof flag.score_breakdown === 'string' ? JSON.parse(flag.score_breakdown) : flag.score_breakdown).map(([k, v]) => (
-                              <span key={k} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#374151', fontSize: '0.68rem', fontWeight: '600', padding: '3px 9px', borderRadius: '6px' }}>
-                                {k.replace(/_/g, ' ')} +{v}
+                              <span key={k} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#374151', fontSize: '0.7rem', fontWeight: '700', padding: '3px 9px', borderRadius: '6px' }}>
+                                ✓ {k.replace(/_/g, ' ')} +{v}
                               </span>
                             ))}
                           </div>

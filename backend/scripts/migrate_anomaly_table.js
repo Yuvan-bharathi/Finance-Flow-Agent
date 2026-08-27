@@ -32,6 +32,12 @@ const createAnomalyTableSQL = `
     explanation         TEXT NULL,
     recommendation      TEXT NULL,
 
+    -- Specific Recommendation & Action Layer
+    recommended_action  ENUM('NO_ACTION','REVIEW','VERIFY_PAYER','VERIFY_DUPLICATE','VERIFY_AMOUNT','ESCALATE') DEFAULT 'NO_ACTION',
+    safe_to_allocate    BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_manual_review BOOLEAN NOT NULL DEFAULT FALSE,
+    evidence            JSON NULL,
+
     -- Outcome
     safe_to_proceed     BOOLEAN NOT NULL DEFAULT TRUE,
     status              ENUM('pending','dismissed','escalated','cleared') DEFAULT 'pending',
@@ -53,18 +59,42 @@ const createAnomalyTableSQL = `
     INDEX idx_severity     (severity),
     INDEX idx_status       (status),
     INDEX idx_anomaly_detected (anomaly_detected),
+    INDEX idx_recommended_action (recommended_action),
     INDEX idx_created_at   (created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `;
 
 const run = async () => {
-  console.log('🔧 [Migration] Creating payment_anomalies table...');
   try {
-    await pool.execute(createAnomalyTableSQL);
-    console.log('✅ [Migration] payment_anomalies table created (or already exists).');
+    console.log('🔄 Running payment_anomalies table migration...');
+    await pool.query(createAnomalyTableSQL);
+
+    // Add new columns to existing table if missing
+    const columns = [
+      { name: 'recommended_action', sql: `ALTER TABLE payment_anomalies ADD COLUMN recommended_action ENUM('NO_ACTION','REVIEW','VERIFY_PAYER','VERIFY_DUPLICATE','VERIFY_AMOUNT','ESCALATE') DEFAULT 'NO_ACTION' AFTER recommendation` },
+      { name: 'safe_to_allocate',   sql: `ALTER TABLE payment_anomalies ADD COLUMN safe_to_allocate BOOLEAN NOT NULL DEFAULT TRUE AFTER recommended_action` },
+      { name: 'requires_manual_review', sql: `ALTER TABLE payment_anomalies ADD COLUMN requires_manual_review BOOLEAN NOT NULL DEFAULT FALSE AFTER safe_to_allocate` },
+      { name: 'evidence',           sql: `ALTER TABLE payment_anomalies ADD COLUMN evidence JSON NULL AFTER requires_manual_review` },
+      { name: 'case_id',            sql: `ALTER TABLE payment_anomalies ADD COLUMN case_id INT UNSIGNED NULL AFTER payment_id` }
+    ];
+
+    for (const col of columns) {
+      try {
+        await pool.query(col.sql);
+        console.log(`  + Column '${col.name}' added.`);
+      } catch (err) {
+        if (err.code === 'ER_DUP_FIELDNAME') {
+          // already exists
+        } else {
+          console.warn(`  - Column '${col.name}' notice:`, err.message);
+        }
+      }
+    }
+
+    console.log('✅ payment_anomalies table migration complete!');
     process.exit(0);
   } catch (err) {
-    console.error('❌ [Migration] Failed:', err.message);
+    console.error('❌ Migration failed:', err.message);
     process.exit(1);
   }
 };
