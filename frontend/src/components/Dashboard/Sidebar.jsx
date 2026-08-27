@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Zap,
   CreditCard,
@@ -18,6 +18,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { getAlerts } from '../../services/notificationService';
 
 /**
  * Collapsible Enterprise Sidebar Component with AI Assistant & Account Controls
@@ -34,9 +35,21 @@ export const Sidebar = ({
   const [hoveredTab, setHoveredTab] = useState(null);
   const [logoHovered, setLogoHovered] = useState(false);
   const [aiHovered, setAiHovered] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(8);
+
+  useEffect(() => {
+    getAlerts({ status: 'pending' })
+      .then(res => {
+        const count = res?.data?.data?.length ?? res?.data?.length;
+        if (typeof count === 'number') {
+          setNotificationCount(count);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const navItems = [
-    { id: 'reconciliations', label: 'Action Center AI', icon: Zap, badge: pendingCount || null },
+    { id: 'reconciliations', label: 'Action Center AI', icon: Zap },
     { id: 'payments', label: 'Payment Ingestion', icon: CreditCard },
     { id: 'companies', label: 'Borrowing Companies', icon: Building2 },
     { id: 'loans', label: 'Loans & Schedules', icon: FileSpreadsheet },
@@ -44,7 +57,7 @@ export const Sidebar = ({
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'agents', label: 'AI Agent Control', icon: Bot },
-    { id: 'notifications', label: 'Notifications', icon: Bell, badge: 8 },
+    { id: 'notifications', label: 'Notifications', icon: Bell, showCountOnHover: true },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
@@ -218,16 +231,17 @@ export const Sidebar = ({
                   {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>}
                 </div>
 
-                {!collapsed && item.badge != null && (
+                {!collapsed && item.showCountOnHover && isHovered && notificationCount > 0 && (
                   <span style={{
                     padding: '2px 8px',
                     borderRadius: '10px',
                     fontSize: '0.68rem',
-                    fontWeight: '700',
-                    background: isActive ? 'rgba(255,255,255,0.25)' : '#e0e7ff',
-                    color: isActive ? '#ffffff' : '#4338ca'
+                    fontWeight: '800',
+                    background: isActive ? 'rgba(255,255,255,0.25)' : '#fee2e2',
+                    color: isActive ? '#ffffff' : '#dc2626',
+                    animation: 'fadeIn 0.15s ease forwards'
                   }}>
-                    {item.badge}
+                    {notificationCount}
                   </span>
                 )}
               </button>
@@ -247,12 +261,15 @@ export const Sidebar = ({
                   zIndex: 9999,
                   pointerEvents: 'none',
                   transform: 'translateY(-50%) translateY(10px)',
-                  animation: 'fadeIn 0.15s ease forwards'
+                  animation: 'fadeIn 0.15s ease forwards',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  {item.label}
-                  {item.badge != null && (
-                    <span style={{ marginLeft: '8px', background: '#4f46e5', color: '#fff', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem' }}>
-                      {item.badge}
+                  <span>{item.label}</span>
+                  {item.showCountOnHover && notificationCount > 0 && (
+                    <span style={{ background: '#ef4444', color: '#fff', padding: '1px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: '700' }}>
+                      {notificationCount}
                     </span>
                   )}
                 </div>

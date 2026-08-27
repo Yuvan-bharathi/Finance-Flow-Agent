@@ -3,8 +3,8 @@ import { LayoutDashboard, Zap, CreditCard, Building2, FileSpreadsheet, ShieldAle
 
 export const Sidebar = ({ activeTab, setActiveTab }) => {
   const menuItems = [
-    { id: 'reconciliations', label: 'Action Center AI', icon: Zap, badge: 'Agent 1' },
-    { id: 'payments', label: 'Payment Ingestion', icon: CreditCard, badge: 'Section 17' },
+    { id: 'reconciliations', label: 'Action Center AI', icon: Zap },
+    { id: 'payments', label: 'Payment Ingestion', icon: CreditCard },
     { id: 'companies', label: 'Borrowing Companies', icon: Building2 },
     { id: 'loans', label: 'Loans & Schedules', icon: FileSpreadsheet },
     { id: 'audit-logs', label: 'Audit Compliance', icon: History }
