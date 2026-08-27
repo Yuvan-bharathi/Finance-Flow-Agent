@@ -1145,7 +1145,7 @@ export const LoanList = ({ onAskAI }: LoanListProps) => {
                   <CustomDatePicker
                     label="First Installment Start Date"
                     value={startDate}
-                    onChange={(val) => setStartDate(val)}
+                    onChange={(val: string) => setStartDate(val)}
                     required
                     placeholder="Select start date"
                   />

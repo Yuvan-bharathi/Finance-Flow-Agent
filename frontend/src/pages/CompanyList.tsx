@@ -832,7 +832,7 @@ export const CompanyList = ({ onAskAI }: CompanyListProps) => {
         <RiskAssessmentDrawer
           company={riskCompany}
           onClose={() => setRiskCompany(null)}
-          onOpenCollectionModal={(c) => setCollectionCompany(c as EnrichedCompany)}
+          onOpenCollectionModal={(c: unknown) => setCollectionCompany(c as EnrichedCompany)}
         />
       )}
 

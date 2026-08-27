@@ -435,7 +435,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
             <CustomDatePicker
               label="Payment Date"
               value={paymentDate}
-              onChange={(val) => setPaymentDate(val)}
+              onChange={(val: string) => setPaymentDate(val)}
               required
               placeholder="Select payment date"
             />
@@ -990,7 +990,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
         <ActionCenterDrawer
           caseItem={selectedCase as ReconciliationCase}
           onClose={() => setSelectedCase(null)}
-          onRefresh={(optimisticData) => {
+          onRefresh={(optimisticData?: { id?: number; status?: string }) => {
             if (optimisticData && optimisticData.id) {
               setCases(prev => prev.map(c => c.id === optimisticData.id ? { ...c, status: optimisticData.status as EnrichedCase['status'] } : c));
               setPayments(prev => prev.map(p => {
