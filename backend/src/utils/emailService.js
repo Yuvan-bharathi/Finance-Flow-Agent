@@ -14,15 +14,29 @@ import { config } from '../config/env.js';
  * the service logs formatted email previews to console without throwing errors or halting operations.
  */
 
-// Dynamic Nodemailer Transporter Getter
+// Dynamic Nodemailer Transporter Getter (Optimized for Gmail & Cloud Hosting)
 const getTransporter = () => {
   const user = process.env.SMTP_USER || config.smtp.user;
   const pass = process.env.SMTP_PASS || config.smtp.pass;
   const host = process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || config.smtp.port || '587', 10);
-  const secure = (process.env.SMTP_SECURE || config.smtp.secure) === true || (process.env.SMTP_SECURE === 'true');
+  const port = parseInt(process.env.SMTP_PORT || config.smtp.port || '465', 10);
+  const secure = port === 465 || (process.env.SMTP_SECURE || config.smtp.secure) === true || (process.env.SMTP_SECURE === 'true');
 
   if (user && pass && user.trim() !== '' && pass.trim() !== '') {
+    // If using Gmail, use nodemailer's optimized 'gmail' preset to prevent Render/Cloud STARTTLS port 587 timeouts
+    if (host.includes('gmail') || user.includes('@gmail.com')) {
+      return nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: user.trim(),
+          pass: pass.replace(/\s+/g, ''),
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
+      });
+    }
+
     return nodemailer.createTransport({
       host,
       port,
@@ -31,6 +45,9 @@ const getTransporter = () => {
         user: user.trim(),
         pass: pass.replace(/\s+/g, ''),
       },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
     });
   }
   return null;
