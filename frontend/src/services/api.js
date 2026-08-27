@@ -70,11 +70,12 @@ api.interceptors.response.use(
     const method = (response.config.method || 'get').toLowerCase();
     const url = response.config.url || '';
 
-    // Store successful GET responses in clientCache
+    // Store successful GET responses in clientCache with route-specific TTL
     if (method === 'get' && response.status === 200 && response.headers?.['x-client-cache'] !== 'HIT') {
       const cacheKey = clientCache.generateKey(url, response.config.params);
       const tags = clientCache.inferTagsFromUrl(url);
-      clientCache.set(cacheKey, response.data, 60, tags);
+      const ttl = clientCache.getTtlForUrl(url);
+      clientCache.set(cacheKey, response.data, ttl, tags);
     }
 
     // Automatic Client-Side Cache Invalidation on Mutations
@@ -92,7 +93,7 @@ api.interceptors.response.use(
 
       if (status === 401) {
         localStorage.removeItem('ff_auth_token');
-        clientCache.clear();
+        // Do NOT clear operational UI data cache on 401; only purge auth token
       }
 
       if (status === 403 || status === 401) {

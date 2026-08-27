@@ -17,6 +17,7 @@ import { requirePermission } from '../middleware/permission.middleware.js';
 import { PERMISSIONS } from '../config/permissions.js';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware.js';
 import { agentRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { cacheMiddleware } from '../middleware/cache.middleware.js';
 
 /**
  * Express Router: Agent Control Center & Multi-Agent Orchestrator Routes (Phase 6 OpenAPI Annotated)
@@ -30,8 +31,8 @@ router.use(authenticate);
  * @openapi
  * /api/v1/agents/status:
  *   get:
- *     summary: Get Aggregate Status & Performance KPIs for All 6 Agents
- *     description: Returns runtime health, execution counts, success rates, average duration, and token usage for all 6 AI agents in a single optimized DB query.
+ *     summary: Get Aggregate Status & Performance KPIs for All 7 Agents
+ *     description: Returns runtime health, execution counts, success rates, average duration, and token usage for all 7 AI agents in a single optimized DB query.
  *     tags:
  *       - Multi-Agent Orchestrator
  *     security:
@@ -40,7 +41,7 @@ router.use(authenticate);
  *       200:
  *         description: Overview stats and agent telemetry array.
  */
-router.get('/status', requirePermission(PERMISSIONS.AGENT_VIEW), getAgentStatus);
+router.get('/status', requirePermission(PERMISSIONS.AGENT_VIEW), cacheMiddleware({ ttlSeconds: 30, tag: 'agents' }), getAgentStatus);
 
 /**
  * @openapi
@@ -56,9 +57,9 @@ router.get('/status', requirePermission(PERMISSIONS.AGENT_VIEW), getAgentStatus)
  *       200:
  *         description: In-process queue depth and concurrency metrics.
  */
-router.get('/queue/status', requirePermission(PERMISSIONS.AGENT_VIEW), getQueueStatus);
+router.get('/queue/status', requirePermission(PERMISSIONS.AGENT_VIEW), cacheMiddleware({ ttlSeconds: 5, tag: 'queue' }), getQueueStatus);
 
-router.get('/activity', requirePermission(PERMISSIONS.AGENT_VIEW), getRecentAgentActivity);
+router.get('/activity', requirePermission(PERMISSIONS.AGENT_VIEW), cacheMiddleware({ ttlSeconds: 20, tag: 'agents' }), getRecentAgentActivity);
 
 /**
  * @openapi

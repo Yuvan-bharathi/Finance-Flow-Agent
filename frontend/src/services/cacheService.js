@@ -174,8 +174,29 @@ class ClientCacheService {
     if (clean.includes('/reconciliation') || clean.includes('/cases')) tags.push('reconciliations', 'payments', 'reports');
     if (clean.includes('/notifications') || clean.includes('/alerts') || clean.includes('/escalate')) tags.push('notifications');
     if (clean.includes('/portfolio') || clean.includes('/reports')) tags.push('reports');
+    if (clean.includes('/anomalies') || clean.includes('/anomaly')) tags.push('anomalies');
+    if (clean.includes('/agents') || clean.includes('/pipeline')) tags.push('agents');
 
     return tags.length > 0 ? tags : ['general'];
+  }
+
+  /**
+   * Returns route-specific dynamic TTL in seconds based on data freshness requirements.
+   * 
+   * @param {string} url - Request URL
+   * @returns {number} TTL in seconds
+   */
+  getTtlForUrl(url = '') {
+    const clean = url.toLowerCase();
+    if (clean.includes('/queue/status') || clean.includes('/queue')) return 5;       // Worker queue: 5s
+    if (clean.includes('/anomalies') || clean.includes('/anomaly')) return 20;       // Anomaly flags: 20s
+    if (clean.includes('/agents/status') || clean.includes('/agents')) return 45;    // Agent runtime status: 45s
+    if (clean.includes('/payments')) return 45;                                      // Payments: 45s
+    if (clean.includes('/reconciliation') || clean.includes('/cases')) return 45;   // Cases: 45s
+    if (clean.includes('/portfolio')) return 120;                                    // Portfolio: 2 min
+    if (clean.includes('/pipeline/executions')) return 180;                         // Historical executions: 3 min
+    if (clean.includes('/audit') || clean.includes('/reports')) return 300;          // Audit / Reports: 5 min
+    return 60; // Default
   }
 
   /**

@@ -262,11 +262,11 @@ export const AgentControlCenter = () => {
 
   // Activity filter state
   const [agentFilter, setAgentFilter] = useState('');
-  const [triggerFilter, setTriggerFilter] = useState('');
-
-  const fetchControlCenterData = async () => {
+  const fetchControlCenterData = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground && agents.every(a => (a.metrics?.total_runs || 0) === 0)) {
+        setLoading(true);
+      }
       const [statusData, activityData, snapshotRes, alertsRes, pipelinesRes, queueRes, anomalyRes] = await Promise.all([
         getAgentStatus(),
         getRecentActivity(25),
@@ -318,12 +318,12 @@ export const AgentControlCenter = () => {
   };
 
   useEffect(() => {
-    fetchControlCenterData();
+    fetchControlCenterData(false);
 
     // Listen for real-time WebSocket events
     const socketInstance = connectSocket();
     const handleEvent = () => {
-      fetchControlCenterData();
+      fetchControlCenterData(true);
     };
 
     if (socketInstance) {
@@ -334,6 +334,7 @@ export const AgentControlCenter = () => {
       socketInstance.on('portfolio_recalculated', handleEvent);
       socketInstance.on('escalation_alert_created', handleEvent);
       socketInstance.on('ANOMALY_DETECTED', (payload) => {
+        clientCache.invalidateByTag('anomalies');
         setAnomalyFlags(prev => {
           if (prev.some(f => f.payment_id === payload.payment_id && f.detection_stage === 'stage_b')) return prev;
           return [{

@@ -104,9 +104,31 @@ export const PaymentIngestion = ({ onAskAI }) => {
         swrCache.invalidate('payments');
       };
 
+      const handleAnomalyDetected = (payload) => {
+        if (!payload) return;
+        setPayments(prev => prev.map(p => {
+          if (p.id === payload.payment_id || p.case_id === payload.case_id) {
+            return {
+              ...p,
+              anomaly_detected: true,
+              anomaly_severity: payload.severity,
+              anomaly_score: payload.anomaly_score,
+              anomaly_types: payload.anomaly_types
+            };
+          }
+          return p;
+        }));
+        swrCache.invalidate('anomalies');
+      };
+
       socket.on('PAYMENT_INGESTED', handlePaymentIngested);
+      socket.on('PAYMENT_RECEIVED', handlePaymentIngested);
+      socket.on('ANOMALY_DETECTED', handleAnomalyDetected);
+
       return () => {
         socket.off('PAYMENT_INGESTED', handlePaymentIngested);
+        socket.off('PAYMENT_RECEIVED', handlePaymentIngested);
+        socket.off('ANOMALY_DETECTED', handleAnomalyDetected);
       };
     }
   }, [startDate, endDate]);
