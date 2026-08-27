@@ -12,6 +12,7 @@ import {
 } from '../services/agentService';
 import { triggerPortfolioAnalysis, getLatestPortfolioSnapshot } from '../services/portfolioService';
 import { triggerEscalationScan, getAlerts, approveAlert, dismissAlert } from '../services/notificationService';
+import { getAnomalyList, dismissAnomaly, escalateAnomaly } from '../services/anomalyService';
 import { useAuth } from '../context/AuthContext';
 import { AgentRunHistoryDrawer } from '../components/AgentRunHistoryDrawer';
 import { PipelineVisualizer } from '../components/PipelineVisualizer';
@@ -49,7 +50,11 @@ import {
   SendHorizontal,
   Building,
   CreditCard,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ScanSearch,
+  AlertTriangle,
+  ShieldCheck,
+  MessageSquare
 } from 'lucide-react';
 
 const formatAuditTimestamp = (dateStr) => {
@@ -64,6 +69,7 @@ const formatAuditTimestamp = (dateStr) => {
 
 const DEFAULT_AGENTS = [
   { id: 'agent_1_reconciliation', name: 'Payment Reconciliation Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
+  { id: 'agent_7_anomaly', name: 'Anomaly Detection Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 180 } },
   { id: 'agent_2_risk', name: 'Repayment Risk Assessment Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
   { id: 'agent_3_collection', name: 'Automated Collection Follow-Up Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
   { id: 'agent_4_document', name: 'Document Intelligence Agent', status: 'READY', is_active: true, metrics: { total_runs: 0, success_rate: 100, avg_duration_ms: 320 } },
@@ -115,6 +121,14 @@ export const AgentControlCenter = () => {
   const [mailSuccessToast, setMailSuccessToast] = useState(null);
   const [authErrorToast, setAuthErrorToast] = useState(null);
 
+  // Agent 7: Anomaly flags
+  const [anomalyFlags, setAnomalyFlags] = useState([]);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const [actioningAnomalyId, setActioningAnomalyId] = useState(null);
+  const [dismissModalId, setDismissModalId] = useState(null);
+  const [dismissReason, setDismissReason] = useState('');
+  const [expandedAnomalyId, setExpandedAnomalyId] = useState(null);
+
   // Activity filter state
   const [agentFilter, setAgentFilter] = useState('');
   const [triggerFilter, setTriggerFilter] = useState('');
@@ -122,13 +136,14 @@ export const AgentControlCenter = () => {
   const fetchControlCenterData = async () => {
     try {
       setLoading(true);
-      const [statusData, activityData, snapshotRes, alertsRes, pipelinesRes, queueRes] = await Promise.all([
+      const [statusData, activityData, snapshotRes, alertsRes, pipelinesRes, queueRes, anomalyRes] = await Promise.all([
         getAgentStatus(),
         getRecentActivity(25),
         getLatestPortfolioSnapshot().catch(() => ({ data: null })),
         getAlerts({ status: 'pending', limit: 10 }).catch(() => ({ data: { data: [] } })),
         getPipelineExecutions({ page: 1, limit: 15 }).catch(() => ({ data: [] })),
-        getQueueStatus().catch(() => null)
+        getQueueStatus().catch(() => null),
+        getAnomalyList({ status: 'pending', limit: 20 }).catch(() => ({ data: [] }))
       ]);
 
       if (statusData) {
@@ -160,6 +175,10 @@ export const AgentControlCenter = () => {
       if (queueRes) {
         setQueueMetrics(queueRes);
       }
+
+      if (anomalyRes?.data) {
+        setAnomalyFlags(Array.isArray(anomalyRes.data) ? anomalyRes.data : (anomalyRes.data?.data || []));
+      }
     } catch (err) {
       console.error('Failed to load agent control center telemetry:', err);
     } finally {
@@ -183,6 +202,22 @@ export const AgentControlCenter = () => {
       socketInstance.on('agent_status_updated', handleEvent);
       socketInstance.on('portfolio_recalculated', handleEvent);
       socketInstance.on('escalation_alert_created', handleEvent);
+      socketInstance.on('ANOMALY_DETECTED', (payload) => {
+        setAnomalyFlags(prev => {
+          if (prev.some(f => f.payment_id === payload.payment_id && f.detection_stage === 'stage_b')) return prev;
+          return [{
+            id: payload.anomaly_id,
+            payment_id: payload.payment_id,
+            company_name: payload.company_name || 'Unknown',
+            anomaly_score: payload.anomaly_score,
+            severity: payload.severity,
+            anomaly_types: payload.anomaly_types || [],
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            isLive: true
+          }, ...prev].slice(0, 20);
+        });
+      });
     }
 
     return () => {
@@ -193,6 +228,7 @@ export const AgentControlCenter = () => {
         socketInstance.off('agent_status_updated', handleEvent);
         socketInstance.off('portfolio_recalculated', handleEvent);
         socketInstance.off('escalation_alert_created', handleEvent);
+        socketInstance.off('ANOMALY_DETECTED');
       }
     };
   }, []);
@@ -200,6 +236,7 @@ export const AgentControlCenter = () => {
   const getAgentDisplayName = (id) => {
     const map = {
       'agent_1_reconciliation': 'Payment Reconciliation Agent',
+      'agent_7_anomaly': 'Anomaly Detection Agent',
       'agent_2_risk': 'Repayment Risk Assessment Agent',
       'agent_3_collection': 'Automated Collection Follow-Up Agent',
       'agent_4_document': 'Document Intelligence Agent',
@@ -207,6 +244,33 @@ export const AgentControlCenter = () => {
       'agent_6_notification': 'Notification & Escalation Agent'
     };
     return map[id] || 'AI Operational Agent';
+  };
+
+  // ─── Anomaly Actions ────────────────────────────────────────────────────────
+  const handleDismissAnomaly = async (anomalyId) => {
+    setActioningAnomalyId(anomalyId);
+    try {
+      await dismissAnomaly(anomalyId, dismissReason);
+      setAnomalyFlags(prev => prev.filter(f => f.id !== anomalyId));
+      setDismissModalId(null);
+      setDismissReason('');
+    } catch (err) {
+      console.error('Failed to dismiss anomaly:', err);
+    } finally {
+      setActioningAnomalyId(null);
+    }
+  };
+
+  const handleEscalateAnomaly = async (anomalyId) => {
+    setActioningAnomalyId(anomalyId);
+    try {
+      await escalateAnomaly(anomalyId);
+      setAnomalyFlags(prev => prev.map(f => f.id === anomalyId ? { ...f, status: 'escalated' } : f));
+    } catch (err) {
+      console.error('Failed to escalate anomaly:', err);
+    } finally {
+      setActioningAnomalyId(null);
+    }
   };
 
   // ─── Modal Open & Pending Targets Fetching ──────────────────────────────────
@@ -1328,6 +1392,180 @@ export const AgentControlCenter = () => {
           </table>
         </div>
       </div>
+
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* AGENT 7: Anomaly Flags Panel                                    */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', marginBottom: '32px' }}>
+        <div style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', padding: '20px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '12px', padding: '10px', display: 'flex' }}>
+              <ScanSearch size={22} color="#ffffff" />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#ffffff' }}>Agent 7 — Anomaly Flags</h3>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(255,255,255,0.85)' }}>
+                {anomalyFlags.filter(f => f.status === 'pending').length} pending review
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ background: 'rgba(255,255,255,0.25)', color: '#ffffff', fontSize: '0.7rem', fontWeight: '700', padding: '3px 10px', borderRadius: '20px' }}>READ-ONLY DETECTION</span>
+            <button onClick={fetchControlCenterData} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '8px', padding: '7px 10px', color: '#ffffff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <RefreshCw size={14} />
+            </button>
+          </div>
+        </div>
+
+        {anomalyFlags.length === 0 ? (
+          <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
+            <ShieldCheck size={40} style={{ marginBottom: '12px', color: '#10b981' }} />
+            <p style={{ margin: 0, fontWeight: '600', fontSize: '0.9rem', color: '#059669' }}>No Active Anomaly Flags</p>
+            <p style={{ margin: '6px 0 0', fontSize: '0.8rem' }}>All recent payments cleared anomaly detection checks.</p>
+          </div>
+        ) : (
+          <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {anomalyFlags.map(flag => {
+              const severityConfig = {
+                CLEAR:    { bg: '#f0fdf4', border: '#bbf7d0', badge: '#16a34a', label: 'CLEAR',    icon: <ShieldCheck size={14} color="#16a34a" /> },
+                LOW:      { bg: '#fefce8', border: '#fde68a', badge: '#d97706', label: 'LOW',      icon: <AlertCircle size={14} color="#d97706" /> },
+                MEDIUM:   { bg: '#fff7ed', border: '#fed7aa', badge: '#ea580c', label: 'MEDIUM',   icon: <AlertTriangle size={14} color="#ea580c" /> },
+                HIGH:     { bg: '#fef2f2', border: '#fecaca', badge: '#dc2626', label: 'HIGH',     icon: <ShieldAlert size={14} color="#dc2626" /> },
+                CRITICAL: { bg: '#450a0a', border: '#dc2626', badge: '#ffffff', label: 'CRITICAL', icon: <ShieldAlert size={14} color="#ef4444" /> },
+              };
+              const cfg = severityConfig[flag.severity] || severityConfig.LOW;
+              const isExpanded = expandedAnomalyId === flag.id;
+              const isActioning = actioningAnomalyId === flag.id;
+              const isEscalated = flag.status === 'escalated';
+              const types = Array.isArray(flag.anomaly_types) ? flag.anomaly_types : (flag.anomaly_types ? JSON.parse(flag.anomaly_types) : []);
+
+              return (
+                <div key={flag.id} style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}`, borderRadius: '14px', overflow: 'hidden', transition: 'all 0.2s ease' }}>
+                  {/* Header Row */}
+                  <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                      {/* Severity Badge */}
+                      <div style={{ background: cfg.badge, color: cfg.label === 'CRITICAL' ? '#ffffff' : '#ffffff', fontSize: '0.65rem', fontWeight: '800', padding: '3px 8px', borderRadius: '6px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                        {cfg.icon} {cfg.label}
+                      </div>
+                      {/* Company + Payment */}
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: 0, fontWeight: '700', fontSize: '0.85rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {flag.company_name || `Payment #${flag.payment_id}`}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.73rem', color: '#64748b' }}>
+                          Payment #{flag.payment_id} · Score: {parseFloat(flag.anomaly_score || 0).toFixed(0)}/100
+                          {flag.isLive && <span style={{ marginLeft: '6px', background: '#4f46e5', color: '#fff', fontSize: '0.6rem', padding: '2px 6px', borderRadius: '10px', fontWeight: '700' }}>LIVE</span>}
+                        </p>
+                      </div>
+                      {/* Anomaly Type Chips */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', flex: 1, justifyContent: 'flex-start' }}>
+                        {types.map(t => (
+                          <span key={t} style={{ background: 'rgba(0,0,0,0.07)', color: '#374151', fontSize: '0.65rem', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                            {t.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    {!isViewer && (
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        <button
+                          onClick={() => setExpandedAnomalyId(isExpanded ? null : flag.id)}
+                          style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 10px', fontSize: '0.73rem', fontWeight: '600', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <Eye size={13} /> {isExpanded ? 'Hide' : 'Details'}
+                        </button>
+                        {!isEscalated && (
+                          <>
+                            <button
+                              onClick={() => { setDismissModalId(flag.id); setDismissReason(''); }}
+                              disabled={isActioning}
+                              style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 10px', fontSize: '0.73rem', fontWeight: '600', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <X size={13} /> Dismiss
+                            </button>
+                            {(flag.severity === 'HIGH' || flag.severity === 'CRITICAL') && (
+                              <button
+                                onClick={() => handleEscalateAnomaly(flag.id)}
+                                disabled={isActioning}
+                                style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '6px 10px', fontSize: '0.73rem', fontWeight: '600', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                {isActioning ? <RefreshCw size={12} className="animate-spin" /> : <ShieldAlert size={13} />}
+                                Escalate
+                              </button>
+                            )}
+                          </>
+                        )}
+                        {isEscalated && (
+                          <span style={{ background: '#dc2626', color: '#fff', fontSize: '0.65rem', fontWeight: '700', padding: '4px 10px', borderRadius: '6px' }}>ESCALATED</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Expanded Details */}
+                  {isExpanded && (
+                    <div style={{ borderTop: `1px solid ${cfg.border}`, padding: '14px 18px', background: 'rgba(255,255,255,0.6)' }}>
+                      {flag.explanation && (
+                        <div style={{ marginBottom: '10px' }}>
+                          <p style={{ margin: '0 0 4px', fontSize: '0.73rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>AI Explanation</p>
+                          <p style={{ margin: 0, fontSize: '0.83rem', color: '#374151', lineHeight: '1.6' }}>{flag.explanation}</p>
+                        </div>
+                      )}
+                      {flag.recommendation && (
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px' }}>
+                          <p style={{ margin: '0 0 2px', fontSize: '0.7rem', fontWeight: '700', color: '#1d4ed8', textTransform: 'uppercase' }}><MessageSquare size={11} style={{ marginRight: '4px' }} />Recommendation</p>
+                          <p style={{ margin: 0, fontSize: '0.82rem', color: '#1e40af' }}>{flag.recommendation}</p>
+                        </div>
+                      )}
+                      {flag.score_breakdown && (
+                        <div style={{ marginTop: '10px' }}>
+                          <p style={{ margin: '0 0 6px', fontSize: '0.7rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Score Breakdown</p>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {Object.entries(typeof flag.score_breakdown === 'string' ? JSON.parse(flag.score_breakdown) : flag.score_breakdown).map(([k, v]) => (
+                              <span key={k} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#374151', fontSize: '0.68rem', fontWeight: '600', padding: '3px 9px', borderRadius: '6px' }}>
+                                {k.replace(/_/g, ' ')} +{v}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Dismiss Reason Modal */}
+      {dismissModalId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#ffffff', borderRadius: '20px', padding: '32px', width: '440px', boxShadow: '0 25px 80px rgba(0,0,0,0.25)' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: '1rem', fontWeight: '800', color: '#0f172a' }}>Dismiss Anomaly Flag</h3>
+            <p style={{ margin: '0 0 18px', fontSize: '0.83rem', color: '#64748b' }}>Provide a brief reason for dismissal. This is stored in the audit trail.</p>
+            <textarea
+              value={dismissReason}
+              onChange={e => setDismissReason(e.target.value)}
+              placeholder="e.g. Verified with operations team — legitimate payment from subsidiary account."
+              style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #cbd5e1', borderRadius: '10px', padding: '12px', fontSize: '0.85rem', minHeight: '80px', resize: 'vertical', outline: 'none', fontFamily: 'inherit' }}
+            />
+            <div style={{ display: 'flex', gap: '10px', marginTop: '16px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setDismissModalId(null); setDismissReason(''); }} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '10px 20px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', color: '#475569' }}>Cancel</button>
+              <button
+                onClick={() => handleDismissAnomaly(dismissModalId)}
+                disabled={!dismissReason.trim() || actioningAnomalyId === dismissModalId}
+                style={{ background: !dismissReason.trim() ? '#cbd5e1' : '#4f46e5', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '0.85rem', fontWeight: '700', cursor: dismissReason.trim() ? 'pointer' : 'not-allowed', color: '#ffffff' }}
+              >
+                {actioningAnomalyId === dismissModalId ? 'Dismissing...' : 'Confirm Dismiss'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* History Drawer for Single Agent */}
       {selectedAgentForHistory && (

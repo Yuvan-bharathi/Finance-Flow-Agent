@@ -13,6 +13,7 @@ import {
   getAllocations
 } from './settlement.controller.js';
 import { sendSuccessResponse } from '../utils/apiResponse.js';
+import { runAnomalyAgentStageB } from '../agents/anomalyAgent.js';
 
 export {
   approveRecommendation,
@@ -40,6 +41,17 @@ export const analyzeCase = async (req, res, next) => {
     const caseId = parseInt(req.params.caseId, 10);
     const userId = req.user ? req.user.id : null;
     const result = await analyzeCaseService(caseId, userId, 'manual');
+
+    // Async Stage B Anomaly Detection after reconciliation match (non-blocking)
+    const paymentId = result?.recommendation?.payment_id || result?.case?.payment_id || null;
+    if (paymentId) {
+      setImmediate(() => {
+        runAnomalyAgentStageB(paymentId, caseId, userId).catch(err =>
+          console.warn('[Reconciliation Controller] Stage B anomaly check failed (non-critical):', err.message)
+        );
+      });
+    }
+
     return sendSuccessResponse(res, 200, 'AI Payment Reconciliation analysis completed successfully', result);
   } catch (error) {
     return next(error);

@@ -78,6 +78,11 @@ export const connectSocket = () => {
       clientCache.invalidateByTag('payments');
       clientCache.invalidateByTag('reports');
     });
+
+    socket.on('ANOMALY_DETECTED', () => {
+      clientCache.invalidateByTag('anomalies');
+      clientCache.invalidateByTag('payments');
+    });
   }
   return socket;
 };

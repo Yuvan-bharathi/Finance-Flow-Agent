@@ -6,6 +6,7 @@ import {
 import { sendSuccessResponse } from '../utils/apiResponse.js';
 import { cacheService } from '../services/cache.service.js';
 import { emitSocketEvent } from '../config/socket.js';
+import { runAnomalyAgentStageA } from '../agents/anomalyAgent.js';
 
 /**
  * Controller: Payment Controller (Phase 7 Real-Time & Caching Enhanced)
@@ -37,6 +38,16 @@ export const ingestPayment = async (req, res, next) => {
       case: result.reconciliation_case,
       timestamp: new Date().toISOString()
     });
+
+    // 3. Async Stage A Anomaly Detection (non-blocking fire-and-forget)
+    const paymentId = result?.payment?.id;
+    if (paymentId) {
+      setImmediate(() => {
+        runAnomalyAgentStageA(paymentId, userId).catch(err =>
+          console.warn('[Payment Controller] Stage A anomaly check failed (non-critical):', err.message)
+        );
+      });
+    }
 
     return sendSuccessResponse(res, 201, 'Payment ingested successfully and reconciliation case opened', result);
   } catch (error) {

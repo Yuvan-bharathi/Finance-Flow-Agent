@@ -139,11 +139,32 @@ export const findAllPayments = async (filterOrQuery = null) => {
   const [countRows] = await pool.execute(countQuery, params);
   const totalRecords = countRows[0]?.total || 0;
 
-  // 2. Paginated Data Query
+  // 2. Paginated Data Query with latest Anomaly Detection data
   const dataQuery = `
-    SELECT p.*, rc.id AS case_id, rc.status AS case_status
+    SELECT
+      p.*,
+      rc.id AS case_id,
+      rc.status AS case_status,
+      pa.id AS anomaly_id,
+      pa.anomaly_detected,
+      pa.anomaly_score,
+      pa.severity AS anomaly_severity,
+      pa.anomaly_types,
+      pa.explanation AS anomaly_explanation,
+      pa.recommendation AS anomaly_recommendation,
+      pa.score_breakdown AS anomaly_breakdown,
+      pa.status AS anomaly_status
     FROM payments p
     LEFT JOIN reconciliation_cases rc ON p.id = rc.payment_id
+    LEFT JOIN (
+      SELECT pa1.*
+      FROM payment_anomalies pa1
+      INNER JOIN (
+        SELECT payment_id, MAX(id) AS max_id
+        FROM payment_anomalies
+        GROUP BY payment_id
+      ) pa2 ON pa1.id = pa2.max_id
+    ) pa ON p.id = pa.payment_id
     ${whereSql}
     ORDER BY p.${sortBy} ${order}
     LIMIT ? OFFSET ?;

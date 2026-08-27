@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play, RefreshCw, AlertTriangle, ShieldCheck, Bot } from 'lucide-react';
+import { CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play, RefreshCw, AlertTriangle, ShieldCheck, Bot, ScanSearch, ShieldAlert, X, MessageSquare } from 'lucide-react';
 import { StatusBadge } from '../components/Dashboard/StatusBadge';
 import { ActionCenterDrawer } from '../components/ActionCenterDrawer';
 import { CustomDatePicker } from '../components/CustomDatePicker';
@@ -26,6 +26,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedCase, setSelectedCase] = useState(null);
+  const [selectedAnomalyPayment, setSelectedAnomalyPayment] = useState(null);
 
   // Multi-select & Batch Execution state
   const [selectedCaseIds, setSelectedCaseIds] = useState([]);
@@ -509,20 +510,21 @@ export const PaymentIngestion = ({ onAskAI }) => {
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Deposit Amount</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Received Date & Time</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Case Status</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Agent 7 Anomaly</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
                     <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#4f46e5' }} />
                     <div>Loading ingested payment records...</div>
                   </td>
                 </tr>
               ) : payments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
                     No payment deposits found. Use the ingestion form above to register transactions.
                   </td>
                 </tr>
@@ -592,6 +594,52 @@ export const PaymentIngestion = ({ onAskAI }) => {
                       {/* Case Status */}
                       <td style={{ padding: '12px 16px' }}>
                         <StatusBadge status={normStatus} />
+                      </td>
+
+                      {/* Agent 7 Anomaly Status */}
+                      <td style={{ padding: '12px 16px' }} onClick={(e) => { e.stopPropagation(); if (p.anomaly_severity || p.anomaly_score != null) setSelectedAnomalyPayment(p); }}>
+                        {(() => {
+                          const severity = p.anomaly_severity || (p.anomaly_score != null ? (p.anomaly_score >= 90 ? 'CRITICAL' : p.anomaly_score >= 70 ? 'HIGH' : p.anomaly_score >= 40 ? 'MEDIUM' : p.anomaly_score >= 20 ? 'LOW' : 'CLEAR') : null);
+                          if (!severity) {
+                            return (
+                              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <ScanSearch size={12} /> Pending scan
+                              </span>
+                            );
+                          }
+                          const cfg = {
+                            CLEAR:    { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', label: 'CLEAR',    icon: <ShieldCheck size={12} /> },
+                            LOW:      { bg: '#fefce8', color: '#d97706', border: '#fde68a', label: 'LOW',      icon: <AlertCircle size={12} /> },
+                            MEDIUM:   { bg: '#fff7ed', color: '#ea580c', border: '#fed7aa', label: 'MEDIUM',   icon: <AlertTriangle size={12} /> },
+                            HIGH:     { bg: '#fef2f2', color: '#dc2626', border: '#fecaca', label: 'HIGH',     icon: <ShieldAlert size={12} /> },
+                            CRITICAL: { bg: '#450a0a', color: '#ef4444', border: '#dc2626', label: 'CRITICAL', icon: <ShieldAlert size={12} /> },
+                          }[severity] || { bg: '#f8fafc', color: '#64748b', border: '#cbd5e1', label: severity, icon: <ScanSearch size={12} /> };
+
+                          return (
+                            <button
+                              type="button"
+                              style={{
+                                background: cfg.bg,
+                                color: cfg.color,
+                                border: `1px solid ${cfg.border}`,
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontSize: '0.7rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title="Click to view Agent 7 Anomaly breakdown"
+                            >
+                              {cfg.icon}
+                              <span>{cfg.label}</span>
+                              {p.anomaly_score != null && <span style={{ opacity: 0.8, fontSize: '0.65rem' }}>({Math.round(p.anomaly_score)})</span>}
+                            </button>
+                          );
+                        })()}
                       </td>
 
                       {/* Actions Column */}
@@ -826,6 +874,103 @@ export const PaymentIngestion = ({ onAskAI }) => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Anomaly Details Modal */}
+      {selectedAnomalyPayment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#ffffff', borderRadius: '20px', padding: '32px', width: '520px', maxWidth: '90vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 25px 80px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: '#fef3c7', borderRadius: '10px', padding: '8px', display: 'flex' }}>
+                  <ScanSearch size={20} color="#d97706" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: '#0f172a' }}>
+                    Agent 7 Anomaly Assessment
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+                    Payment #{selectedAnomalyPayment.id} · Txn: {selectedAnomalyPayment.transaction_id}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedAnomalyPayment(null)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', color: '#64748b' }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Score & Severity Hero Banner */}
+            <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Anomaly Score</span>
+                <div style={{ fontSize: '1.6rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.1 }}>
+                  {selectedAnomalyPayment.anomaly_score != null ? Math.round(selectedAnomalyPayment.anomaly_score) : 0}<span style={{ fontSize: '0.9rem', color: '#94a3b8', fontWeight: '600' }}>/100</span>
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', display: 'block', textAlign: 'right' }}>Severity</span>
+                <span style={{
+                  background: selectedAnomalyPayment.anomaly_severity === 'HIGH' || selectedAnomalyPayment.anomaly_severity === 'CRITICAL' ? '#fef2f2' : selectedAnomalyPayment.anomaly_severity === 'MEDIUM' ? '#fff7ed' : selectedAnomalyPayment.anomaly_severity === 'LOW' ? '#fefce8' : '#f0fdf4',
+                  color: selectedAnomalyPayment.anomaly_severity === 'HIGH' || selectedAnomalyPayment.anomaly_severity === 'CRITICAL' ? '#dc2626' : selectedAnomalyPayment.anomaly_severity === 'MEDIUM' ? '#ea580c' : selectedAnomalyPayment.anomaly_severity === 'LOW' ? '#d97706' : '#16a34a',
+                  border: `1px solid ${selectedAnomalyPayment.anomaly_severity === 'HIGH' || selectedAnomalyPayment.anomaly_severity === 'CRITICAL' ? '#fecaca' : selectedAnomalyPayment.anomaly_severity === 'MEDIUM' ? '#fed7aa' : selectedAnomalyPayment.anomaly_severity === 'LOW' ? '#fde68a' : '#bbf7d0'}`,
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '0.78rem',
+                  fontWeight: '800',
+                  display: 'inline-block',
+                  marginTop: '2px'
+                }}>
+                  {selectedAnomalyPayment.anomaly_severity || 'CLEAR'}
+                </span>
+              </div>
+            </div>
+
+            {/* AI Explanation */}
+            {selectedAnomalyPayment.anomaly_explanation && (
+              <div style={{ marginBottom: '14px' }}>
+                <p style={{ margin: '0 0 4px', fontSize: '0.72rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>AI Explanation</p>
+                <p style={{ margin: 0, fontSize: '0.83rem', color: '#334155', lineHeight: '1.6', background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                  {selectedAnomalyPayment.anomaly_explanation}
+                </p>
+              </div>
+            )}
+
+            {/* Recommendation */}
+            {selectedAnomalyPayment.anomaly_recommendation && (
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
+                <p style={{ margin: '0 0 2px', fontSize: '0.7rem', fontWeight: '700', color: '#1d4ed8', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <MessageSquare size={12} /> Recommendation
+                </p>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#1e40af', lineHeight: '1.5' }}>
+                  {selectedAnomalyPayment.anomaly_recommendation}
+                </p>
+              </div>
+            )}
+
+            {/* Score Breakdown Chips */}
+            {selectedAnomalyPayment.anomaly_breakdown && (
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 6px', fontSize: '0.7rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Deterministic Score Breakdown</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {Object.entries(typeof selectedAnomalyPayment.anomaly_breakdown === 'string' ? JSON.parse(selectedAnomalyPayment.anomaly_breakdown) : selectedAnomalyPayment.anomaly_breakdown).map(([k, v]) => (
+                    <span key={k} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#374151', fontSize: '0.7rem', fontWeight: '600', padding: '4px 10px', borderRadius: '6px' }}>
+                      {k.replace(/_/g, ' ')}: +{v} pts
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                onClick={() => setSelectedAnomalyPayment(null)}
+                style={{ background: '#4f46e5', border: 'none', borderRadius: '10px', padding: '9px 20px', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer', color: '#ffffff' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

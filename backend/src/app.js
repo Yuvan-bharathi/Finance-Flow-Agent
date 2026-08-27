@@ -30,6 +30,7 @@ import portfolioRoutes from './routes/portfolio.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import assistantRoutes from './routes/assistant.routes.js';
+import anomalyRoutes from './routes/anomaly.routes.js';
 
 /**
  * Express Application Setup (Phase 4 Enterprise Edition)
@@ -164,6 +165,7 @@ const registerRoutes = (prefix) => {
   app.use(`${prefix}/notifications`, notificationRoutes);
   app.use(`${prefix}/settings`, settingsRoutes);
   app.use(`${prefix}/assistant`, assistantRoutes);
+  app.use(`${prefix}/anomaly`, anomalyRoutes);
 };
 
 // Mount versioned and root API gateways
