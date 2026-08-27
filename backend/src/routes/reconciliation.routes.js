@@ -9,7 +9,11 @@ import {
   analyzeAllPending,
   approveRecommendation,
   rejectRecommendation,
-  overrideRecommendation
+  overrideRecommendation,
+  getCasePlaybook,
+  updatePlaybookStep,
+  updatePlaybookStatus,
+  getStandardPlaybooks
 } from '../controllers/reconciliation.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { requirePermission } from '../middleware/permission.middleware.js';
@@ -58,6 +62,12 @@ router.get('/stats', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({
 router.get('/cases', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({ ttlSeconds: 45, tag: 'reconciliations' }), getCases);
 router.get('/cases/:caseId', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({ ttlSeconds: 60, tag: 'reconciliations' }), getCaseById);
 router.get('/allocations', requirePermission(PERMISSIONS.CASE_VIEW), cacheMiddleware({ ttlSeconds: 60, tag: 'reconciliations' }), getAllocations);
+
+// Deterministic Playbooks & Audit Progress Endpoints
+router.get('/cases/:caseId/playbook', requirePermission(PERMISSIONS.CASE_VIEW), getCasePlaybook);
+router.post('/cases/:caseId/playbook/step', requirePermission(PERMISSIONS.CASE_APPROVE), updatePlaybookStep);
+router.post('/cases/:caseId/playbook/status', requirePermission(PERMISSIONS.CASE_APPROVE), updatePlaybookStatus);
+router.get('/playbooks/standard', requirePermission(PERMISSIONS.CASE_VIEW), getStandardPlaybooks);
 
 // Trigger AI Agent 1
 router.post('/analyze/:caseId', requirePermission(PERMISSIONS.AGENT_RUN), analyzeCase);

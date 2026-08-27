@@ -12,8 +12,14 @@ import {
   overrideRecommendation,
   getAllocations
 } from './settlement.controller.js';
-import { sendSuccessResponse } from '../utils/apiResponse.js';
+import { sendSuccessResponse, sendErrorResponse } from '../utils/apiResponse.js';
 import { runAnomalyAgentStageB } from '../agents/anomalyAgent.js';
+import {
+  PLAYBOOKS,
+  getCasePlaybookService,
+  updatePlaybookStepService,
+  updatePlaybookStatusService
+} from '../engine/playbookEngine.js';
 
 export {
   approveRecommendation,
@@ -98,3 +104,61 @@ export const getCaseById = async (req, res, next) => {
     return next(error);
   }
 };
+
+/**
+ * Controller: Get Deterministic Playbook for a Case with Audit Progress
+ */
+export const getCasePlaybook = async (req, res, next) => {
+  try {
+    const caseId = parseInt(req.params.caseId, 10);
+    const playbook = await getCasePlaybookService(caseId, req.user);
+    if (!playbook) {
+      return sendErrorResponse(res, 404, 'Case not found or no playbook available');
+    }
+    return sendSuccessResponse(res, 200, 'Case playbook retrieved', playbook);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Controller: Update a single Playbook step completion
+ */
+export const updatePlaybookStep = async (req, res, next) => {
+  try {
+    const caseId = parseInt(req.params.caseId, 10);
+    const { stepId, completed, notes } = req.body;
+    const completedBy = req.user ? (req.user.name || req.user.email || 'Accountant') : 'Accountant';
+    const updated = await updatePlaybookStepService(caseId, parseInt(stepId, 10), completed, completedBy, notes);
+    return sendSuccessResponse(res, 200, 'Playbook step updated', updated);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Controller: Update overall Playbook review status (e.g. COMPLETED, ESCALATED, IN_PROGRESS)
+ */
+export const updatePlaybookStatus = async (req, res, next) => {
+  try {
+    const caseId = parseInt(req.params.caseId, 10);
+    const { status } = req.body;
+    const completedBy = req.user ? (req.user.name || req.user.email || 'Accountant') : 'Accountant';
+    const updated = await updatePlaybookStatusService(caseId, status, completedBy);
+    return sendSuccessResponse(res, 200, 'Playbook review status updated', updated);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Controller: Get all Standardized Operational Playbooks library for Agent 7
+ */
+export const getStandardPlaybooks = async (req, res, next) => {
+  try {
+    return sendSuccessResponse(res, 200, 'Standardized Operational Playbooks library', Object.values(PLAYBOOKS));
+  } catch (error) {
+    return next(error);
+  }
+};
+
