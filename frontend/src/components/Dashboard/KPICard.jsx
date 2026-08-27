@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { AnimatedCounter } from '../common/AnimatedCounter';
 
 /**
  * Reusable KPI Card Component
@@ -87,7 +88,11 @@ export const KPICard = ({
 
       {/* Primary Value */}
       <div style={{ fontSize: '1.65rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1 }}>
-        {value}
+        {typeof value === 'number' || (!isNaN(Number(value)) && typeof value === 'string' && value.trim() !== '') ? (
+          <AnimatedCounter value={value} duration={1000} />
+        ) : (
+          value
+        )}
       </div>
 
       {/* Bottom Change Trend */}

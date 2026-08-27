@@ -1,17 +1,39 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { AnimatedCounter } from '../common/AnimatedCounter';
 
 /**
  * Case Status Overview Donut Chart Component
- * Dynamically renders SVG Donut Chart from live MySQL status distribution stats.
- * 
- * Called by:
- * - Dashboard.jsx
+ * Dynamically renders SVG Donut Chart with on-load draw animation and animated counter.
  * 
  * @param {Array} statusBreakdown - Array of status breakdown objects `[{ status: 'resolved', count: 6 }, ...]`.
  * @param {number} totalCases - Total count of cases from backend.
  * @param {boolean} loading - Loading state.
  */
 export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading = false }) => {
+  const [animProgress, setAnimProgress] = useState(0);
+
+  useEffect(() => {
+    let startTimestamp = null;
+    const duration = 1200;
+
+    const step = (timestamp) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const elapsed = timestamp - startTimestamp;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      setAnimProgress(easeOut);
+
+      if (progress < 1) {
+        window.requestAnimationFrame(step);
+      } else {
+        setAnimProgress(1);
+      }
+    };
+
+    const animFrame = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(animFrame);
+  }, [statusBreakdown]);
+
   // Map raw status strings to human labels and color tokens
   const statusConfig = {
     resolved: { label: 'Resolved', color: '#10b981' },
@@ -45,18 +67,19 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  // Compute SVG stroke-dasharray offsets dynamically
+  // Compute SVG stroke-dasharray offsets dynamically with animation progress
   let strokeOffset = 0;
   const slices = categories.map(cat => {
     const percentVal = total > 0 ? (cat.count / total) * 100 : 0;
-    const strokeDash = total > 0 ? (cat.count / total) * circumference : 0;
+    const fullStrokeDash = total > 0 ? (cat.count / total) * circumference : 0;
+    const currentStrokeDash = fullStrokeDash * animProgress;
     const slice = {
       ...cat,
       percent: percentVal.toFixed(1) + '%',
-      strokeDasharray: `${strokeDash} ${circumference}`,
+      strokeDasharray: `${currentStrokeDash} ${circumference}`,
       strokeDashoffset: -strokeOffset
     };
-    strokeOffset += strokeDash;
+    strokeOffset += currentStrokeDash;
     return slice;
   });
 
@@ -69,8 +92,9 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
       display: 'flex',
       flexDirection: 'column',
       gap: '16px',
-      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
-      height: '320px'
+      boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+      height: '340px',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease'
     }}>
       
       <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#0f172a' }}>
@@ -80,7 +104,7 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
         
         {/* SVG Donut Chart with Dynamic Center Label */}
-        <div style={{ position: 'relative', width: `${size}px`, height: `${size}px` }}>
+        <div style={{ position: 'relative', width: `${size}px`, height: `${size}px`, flexShrink: 0 }}>
           <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
             {/* Background Base Ring */}
             <circle
@@ -88,11 +112,11 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
               cy={size / 2}
               r={radius}
               fill="transparent"
-              stroke="#e2e8f0"
+              stroke="#f1f5f9"
               strokeWidth={strokeWidth}
             />
 
-            {/* Dynamic Donut Slices */}
+            {/* Dynamic Animated Donut Slices */}
             {slices.map((slice, i) => (
               <circle
                 key={i}
@@ -104,12 +128,13 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
                 strokeWidth={strokeWidth}
                 strokeDasharray={slice.strokeDasharray}
                 strokeDashoffset={slice.strokeDashoffset}
-                style={{ transition: 'stroke-dasharray 0.5s ease' }}
+                strokeLinecap="round"
+                style={{ transition: 'stroke-dasharray 0.05s linear' }}
               />
             ))}
           </svg>
 
-          {/* Donut Center Count */}
+          {/* Donut Center Count with Counter Animation */}
           <div style={{
             position: 'absolute',
             inset: 0,
@@ -119,10 +144,10 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
             justifyContent: 'center',
             pointerEvents: 'none'
           }}>
-            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#0f172a', lineHeight: 1 }}>
-              {loading ? '--' : total}
+            <div style={{ fontSize: '1.65rem', fontWeight: '800', color: '#0f172a', lineHeight: 1 }}>
+              {loading ? '--' : <AnimatedCounter value={total} duration={1200} />}
             </div>
-            <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: '600', marginTop: '2px' }}>
+            <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: '700', marginTop: '3px' }}>
               Total Cases
             </div>
           </div>
@@ -138,14 +163,14 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
             categories.map((cat, idx) => (
               <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: cat.color }} />
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: cat.color, flexShrink: 0 }}></span>
                   <span style={{ color: '#475569', fontWeight: '600' }}>{cat.label}</span>
                 </div>
-                <div>
-                  <strong style={{ color: '#0f172a' }}>{cat.count}</strong>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '4px' }}>
-                    ({total > 0 ? ((cat.count / total) * 100).toFixed(1) : '0.0'}%)
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <strong style={{ color: '#0f172a' }}>
+                    <AnimatedCounter value={cat.count} duration={1000} />
+                  </strong>
+                  <span style={{ color: '#94a3b8', fontSize: '0.725rem' }}>({cat.percent})</span>
                 </div>
               </div>
             ))
@@ -153,7 +178,6 @@ export const CaseStatusChart = ({ statusBreakdown = [], totalCases = 0, loading 
         </div>
 
       </div>
-
     </div>
   );
 };

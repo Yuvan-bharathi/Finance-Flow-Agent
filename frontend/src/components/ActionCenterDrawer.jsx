@@ -14,7 +14,7 @@ import {
   ShieldAlert,
   Bot
 } from 'lucide-react';
-import { analyzeCase, approveRecommendation, rejectRecommendation, overrideRecommendation } from '../services/reconciliationService';
+import { analyzeCase, approveRecommendation, rejectRecommendation, overrideRecommendation, getCaseById } from '../services/reconciliationService';
 import { StatusBadge } from './Dashboard/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 
@@ -66,7 +66,16 @@ export const ActionCenterDrawer = ({ caseItem, onClose, onRefresh, onAskAI }) =>
 
   useEffect(() => {
     setActiveCase(caseItem);
-  }, [caseItem]);
+    if (caseItem?.id) {
+      getCaseById(caseItem.id)
+        .then(fullCase => {
+          if (fullCase) {
+            setActiveCase(prev => ({ ...(prev || {}), ...fullCase }));
+          }
+        })
+        .catch(err => console.warn('[ActionCenterDrawer] Failed to fetch full case details:', err));
+    }
+  }, [caseItem?.id]);
 
   // Handle Escape key press to close drawer
   useEffect(() => {

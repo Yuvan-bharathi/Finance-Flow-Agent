@@ -16,7 +16,7 @@ import {
  *   that provides context-aware, role-aware AI assistance backed by real MySQL data.
  *   Supports Phase 3 Human-in-the-Loop Action Confirmation Protocols.
  */
-const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
+const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {}, onClearContext }) => {
   const { user } = useAuth();
 
   // ─── Conversation State ──────────────────────────────────────────────────
@@ -85,20 +85,26 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
     }
   }, [isOpen, isMinimized]);
 
-  // ─── Welcome message when panel first opens ─────────────────────────────
+  // Track previous record ID to refresh welcome context when switching rows
+  const prevRecordRef = useRef(null);
+
+  // ─── Welcome message when panel first opens or record context changes ─────
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      const greeting = getGreetingMessage(user, contextPayload);
-      setMessages([{
-        role:      'assistant',
-        content:   greeting,
-        sources:   [],
-        suggestedActions: getInitialSuggestedActions(contextPayload),
-        timestamp: new Date()
-      }]);
+    if (isOpen) {
+      const recordKey = `${contextPayload?.recordType || 'general'}_${contextPayload?.recordId || 'none'}_${contextPayload?.caseId || ''}`;
+      if (messages.length === 0 || prevRecordRef.current !== recordKey) {
+        prevRecordRef.current = recordKey;
+        const greeting = getGreetingMessage(user, contextPayload);
+        setMessages([{
+          role:      'assistant',
+          content:   greeting,
+          sources:   [],
+          suggestedActions: getInitialSuggestedActions(contextPayload),
+          timestamp: new Date()
+        }]);
+      }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, contextPayload?.recordType, contextPayload?.recordId, contextPayload?.caseId, user]);
 
   // ─── Send Message ────────────────────────────────────────────────────────
   const handleSend = useCallback(async (messageText = inputValue) => {
@@ -317,6 +323,7 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
         </div>
 
         {/* ── Context Badge ────────────────────────────────────────────────── */}
+        {/* Context Breadcrumb Banner */}
         {contextLabel && (
           <div style={{
             background:   '#e0e7ff',
@@ -327,11 +334,32 @@ const AiCopilotPanel = ({ isOpen, onClose, contextPayload = {} }) => {
             color:        '#3730a3',
             display:      'flex',
             alignItems:   'center',
+            justifyContent: 'space-between',
             gap:          '6px'
           }}>
-            {getContextIcon(contextPayload.recordType)}
-            {contextLabel}
-            <span style={{ color: '#6366f1', fontWeight: '600' }}>· Ask me anything about this record</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {getContextIcon(contextPayload.recordType)}
+              <span>{contextLabel}</span>
+              <span style={{ color: '#6366f1', fontWeight: '600' }}>· Ask me anything about this record</span>
+            </div>
+            {onClearContext && (
+              <button
+                onClick={onClearContext}
+                title="Clear record focus"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6366f1',
+                  padding: '0 4px',
+                  fontSize: '0.85rem',
+                  fontWeight: '800',
+                  lineHeight: 1
+                }}
+              >
+                ✕
+              </button>
+            )}
           </div>
         )}
 
@@ -780,8 +808,8 @@ const formatRole = (role = '') => {
 const getContextLabel = (ctx) => {
   if (!ctx?.recordType || !ctx?.recordId) return null;
   const labels = {
-    payment:              `Payment #${ctx.recordId}`,
-    reconciliation_case:  `Case #${ctx.recordId}`,
+    payment:              `Payment #${ctx.recordId}${ctx.caseId ? ` (Case #${ctx.caseId})` : ''}`,
+    reconciliation_case:  `Case #${ctx.recordId}${ctx.paymentId ? ` (Payment #${ctx.paymentId})` : ''}`,
     company:              `Company #${ctx.recordId}`,
     loan:                 `Loan #${ctx.recordId}`
   };

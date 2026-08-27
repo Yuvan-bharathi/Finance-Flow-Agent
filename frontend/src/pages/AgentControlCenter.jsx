@@ -1022,7 +1022,7 @@ export const AgentControlCenter = () => {
                 }}
               >
                 <Zap size={13} />
-                <span>⚡ Batch All</span>
+                <span>Batch All</span>
               </button>
             </div>
           </div>

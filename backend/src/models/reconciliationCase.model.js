@@ -78,7 +78,7 @@ export const findOpenCases = async (limit = 50) => {
     FROM reconciliation_cases rc
     JOIN payments p ON rc.payment_id = p.id
     WHERE rc.status IN ('new', 'open')
-      AND (SELECT COUNT(*) FROM ai_recommendations ar WHERE ar.case_id = rc.id) = 0
+      AND (SELECT COUNT(*) FROM ai_recommendations ar WHERE ar.reconciliation_case_id = rc.id) = 0
     ORDER BY rc.created_at DESC, rc.id DESC
     LIMIT ?;
   `;

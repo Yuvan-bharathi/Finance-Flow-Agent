@@ -1,34 +1,58 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 /**
- * Cases Over Time Curved Line Chart Component
- * Renders a smooth SVG line chart with gradient fill and date labels.
+ * Dynamic Cases Over Time Curved Line Chart Component
+ * Renders a smooth SVG line chart with on-load path draw animation, rising gradient area, and interactive timeframe switcher.
  * 
- * Called by:
- * - Dashboard.jsx
+ * @param {Array} casesOverTime - Array of `{ day, date, value }` objects from backend stats.
+ * @param {boolean} loading - True if stats request is in progress.
  */
-export const CasesOverTimeChart = () => {
-  const points = [
-    { day: 'May 20', value: 5 },
-    { day: 'May 21', value: 15 },
-    { day: 'May 22', value: 34 },
-    { day: 'May 23', value: 10 },
-    { day: 'May 24', value: 22 },
-    { day: 'May 25', value: 26 },
-    { day: 'May 26', value: 40 }
+export const CasesOverTimeChart = ({ casesOverTime = [], loading = false }) => {
+  const [selectedTimeframe, setSelectedTimeframe] = useState('This Week');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [animKey, setAnimKey] = useState(0);
+
+  const timeframes = ['Today', 'This Week', 'This Month', 'Last 30 Days', 'YTD'];
+
+  // Default dynamic August 2026 dates if empty
+  const defaultPoints = [
+    { day: 'Aug 21', value: 4 },
+    { day: 'Aug 22', value: 7 },
+    { day: 'Aug 23', value: 5 },
+    { day: 'Aug 24', value: 9 },
+    { day: 'Aug 25', value: 6 },
+    { day: 'Aug 26', value: 8 },
+    { day: 'Aug 27', value: 14 }
   ];
+
+  let points = casesOverTime && casesOverTime.length > 0 ? casesOverTime : defaultPoints;
+
+  // Filter or slice based on selected timeframe
+  if (selectedTimeframe === 'Today') {
+    points = [points[points.length - 1] || { day: 'Today', value: 14 }];
+  } else if (selectedTimeframe === 'This Week') {
+    points = points.slice(-7);
+  }
+
+  // Trigger animation replay when points or timeframe change
+  useEffect(() => {
+    setAnimKey(prev => prev + 1);
+  }, [selectedTimeframe, casesOverTime]);
 
   const width = 360;
   const height = 180;
   const padding = 24;
 
-  const maxVal = 50;
+  const values = points.map(p => p.value || 0);
+  const maxVal = Math.max(...values, 15);
   const minVal = 0;
 
   // Convert points to SVG coordinates
   const coords = points.map((p, idx) => {
-    const x = padding + (idx * (width - 2 * padding)) / (points.length - 1);
+    const x = points.length === 1
+      ? width / 2
+      : padding + (idx * (width - 2 * padding)) / Math.max(points.length - 1, 1);
     const y = height - padding - ((p.value - minVal) / (maxVal - minVal)) * (height - 2 * padding);
     return { x, y, value: p.value, day: p.day };
   });
@@ -45,7 +69,9 @@ export const CasesOverTimeChart = () => {
   }, '');
 
   // Closed path for area gradient fill
-  const areaD = `${pathD} L ${coords[coords.length - 1].x},${height - padding} L ${coords[0].x},${height - padding} Z`;
+  const areaD = coords.length > 1
+    ? `${pathD} L ${coords[coords.length - 1].x},${height - padding} L ${coords[0].x},${height - padding} Z`
+    : '';
 
   return (
     <div style={{
@@ -56,36 +82,84 @@ export const CasesOverTimeChart = () => {
       display: 'flex',
       flexDirection: 'column',
       gap: '16px',
-      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
-      height: '320px'
+      boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+      height: '340px',
+      position: 'relative',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease'
     }}>
       
       {/* Card Header & Period Selector Dropdown */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#0f172a' }}>
-          Cases Over Time
-        </h3>
+        <div>
+          <h3 style={{ fontSize: '1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+            Cases Over Time
+          </h3>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            {points.length > 1 ? `${points[0]?.day} → ${points[points.length - 1]?.day}` : 'Active ledger activity'}
+          </span>
+        </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          padding: '4px 10px',
-          borderRadius: '8px',
-          fontSize: '0.75rem',
-          fontWeight: '600',
-          color: '#475569',
-          cursor: 'pointer'
-        }}>
-          <span>This Week</span>
-          <ChevronDown size={14} color="#94a3b8" />
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowDropdown(!showDropdown)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              padding: '5px 10px',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              color: '#475569',
+              cursor: 'pointer'
+            }}
+          >
+            <span>{selectedTimeframe}</span>
+            <ChevronDown size={14} color="#94a3b8" />
+          </button>
+
+          {showDropdown && (
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              top: '100%',
+              marginTop: '4px',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+              zIndex: 20,
+              width: '120px',
+              overflow: 'hidden'
+            }}>
+              {timeframes.map(tf => (
+                <div
+                  key={tf}
+                  onClick={() => {
+                    setSelectedTimeframe(tf);
+                    setShowDropdown(false);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '0.75rem',
+                    fontWeight: selectedTimeframe === tf ? '800' : '600',
+                    color: selectedTimeframe === tf ? '#4f46e5' : '#334155',
+                    background: selectedTimeframe === tf ? '#f5f3ff' : 'transparent',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {tf}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* SVG Curved Chart */}
-      <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      {/* SVG Curved Chart with On-Load Path Drawing Animation */}
+      <div key={animKey} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
         <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
           <defs>
             <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
@@ -95,41 +169,88 @@ export const CasesOverTimeChart = () => {
           </defs>
 
           {/* Horizontal Grid Lines */}
-          {[0, 10, 20, 30, 40, 50].map((val, idx) => {
-            const y = height - padding - (val / 50) * (height - 2 * padding);
+          {[0, Math.round(maxVal / 2), maxVal].map((val, idx) => {
+            const y = height - padding - (val / maxVal) * (height - 2 * padding);
             return (
-              <line key={idx} x1={padding} y1={y} x2={width - padding} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+              <g key={idx}>
+                <line
+                  x1={padding}
+                  y1={y}
+                  x2={width - padding}
+                  y2={y}
+                  stroke="#f1f5f9"
+                  strokeDasharray="4 4"
+                  strokeWidth="1"
+                />
+                <text
+                  x={padding - 6}
+                  y={y + 3}
+                  textAnchor="end"
+                  fontSize="9"
+                  fill="#94a3b8"
+                  fontFamily="sans-serif"
+                >
+                  {val}
+                </text>
+              </g>
             );
           })}
 
-          {/* Gradient Filled Area */}
-          <path d={areaD} fill="url(#purpleGradient)" />
-
-          {/* Smooth Purple/Blue Line */}
-          <path d={pathD} fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" />
-
-          {/* Rounded Data Points */}
-          {coords.map((pt, i) => (
-            <circle
-              key={i}
-              cx={pt.x}
-              cy={pt.y}
-              r="4"
-              fill="#6366f1"
-              stroke="#ffffff"
-              strokeWidth="2"
+          {/* Area Fill with Rise Keyframe Animation */}
+          {areaD && (
+            <path
+              d={areaD}
+              fill="url(#purpleGradient)"
+              style={{
+                animation: 'riseGradientArea 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+              }}
             />
+          )}
+
+          {/* Smooth Curve Line with Left-to-Right Draw Animation */}
+          {coords.length > 1 ? (
+            <path
+              d={pathD}
+              fill="none"
+              stroke="#6366f1"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray="1000"
+              strokeDashoffset="1000"
+              style={{
+                animation: 'drawSmoothCurve 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+              }}
+            />
+          ) : null}
+
+          {/* Data Points with Pop-in Animation */}
+          {coords.map((point, idx) => (
+            <g key={idx}>
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="4.5"
+                fill="#ffffff"
+                stroke="#4f46e5"
+                strokeWidth="2.5"
+                style={{
+                  animation: `popInDot 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.3 + idx * 0.08}s backwards`
+                }}
+              />
+              <text
+                x={point.x}
+                y={height - 6}
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="700"
+                fill="#64748b"
+                fontFamily="sans-serif"
+              >
+                {point.day}
+              </text>
+            </g>
           ))}
         </svg>
-
-        {/* X-Axis Date Labels */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 8px', marginTop: '6px' }}>
-          {points.map((pt, i) => (
-            <span key={i} style={{ fontSize: '0.675rem', color: '#94a3b8', fontWeight: '500' }}>
-              {pt.day}
-            </span>
-          ))}
-        </div>
       </div>
 
     </div>

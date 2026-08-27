@@ -496,7 +496,7 @@ export const PaymentIngestion = ({ onAskAI }) => {
               }}
             >
               <Plus size={16} />
-              <span>{submitting ? 'Ingesting...' : '+ Ingest Payment & Open Case'}</span>
+              <span>{submitting ? 'Ingesting...' : 'Ingest Payment & Open Case'}</span>
             </button>
           </div>
         </form>
@@ -869,30 +869,31 @@ export const PaymentIngestion = ({ onAskAI }) => {
                             </button>
                           )}
 
-                          {/* Ask AI / Investigate button */}
+                          {/* Ask AI / Investigate icon-only button */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (onAskAI) onAskAI('payment', p.id);
+                              if (onAskAI) onAskAI('payment', p.id, { caseId });
                             }}
-                            title="Ask AI to investigate this payment"
+                            title={`Ask AI to investigate Payment #${p.id}${caseId ? ` (Case #${caseId})` : ''}`}
                             style={{
                               background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
                               color: '#ffffff',
                               border: 'none',
-                              padding: '5px 10px',
-                              borderRadius: '6px',
-                              fontSize: '0.72rem',
-                              fontWeight: '700',
+                              width: '32px',
+                              height: '30px',
+                              borderRadius: '8px',
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px',
-                              boxShadow: '0 2px 6px rgba(124,58,237,0.25)'
+                              justifyContent: 'center',
+                              boxShadow: '0 2px 6px rgba(124,58,237,0.25)',
+                              transition: 'transform 0.15s ease'
                             }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.06)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                           >
-                            <Bot size={11} />
-                            Ask AI
+                            <Bot size={15} />
                           </button>
 
                         </div>
