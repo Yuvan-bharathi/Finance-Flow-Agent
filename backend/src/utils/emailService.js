@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import dns from 'dns';
+import dnsPromises from 'dns/promises';
 import { config } from '../config/env.js';
 
 // Force Node.js DNS resolver to prioritize IPv4 on Cloud/Render containers
@@ -8,99 +9,91 @@ try {
 } catch (_) {}
 
 /**
+ * Helper: Explicitly resolves hostname to an IPv4 address (A record)
+ * This permanently eliminates 'ENETUNREACH' on Cloud/Render containers without IPv6 routing.
+ */
+const resolveIPv4Address = async (hostname = 'smtp.gmail.com') => {
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') return hostname;
+  try {
+    const ips = await dnsPromises.resolve4(hostname);
+    if (ips && ips.length > 0) {
+      console.log(`[EmailService DNS] Resolved ${hostname} to IPv4: ${ips[0]}`);
+      return ips[0];
+    }
+  } catch (err) {
+    console.warn(`[EmailService DNS] IPv4 resolve fallback for ${hostname}:`, err.message);
+  }
+  return hostname;
+};
+
+/**
  * Utility: Centralized Email Service (Nodemailer + SMTP)
  * 
  * Purpose:
  * Provides resilient email dispatch for:
  * 1. User Invitation & Password Setup Links (Admin / Super Admin account provisioning)
  * 2. AI Escalation & Collection Follow-Up Notices (Agent 3 & Agent 6 dispatch)
- * 
- * Fail-Safe Design:
- * If SMTP credentials (SMTP_USER / SMTP_PASS) are not provided in environment variables,
- * the service logs formatted email previews to console without throwing errors or halting operations.
  */
 
-// Dynamic Nodemailer Transporter Getter (Optimized for Gmail & Cloud Hosting)
-const getTransporter = () => {
-  const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
-  const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
-  const host = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
-  const port = parseInt(process.env.SMTP_PORT || config.smtp.port || '465', 10);
-  const secure = port === 465;
-
-  if (user && pass && user !== '' && pass !== '') {
-    return nodemailer.createTransport({
-      host: host || 'smtp.gmail.com',
-      port: port || 465,
-      secure: secure,
-      auth: {
-        user,
-        pass,
-      },
-      family: 4, // CRITICAL: Force IPv4 to prevent Render Linux IPv6 timeout
-      tls: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeout: 12000,
-      greetingTimeout: 12000,
-      socketTimeout: 20000,
-    });
-  }
-  return null;
-};
-
-// Helper: Sends an email attempting Port 465 SSL first, then Port 587 TLS fallback
+// Helper: Sends an email attempting Port 465 SSL first, then Port 587 TLS fallback with direct IPv4 resolution
 const sendWithTransporterFallback = async (mailOptions) => {
   const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
   const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
-  const host = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
+  const rawHost = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
 
   if (!user || !pass) {
     return { success: false, notConfigured: true };
   }
 
+  // Resolve pure IPv4 IP to bypass Render IPv6 container networking drop
+  const ipv4Host = await resolveIPv4Address(rawHost);
+
   // Attempt 1: Port 465 (Direct SSL) with explicit IPv4
   try {
     const transporter465 = nodemailer.createTransport({
-      host,
+      host: ipv4Host,
       port: 465,
       secure: true,
       auth: { user, pass },
-      family: 4,
-      tls: { rejectUnauthorized: false },
+      tls: {
+        servername: rawHost, // Preserves SSL certificate domain verification
+        rejectUnauthorized: false
+      },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 15000,
     });
 
     const info = await transporter465.sendMail(mailOptions);
-    console.log(`[EmailService] ✅ Delivered via Port 465 SSL to ${mailOptions.to} (Message ID: ${info.messageId})`);
-    return { success: true, messageId: info.messageId, port: 465, response: info.response };
+    console.log(`[EmailService] ✅ Delivered via Port 465 SSL (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info.messageId})`);
+    return { success: true, messageId: info.messageId, port: 465, response: info.response, host: ipv4Host };
   } catch (err465) {
     console.warn(`[EmailService] ⚠️ Port 465 SSL failed (${err465.message}), attempting Port 587 TLS fallback...`);
 
     // Attempt 2: Port 587 (STARTTLS) with explicit IPv4
     try {
       const transporter587 = nodemailer.createTransport({
-        host,
+        host: ipv4Host,
         port: 587,
         secure: false,
         auth: { user, pass },
-        family: 4,
-        tls: { rejectUnauthorized: false },
+        tls: {
+          servername: rawHost,
+          rejectUnauthorized: false
+        },
         connectionTimeout: 10000,
         greetingTimeout: 10000,
         socketTimeout: 15000,
       });
 
       const info587 = await transporter587.sendMail(mailOptions);
-      console.log(`[EmailService] ✅ Delivered via Port 587 TLS to ${mailOptions.to} (Message ID: ${info587.messageId})`);
-      return { success: true, messageId: info587.messageId, port: 587, response: info587.response };
+      console.log(`[EmailService] ✅ Delivered via Port 587 TLS (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info587.messageId})`);
+      return { success: true, messageId: info587.messageId, port: 587, response: info587.response, host: ipv4Host };
     } catch (err587) {
       console.error(`[EmailService Error] Both Port 465 & 587 failed to send to ${mailOptions.to}:`, err587.message);
       return {
         success: false,
-        error: `Port 465 error: ${err465.message}; Port 587 error: ${err587.message}`,
+        error: `Port 465: ${err465.message}; Port 587: ${err587.message}`,
         mode: 'smtp_failed'
       };
     }

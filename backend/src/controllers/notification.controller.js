@@ -201,7 +201,7 @@ export const approveAlert = async (req, res) => {
       : `Escalation notice approved, but email delivery encountered: ${emailResult.error || 'SMTP delivery issue'}`;
 
     return res.status(200).json({
-      success: true,
+      success: emailResult.success !== false,
       message: statusMessage,
       data: {
         alertId,
