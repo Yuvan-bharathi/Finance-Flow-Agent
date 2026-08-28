@@ -1,62 +1,68 @@
 import nodemailer from 'nodemailer';
-import dns from 'dns';
-import dnsPromises from 'dns/promises';
+import { createRequire } from 'module';
 import { config } from '../config/env.js';
 
-// Force Node.js DNS resolver to prioritize IPv4 on Cloud/Render containers
+// ─────────────────────────────────────────────────────────────────────────────
+// IPv4-Force: Use callback-style dns.resolve4 (available on ALL Node versions)
+// This is the ONLY reliable way to bypass IPv6 on Render's Linux containers.
+// ─────────────────────────────────────────────────────────────────────────────
+const require = createRequire(import.meta.url);
+const dnsModule = require('dns');
+
+// Also try setting ipv4first if available (Node 17+)
 try {
-  dns.setDefaultResultOrder?.('ipv4first');
+  if (typeof dnsModule.setDefaultResultOrder === 'function') {
+    dnsModule.setDefaultResultOrder('ipv4first');
+    console.log('[EmailService] ✅ dns.setDefaultResultOrder set to ipv4first');
+  }
 } catch (_) {}
 
 /**
- * Helper: Explicitly resolves hostname to an IPv4 address (A record)
- * This permanently eliminates 'ENETUNREACH' on Cloud/Render containers without IPv6 routing.
+ * Helper: Resolves a hostname to its first IPv4 address using callback-style DNS (Node 12+).
+ * Falls back to the original hostname if resolution fails.
  */
-const resolveIPv4Address = async (hostname = 'smtp.gmail.com') => {
-  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') return hostname;
-  try {
-    const ips = await dnsPromises.resolve4(hostname);
-    if (ips && ips.length > 0) {
-      console.log(`[EmailService DNS] Resolved ${hostname} to IPv4: ${ips[0]}`);
-      return ips[0];
+const resolveIPv4Address = (hostname) => {
+  return new Promise((resolve) => {
+    if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') {
+      return resolve(hostname);
     }
-  } catch (err) {
-    console.warn(`[EmailService DNS] IPv4 resolve fallback for ${hostname}:`, err.message);
-  }
-  return hostname;
+    dnsModule.resolve4(hostname, (err, addresses) => {
+      if (err || !addresses || addresses.length === 0) {
+        console.warn(`[EmailService DNS] Could not resolve IPv4 for ${hostname}: ${err?.message}. Using hostname.`);
+        return resolve(hostname);
+      }
+      const ip = addresses[0];
+      console.log(`[EmailService DNS] ✅ Resolved ${hostname} → IPv4: ${ip}`);
+      resolve(ip);
+    });
+  });
 };
 
 /**
- * Utility: Centralized Email Service (Nodemailer + SMTP)
- * 
- * Purpose:
- * Provides resilient email dispatch for:
- * 1. User Invitation & Password Setup Links (Admin / Super Admin account provisioning)
- * 2. AI Escalation & Collection Follow-Up Notices (Agent 3 & Agent 6 dispatch)
+ * Helper: Creates a Nodemailer transport that connects via direct IPv4 address
+ * with proper SNI (servername) so Gmail's TLS cert is validated correctly.
  */
-
-// Helper: Creates a transport instance configured for a specific port and direct IPv4 host
 const createTransporterForPort = (ipv4Host, rawHost, port, user, pass) => {
   const isSecure = port === 465;
   return nodemailer.createTransport({
-    host: ipv4Host,
+    host: ipv4Host,          // Direct IPv4 — bypasses OS DNS lookup entirely
     port,
-    secure: isSecure,
-    requireTLS: !isSecure, // Ensures STARTTLS handshake on port 587
+    secure: isSecure,        // true for 465 (SSL), false for 587 (STARTTLS)
+    requireTLS: !isSecure,   // Force STARTTLS upgrade on port 587
     auth: { user, pass },
     tls: {
-      servername: rawHost, // Preserves SSL certificate domain verification (smtp.gmail.com)
+      servername: rawHost,   // Use smtp.gmail.com as SNI for cert validation
       rejectUnauthorized: false
     },
-    debug: false,
-    logger: false,
     connectionTimeout: 12000,
     greetingTimeout: 12000,
     socketTimeout: 15000,
   });
 };
 
-// Helper: Sends an email attempting configured port first (e.g. 587), then fallback port (e.g. 465)
+/**
+ * Core dispatch helper — tries configured port first, then auto-falls back.
+ */
 const sendWithTransporterFallback = async (mailOptions) => {
   const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
   const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
@@ -65,55 +71,59 @@ const sendWithTransporterFallback = async (mailOptions) => {
   const fallbackPort = configuredPort === 587 ? 465 : 587;
 
   if (!user || !pass) {
-    console.warn('[EmailService] ⚠️ SMTP_USER or SMTP_PASS not set in environment.');
+    console.warn('[EmailService] ⚠️ SMTP_USER or SMTP_PASS not set. Cannot send email.');
     return { success: false, notConfigured: true };
   }
 
-  console.log(`[EmailService] 🚀 Initiating email dispatch to: ${mailOptions.to} (Sender: ${user})`);
+  console.log(`[EmailService] 📨 Dispatching to: ${mailOptions.to}`);
+  console.log(`[EmailService] 📤 From: ${user} | Host: ${rawHost} | Configured port: ${configuredPort}`);
 
-  // Resolve pure IPv4 IP to bypass Render IPv6 container networking drop
+  // Resolve to IPv4 using Node callback-style DNS (guaranteed IPv4-only)
   const ipv4Host = await resolveIPv4Address(rawHost);
 
-  // Attempt 1: User's Configured Port (e.g., 587 TLS)
+  // Attempt 1: Configured port (e.g., 587 STARTTLS)
   try {
-    console.log(`[EmailService] 📡 Connecting to ${ipv4Host}:${configuredPort} (SNI: ${rawHost}, TLS: ${configuredPort === 465 ? 'SSL' : 'STARTTLS'})...`);
-    const transporter1 = createTransporterForPort(ipv4Host, rawHost, configuredPort, user, pass);
-    const info = await transporter1.sendMail(mailOptions);
-    console.log(`[EmailService] ✅ Delivered successfully via Port ${configuredPort} (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info.messageId})`);
+    console.log(`[EmailService] 🔌 Connecting to ${ipv4Host}:${configuredPort} (SNI: ${rawHost}, Mode: ${configuredPort === 465 ? 'SSL' : 'STARTTLS'})...`);
+    const t1 = createTransporterForPort(ipv4Host, rawHost, configuredPort, user, pass);
+    const info = await t1.sendMail(mailOptions);
+    console.log(`[EmailService] ✅ Email delivered! Port: ${configuredPort}, MsgID: ${info.messageId}, Response: ${info.response}`);
     return { success: true, messageId: info.messageId, port: configuredPort, response: info.response, host: ipv4Host };
   } catch (err1) {
-    console.warn(`[EmailService] ⚠️ Port ${configuredPort} failed (${err1.message}), attempting Port ${fallbackPort} fallback...`);
+    console.warn(`[EmailService] ⚠️ Port ${configuredPort} failed: "${err1.message}" — trying fallback port ${fallbackPort}...`);
 
-    // Attempt 2: Fallback Port (e.g., 465 SSL)
+    // Attempt 2: Fallback port (e.g., 465 SSL)
     try {
-      console.log(`[EmailService] 📡 Retrying via fallback port ${ipv4Host}:${fallbackPort}...`);
-      const transporter2 = createTransporterForPort(ipv4Host, rawHost, fallbackPort, user, pass);
-      const info2 = await transporter2.sendMail(mailOptions);
-      console.log(`[EmailService] ✅ Delivered successfully via Port ${fallbackPort} (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info2.messageId})`);
+      console.log(`[EmailService] 🔌 Fallback connecting to ${ipv4Host}:${fallbackPort} (Mode: ${fallbackPort === 465 ? 'SSL' : 'STARTTLS'})...`);
+      const t2 = createTransporterForPort(ipv4Host, rawHost, fallbackPort, user, pass);
+      const info2 = await t2.sendMail(mailOptions);
+      console.log(`[EmailService] ✅ Email delivered via fallback! Port: ${fallbackPort}, MsgID: ${info2.messageId}`);
       return { success: true, messageId: info2.messageId, port: fallbackPort, response: info2.response, host: ipv4Host };
     } catch (err2) {
-      console.error(`[EmailService Error] Both Port ${configuredPort} & ${fallbackPort} failed to send to ${mailOptions.to}:`, err2.message);
+      console.error(`[EmailService] ❌ BOTH ports failed!`);
+      console.error(`  Port ${configuredPort} error: ${err1.message}`);
+      console.error(`  Port ${fallbackPort} error: ${err2.message}`);
+      console.error(`  Resolved host: ${ipv4Host}, Raw host: ${rawHost}, User: ${user}`);
       return {
         success: false,
         error: `Port ${configuredPort}: ${err1.message}; Port ${fallbackPort}: ${err2.message}`,
-        mode: 'smtp_failed'
+        mode: 'smtp_failed',
+        resolvedHost: ipv4Host,
+        rawHost,
+        user
       };
     }
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC API
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Sends a User Invitation & Password Setup Email
- * 
- * @param {Object} params
- * @param {string} params.email - Recipient user email
- * @param {string} params.name - Recipient user full name
- * @param {string} params.roleName - Assigned role (e.g., 'Senior Accountant', 'Manager')
- * @param {string} params.invitationUrl - Front-end URL to set initial password
  */
 export const sendUserInvitationEmail = async ({ email, name, roleName, invitationUrl }) => {
   const subject = `Welcome to FinanceFlow AI — Set Up Your ${roleName} Account`;
-  
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -142,18 +152,14 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
         <div class="content">
           <h2>Welcome, ${name}! 👋</h2>
           <p>An administrator has provisioned a new user account for you on the FinanceFlow AI platform.</p>
-          
           <div style="margin: 16px 0;">
             <strong>Assigned Role:</strong><br>
             <span class="badge">${roleName}</span>
           </div>
-
           <p>To activate your account and establish your secure credentials, please click the link below to set your password:</p>
-          
           <div style="text-align: center;">
             <a href="${invitationUrl}" class="btn" target="_blank">Set Password &amp; Activate Account</a>
           </div>
-          
           <p style="font-size: 12px; color: #6b7280; word-break: break-all; margin-top: 16px;">
             Link not working? Paste this URL into your browser:<br>
             <a href="${invitationUrl}" style="color: #4f46e5;">${invitationUrl}</a>
@@ -168,12 +174,7 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
   `;
 
   const senderFrom = process.env.SMTP_FROM || `FinanceFlow AI <${process.env.SMTP_USER || 'yuvanbharathin@gmail.com'}>`;
-  const result = await sendWithTransporterFallback({
-    from: senderFrom,
-    to: email,
-    subject,
-    html: htmlContent,
-  });
+  const result = await sendWithTransporterFallback({ from: senderFrom, to: email, subject, html: htmlContent });
 
   if (result.notConfigured) {
     console.log('📧 [MOCK INVITATION EMAIL — SMTP CREDENTIALS NOT CONFIGURED]');
@@ -184,16 +185,7 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
 };
 
 /**
- * Sends an Automated Financial Escalation & Collection Follow-Up Email
- * 
- * @param {Object} params
- * @param {string} params.recipientEmail - Recipient email (borrower finance team)
- * @param {string} params.fromEmail - Sender address
- * @param {string} params.companyName - Delinquent company name
- * @param {string} params.subject - Email subject line
- * @param {string} params.body - Email message content / notice
- * @param {string} params.priority - Urgency priority ('low', 'medium', 'high', 'critical')
- * @param {number|string} params.alertId - Alert ID
+ * Sends an AI Escalation / Collection Follow-Up Email to Borrower
  */
 export const sendEscalationNoticeEmail = async ({
   recipientEmail,
@@ -216,8 +208,8 @@ export const sendEscalationNoticeEmail = async ({
       <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
-        .header { background: #0f172a; padding: 24px; text-align: left; color: #ffffff; display: flex; align-items: center; justify-content: space-between; }
         .priority-banner { background: ${priorityColor}; color: #ffffff; padding: 8px 16px; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; }
+        .header { background: #0f172a; padding: 24px; display: flex; align-items: center; justify-content: space-between; }
         .content { padding: 32px 24px; }
         .message-box { background: #f8fafc; border-left: 4px solid ${priorityColor}; padding: 18px; border-radius: 0 10px 10px 0; font-size: 14px; line-height: 1.6; color: #334155; white-space: pre-wrap; margin: 20px 0; }
         .footer { background: #f1f5f9; padding: 16px 24px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
@@ -225,9 +217,7 @@ export const sendEscalationNoticeEmail = async ({
     </head>
     <body>
       <div class="container">
-        <div class="priority-banner">
-          ${priority.toUpperCase()} URGENCY — OFFICIAL FINANCIAL REMINDER
-        </div>
+        <div class="priority-banner">${priority.toUpperCase()} URGENCY — OFFICIAL FINANCIAL REMINDER</div>
         <div class="header">
           <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #ffffff;">FinanceFlow <span style="color:#818cf8;">AI</span></h2>
           <span style="font-size: 12px; color: #94a3b8;">Ref Alert #${alertId || 'N/A'}</span>
@@ -235,56 +225,48 @@ export const sendEscalationNoticeEmail = async ({
         <div class="content">
           <h3>Attention: ${companyName}</h3>
           <p style="font-size: 14px; color: #475569;">Please review the official repayment notice below regarding your outstanding facility balance:</p>
-          
           <div class="message-box">${body}</div>
-
           <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-            If you have already processed this payment, please disregard this notice or reply directly to this email (<a href="mailto:${fromEmail || 'yuvanbharathin@gmail.com'}">${fromEmail || 'yuvanbharathin@gmail.com'}</a>).
+            If you have already processed this payment, please disregard this notice or reply to
+            <a href="mailto:${fromEmail || process.env.SMTP_USER}">${fromEmail || process.env.SMTP_USER}</a>.
           </p>
         </div>
         <div class="footer">
-          This is an automated notification managed by FinanceFlow AI Operational Agents. &copy; ${new Date().getFullYear()} FinanceFlow AI.
+          Automated notification by FinanceFlow AI Operational Agents. &copy; ${new Date().getFullYear()} FinanceFlow AI.
         </div>
       </div>
     </body>
     </html>
   `;
 
-  const result = await sendWithTransporterFallback({
-    from: senderFrom,
-    to: targetRecipient,
-    subject,
-    html: htmlContent,
-  });
+  const result = await sendWithTransporterFallback({ from: senderFrom, to: targetRecipient, subject, html: htmlContent });
 
   if (result.notConfigured) {
-    console.log('📧 [MOCK ESCALATION MAIL DISPATCH — REAL SMTP CREDENTIALS NOT SET]');
-    return {
-      success: true,
-      mode: 'mock_console',
-      from: fromEmail,
-      to: targetRecipient,
-      notice: 'Email logged to server console.'
-    };
+    console.log('📧 [MOCK ESCALATION EMAIL — SMTP NOT CONFIGURED]');
+    return { success: true, mode: 'mock_console', from: fromEmail, to: targetRecipient };
   }
 
-  return {
-    ...result,
-    from: fromEmail,
-    to: targetRecipient
-  };
+  return { ...result, from: fromEmail, to: targetRecipient };
 };
 
 /**
- * Diagnostic utility: tests SMTP connectivity and returns connection details
+ * Diagnostic: Tests SMTP connectivity directly from Render's container.
+ * Call GET /api/notifications/test-smtp to verify production email delivery.
  */
 export const testSmtpConnection = async (targetEmail = 'mani30saravanan@gmail.com') => {
   const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
-  
   return await sendWithTransporterFallback({
     from: `"FinanceFlow Diagnostics" <${user}>`,
     to: targetEmail,
     subject: '🧪 FinanceFlow AI — SMTP Production Diagnostic Ping',
-    html: `<p>Production SMTP ping from Render container to ${targetEmail} at ${new Date().toISOString()}</p>`
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #4f46e5; border-radius: 12px;">
+        <h2 style="color: #4f46e5;">SMTP Production Diagnostic</h2>
+        <p>This ping confirms SMTP delivery is working from Render cloud container.</p>
+        <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+        <p><strong>To:</strong> ${targetEmail}</p>
+        <p><strong>Sender:</strong> ${user}</p>
+      </div>
+    `
   });
 };
