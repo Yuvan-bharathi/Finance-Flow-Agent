@@ -196,12 +196,13 @@ export const approveAlert = async (req, res) => {
     // Invalidate notification cache tag
     cacheService.invalidateByTag('notifications');
 
-    const statusMessage = emailResult.success
+    const isDelivered = emailResult && emailResult.success === true;
+    const statusMessage = isDelivered
       ? `Escalation notice approved & email successfully delivered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`
-      : `Escalation notice approved, but email delivery encountered: ${emailResult.error || 'SMTP delivery issue'}`;
+      : `Notice approved in ledger, but email delivery failed: ${emailResult?.error || 'SMTP Connection Error'}`;
 
-    return res.status(200).json({
-      success: emailResult.success !== false,
+    return res.status(isDelivered ? 200 : 422).json({
+      success: isDelivered,
       message: statusMessage,
       data: {
         alertId,
