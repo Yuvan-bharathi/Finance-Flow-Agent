@@ -3,52 +3,35 @@ import {
   triggerEscalationScan,
   getAlerts,
   approveAlert,
-  dismissAlert
+  dismissAlert,
+  batchApproveAlerts,
+  batchDismissAlerts
 } from '../controllers/notification.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
+import { authorize } from '../middleware/rbac.middleware.js';
+import { cacheMiddleware } from '../middleware/cache.middleware.js';
 
 /**
  * Express Router: Notification & Escalation Routes
- *
  * Base path: /api/notifications (mounted in app.js)
- * Authentication: Required for all routes (JWT cookie via authenticate middleware)
- *
- * Routes:
- *
- *   POST /api/notifications/escalate
- *     → Triggers Agent 6 (manual SLA breach scan + Groq escalation analysis)
- *     → Creates pending alerts in notification_alerts
- *     → Emits WebSocket NEW_ESCALATION_ALERTS
- *     → Auth: Any authenticated user (admin/manager recommended)
- *
- *   GET /api/notifications/alerts
- *     → Returns escalation alerts (filtered by status/severity)
- *     → Query: ?status=pending&severity=HIGH&limit=20
- *     → Auth: Any authenticated user
- *
- *   PUT /api/notifications/alerts/:id/approve
- *     → Human approves an alert (Approve & Send workflow step)
- *     → Updates notification_status = 'approved'
- *     → Auth: Authenticated user (records who approved)
- *
- *   PUT /api/notifications/alerts/:id/dismiss
- *     → Human dismisses an alert (no action needed)
- *     → Updates notification_status = 'dismissed'
- *     → Auth: Authenticated user
  */
 
 const router = Router();
 
 router.use(authenticate);
 
-// Trigger Agent 6 — Manual escalation scan
-router.post('/escalate', triggerEscalationScan);
+// Trigger Agent 6 — Manual escalation scan (Restricted to owner, super_admin, admin, manager)
+router.post('/escalate', authorize(['owner', 'super_admin', 'admin', 'manager']), triggerEscalationScan);
 
-// Read escalation alerts
-router.get('/alerts', getAlerts);
+// Read escalation alerts (All authenticated users can view - Cached for 30s under 'notifications' tag)
+router.get('/alerts', cacheMiddleware({ ttlSeconds: 30, tag: 'notifications' }), getAlerts);
 
-// Human-in-the-loop approval actions
-router.put('/alerts/:id/approve', approveAlert);
-router.put('/alerts/:id/dismiss', dismissAlert);
+// Human-in-the-loop approval actions (Restricted to owner, super_admin, admin, manager, senior_accountant)
+router.put('/alerts/:id/approve', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), approveAlert);
+router.put('/alerts/:id/dismiss', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), dismissAlert);
+
+// Batch approval and dispatch actions (Restricted to owner, super_admin, admin, manager, senior_accountant)
+router.post('/alerts/batch-approve', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), batchApproveAlerts);
+router.post('/alerts/batch-dismiss', authorize(['owner', 'super_admin', 'admin', 'manager', 'senior_accountant']), batchDismissAlerts);
 
 export default router;

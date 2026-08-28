@@ -16,8 +16,7 @@ import { sendSuccessResponse } from '../utils/apiResponse.js';
  */
 export const getAuditLogs = async (req, res, next) => {
   try {
-    const { entity_type } = req.query;
-    const logs = await getAuditLogsService({ entity_type });
+    const logs = await getAuditLogsService(req.query);
     return sendSuccessResponse(res, 200, 'Audit logs retrieved successfully', logs);
   } catch (error) {
     return next(error);

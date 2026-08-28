@@ -116,8 +116,13 @@ export const runNotificationAgent = async (triggeredBy = null) => {
       step_type: 'SLA_ENGINE', step_name: 'SLA_BREACH_DETECTED',
       status: 'completed',
       output_data: {
-        breach_count: overdueLoans.length,
-        companies: overdueLoans.map(l => ({ company_id: l.company_id, overdue_days: l.overdue_days }))
+        total_delinquent_companies: overdueLoans.length,
+        breached_borrowers: overdueLoans.map(l => ({
+          company: l.company_name,
+          overdue_days: `${l.overdue_days} days past due`,
+          overdue_amount: `₹${Number(l.outstanding_amount).toLocaleString('en-IN')}`,
+          overdue_milestones: `${l.overdue_installments_count || 1} installment(s)`
+        }))
       }
     });
 
@@ -256,22 +261,25 @@ Output ONLY a valid JSON array:
 
       const [insertResult] = await pool.execute(`
         INSERT INTO notification_alerts (
-          agent_run_id, company_id, loan_id, repayment_id,
+          agent_run_id, company_id, loan_id,
           severity, overdue_days, outstanding_amount,
+          title, message,
           recommended_recipient, recommended_action, ai_reasoning,
-          notification_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+          escalation_level, notification_status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
       `, [
         runId,
         loan.company_id,
         loan.loan_id || null,
-        loan.repayment_id || null,
         groqAlert.severity,
         parseInt(loan.overdue_days || 0),
         parseFloat(loan.outstanding_amount || 0),
+        `SLA Breach: ${loan.company_name} (${loan.overdue_days} Days Past Due)`,
+        groqAlert.ai_reasoning || `SLA Breach: Payment is ${loan.overdue_days} days overdue with ₹${Number(loan.outstanding_amount).toLocaleString('en-IN')} outstanding.`,
         groqAlert.recommended_recipient,
         groqAlert.recommended_action,
-        groqAlert.ai_reasoning
+        groqAlert.ai_reasoning,
+        groqAlert.recommended_recipient || 'Finance Manager'
       ]);
 
       savedAlerts.push({

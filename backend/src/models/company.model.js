@@ -2,69 +2,145 @@ import pool from '../config/db.js';
 
 /**
  * Model: Company Model / Repository
- * Purpose: Executes MySQL queries for borrowing company records.
- * 
- * Data flow:
- * Controller ➔ Company Service ➔ Company Model ➔ MySQL Pool ➔ `companies` table
+ * Purpose: Executes MySQL queries for borrowing company records and financial loan aggregations.
  */
 
 /**
- * Retrieves all borrowing companies with optional status filtering.
- * 
- * Called by:
- * - company.service.js (getCompanies)
+ * Retrieves all borrowing companies with real-time loan totals, EMI progress, and monthly installment metrics.
  * 
  * @param {string|null} status - Optional status filter ('active', 'inactive', 'blacklisted').
- * @returns {Promise<Array>} List of company objects.
+ * @returns {Promise<Array>} List of company objects with loan and EMI summary stats.
  */
 export const findAllCompanies = async (status = null) => {
   let query = `
-    SELECT id, company_name, registration_number, tax_identifier, bank_account_number, 
-           contact_name, contact_email, contact_phone, address, status, created_at, updated_at
-    FROM companies
+    SELECT 
+      c.id, 
+      c.company_name, 
+      c.registration_number, 
+      c.tax_identifier, 
+      c.bank_account_number, 
+      c.contact_name, 
+      c.contact_email, 
+      c.contact_phone, 
+      c.address, 
+      c.status, 
+      c.created_at, 
+      c.updated_at,
+      COALESCE(loan_agg.total_borrowed, 0) AS total_borrowed,
+      COALESCE(loan_agg.total_payable, 0) AS total_payable,
+      COALESCE(loan_agg.active_loans_count, 0) AS active_loans_count,
+      COALESCE(sched_agg.total_emis, 0) AS total_emis,
+      COALESCE(sched_agg.emis_paid, 0) AS emis_paid,
+      COALESCE(sched_agg.emis_pending, 0) AS emis_pending,
+      COALESCE(sched_agg.monthly_installment, 0) AS monthly_installment,
+      COALESCE(sched_agg.total_amount_paid, 0) AS total_amount_paid,
+      COALESCE(loan_agg.total_payable - sched_agg.total_amount_paid, 0) AS remaining_balance
+    FROM companies c
+    LEFT JOIN (
+      SELECT 
+        company_id,
+        SUM(principal_amount) AS total_borrowed,
+        SUM(total_payable) AS total_payable,
+        COUNT(id) AS active_loans_count
+      FROM loans
+      GROUP BY company_id
+    ) loan_agg ON c.id = loan_agg.company_id
+    LEFT JOIN (
+      SELECT 
+        l.company_id,
+        COUNT(rs.id) AS total_emis,
+        SUM(CASE WHEN rs.status = 'paid' THEN 1 ELSE 0 END) AS emis_paid,
+        SUM(CASE WHEN rs.status != 'paid' THEN 1 ELSE 0 END) AS emis_pending,
+        AVG(rs.scheduled_amount) AS monthly_installment,
+        SUM(rs.paid_amount) AS total_amount_paid,
+        SUM(rs.scheduled_amount - rs.paid_amount) AS remaining_balance
+      FROM loans l
+      JOIN repayment_schedules rs ON l.id = rs.loan_id
+      GROUP BY l.company_id
+    ) sched_agg ON c.id = sched_agg.company_id
   `;
   const params = [];
 
   if (status) {
-    query += ` WHERE status = ?`;
+    query += ` WHERE c.status = ?`;
     params.push(status);
   }
 
-  query += ` ORDER BY created_at DESC;`;
-  const [rows] = await pool.execute(query, params);
+  query += ` ORDER BY c.id ASC;`;
+  const [rows] = await pool.query(query, params);
   return rows;
 };
 
 /**
- * Retrieves a single company by primary key ID along with loan count.
- * 
- * Called by:
- * - company.service.js (getCompanyById)
+ * Retrieves a single company by primary key ID along with loan list and detailed repayment schedules.
  * 
  * @param {number} companyId - Primary key ID in `companies` table.
- * @returns {Promise<Object|null>} Company details or null.
+ * @returns {Promise<Object|null>} Company details with loan schedules or null.
  */
 export const findCompanyById = async (companyId) => {
   const query = `
-    SELECT c.*, COUNT(l.id) AS total_loans
+    SELECT 
+      c.*,
+      COALESCE(loan_agg.total_borrowed, 0) AS total_borrowed,
+      COALESCE(loan_agg.total_payable, 0) AS total_payable,
+      COALESCE(loan_agg.active_loans_count, 0) AS active_loans_count,
+      COALESCE(sched_agg.total_emis, 0) AS total_emis,
+      COALESCE(sched_agg.emis_paid, 0) AS emis_paid,
+      COALESCE(sched_agg.emis_pending, 0) AS emis_pending,
+      COALESCE(sched_agg.monthly_installment, 0) AS monthly_installment,
+      COALESCE(sched_agg.total_amount_paid, 0) AS total_amount_paid,
+      COALESCE(loan_agg.total_payable - sched_agg.total_amount_paid, 0) AS remaining_balance
     FROM companies c
-    LEFT JOIN loans l ON c.id = l.company_id
+    LEFT JOIN (
+      SELECT 
+        company_id,
+        SUM(principal_amount) AS total_borrowed,
+        SUM(total_payable) AS total_payable,
+        COUNT(id) AS active_loans_count
+      FROM loans
+      GROUP BY company_id
+    ) loan_agg ON c.id = loan_agg.company_id
+    LEFT JOIN (
+      SELECT 
+        l.company_id,
+        COUNT(rs.id) AS total_emis,
+        SUM(CASE WHEN rs.status = 'paid' THEN 1 ELSE 0 END) AS emis_paid,
+        SUM(CASE WHEN rs.status != 'paid' THEN 1 ELSE 0 END) AS emis_pending,
+        AVG(rs.scheduled_amount) AS monthly_installment,
+        SUM(rs.paid_amount) AS total_amount_paid,
+        SUM(rs.scheduled_amount - rs.paid_amount) AS remaining_balance
+      FROM loans l
+      JOIN repayment_schedules rs ON l.id = rs.loan_id
+      GROUP BY l.company_id
+    ) sched_agg ON c.id = sched_agg.company_id
     WHERE c.id = ?
-    GROUP BY c.id
     LIMIT 1;
   `;
-  const [rows] = await pool.execute(query, [companyId]);
-  return rows.length > 0 ? rows[0] : null;
+  const [rows] = await pool.query(query, [companyId]);
+  if (rows.length === 0) return null;
+
+  const company = rows[0];
+
+  // Fetch individual loan facilities & schedules
+  const [loans] = await pool.query(`
+    SELECT 
+      l.*,
+      (SELECT COUNT(*) FROM repayment_schedules WHERE loan_id = l.id) AS total_emis,
+      (SELECT COUNT(*) FROM repayment_schedules WHERE loan_id = l.id AND status = 'paid') AS emis_paid,
+      (SELECT COUNT(*) FROM repayment_schedules WHERE loan_id = l.id AND status != 'paid') AS emis_pending,
+      (SELECT scheduled_amount FROM repayment_schedules WHERE loan_id = l.id ORDER BY installment_number ASC LIMIT 1) AS monthly_installment,
+      (SELECT COALESCE(SUM(paid_amount), 0) FROM repayment_schedules WHERE loan_id = l.id) AS total_amount_paid
+    FROM loans l
+    WHERE l.company_id = ?
+    ORDER BY l.id ASC;
+  `, [companyId]);
+
+  company.loans = loans;
+  return company;
 };
 
 /**
  * Inserts a new borrowing company into `companies`.
- * 
- * Called by:
- * - company.service.js (createCompany)
- * 
- * @param {Object} companyData - Object containing company details.
- * @returns {Promise<number>} Inserted company primary key ID.
  */
 export const insertCompany = async (companyData) => {
   const {
@@ -96,13 +172,6 @@ export const insertCompany = async (companyData) => {
 
 /**
  * Updates an existing company's fields.
- * 
- * Called by:
- * - company.service.js (updateCompany)
- * 
- * @param {number} companyId - Company ID.
- * @param {Object} companyData - Fields to update.
- * @returns {Promise<boolean>} True if updated.
  */
 export const updateCompanyById = async (companyId, companyData) => {
   const {
@@ -138,3 +207,16 @@ export const updateCompanyById = async (companyId, companyData) => {
 
   return result.affectedRows > 0;
 };
+
+/**
+ * Deletes a company record by primary key ID.
+ * 
+ * @param {number} companyId - Primary key ID in `companies` table.
+ * @returns {Promise<boolean>} True if deleted.
+ */
+export const deleteCompanyById = async (companyId) => {
+  const query = `DELETE FROM companies WHERE id = ?;`;
+  const [result] = await pool.execute(query, [companyId]);
+  return result.affectedRows > 0;
+};
+

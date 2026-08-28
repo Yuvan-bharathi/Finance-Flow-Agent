@@ -2,7 +2,8 @@ import {
   getCompaniesService,
   getCompanyByIdService,
   createCompanyService,
-  updateCompanyService
+  updateCompanyService,
+  deleteCompanyService
 } from '../services/company.service.js';
 import { sendSuccessResponse } from '../utils/apiResponse.js';
 
@@ -63,7 +64,7 @@ export const getCompanyById = async (req, res, next) => {
  */
 export const createCompany = async (req, res, next) => {
   try {
-    const company = await createCompanyService(req.body);
+    const company = await createCompanyService(req.body, req.user?.id);
     return sendSuccessResponse(res, 201, 'Company created successfully', company);
   } catch (error) {
     return next(error);
@@ -82,8 +83,27 @@ export const createCompany = async (req, res, next) => {
 export const updateCompany = async (req, res, next) => {
   try {
     const companyId = parseInt(req.params.id, 10);
-    const company = await updateCompanyService(companyId, req.body);
+    const company = await updateCompanyService(companyId, req.body, req.user?.id);
     return sendSuccessResponse(res, 200, 'Company updated successfully', company);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Controller: deleteCompany
+ * Endpoint: DELETE /api/companies/:id
+ * Access: Owner, Super Admin only
+ * 
+ * @param {Object} req - Express request object. `req.params.id` contains company ID.
+ * @param {Object} res - Express response object.
+ * @param {Function} next - Error propagation.
+ */
+export const deleteCompany = async (req, res, next) => {
+  try {
+    const companyId = parseInt(req.params.id, 10);
+    const result = await deleteCompanyService(companyId, req.user?.id);
+    return sendSuccessResponse(res, 200, result.message, result);
   } catch (error) {
     return next(error);
   }

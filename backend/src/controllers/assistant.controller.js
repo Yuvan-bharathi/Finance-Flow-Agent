@@ -1,127 +1,119 @@
 import { runAssistantAgent } from '../agents/assistantAgent.js';
+import {
+  confirmActionProposal,
+  dismissActionProposal
+} from '../services/assistantAction.service.js';
+import { findActiveProposalsByUserId, findProposalById } from '../models/assistantAction.model.js';
+import { sendSuccessResponse, sendErrorResponse } from '../utils/apiResponse.js';
 
 /**
- * Controller: FinanceFlow AI Assistant
+ * Controller: FinanceFlow AI Operational Assistant & Copilot (Phase 7)
  *
- * Purpose:
- *   HTTP handlers for the AI Copilot endpoints.
- *   Validates the request, delegates to assistantAgent.js, returns structured response.
- *
- * Routes handled:
- *   POST /api/assistant/chat         → chat()         (main conversation endpoint)
- *   GET  /api/assistant/wake/:type/:id → wakeContext() (pre-load context for Investigate button)
- *
- * Request shape for POST /api/assistant/chat:
- *   {
- *     message:             string,      // User's current message
- *     conversationHistory: Array,       // Last N messages [{ role, content }] from React state
- *     contextPayload: {                 // Current page + record user is looking at
- *       page:       string,             // e.g., 'payments', 'companies', 'reconciliations'
- *       recordType: string | null,      // e.g., 'payment', 'company', 'reconciliation_case'
- *       recordId:   number | null       // Primary key of the selected record
- *     }
- *   }
- *
- * Response shape:
- *   {
- *     success:          boolean,
- *     data: {
- *       answer:           string,        // Markdown-formatted AI response
- *       sources: [                       // Structured source citations for UI cards
- *         { type, tool, recordId, title, snippet }
- *       ],
- *       suggestedActions: [              // Navigation/action buttons for frontend
- *         { label, action, params }
- *       ],
- *       total_tokens:     number,
- *       context:          Object
- *     }
- *   }
+ * Handles:
+ * 1. `POST /api/v1/assistant/chat` - Conversational tool-calling endpoint.
+ * 2. `GET /api/v1/assistant/proposals` - Retrieves user's pending action proposals.
+ * 3. `POST /api/v1/assistant/proposals/:id/confirm` - Human confirmation & ACID execution.
+ * 4. `POST /api/v1/assistant/proposals/:id/dismiss` - Rejection of proposal without mutation.
+ * 5. `GET /api/v1/assistant/wake/:recordType/:recordId` - Context pre-loader.
  */
 
 /**
  * chat — Main AI Copilot Conversation Endpoint
- *
- * Data flow:
- *   Frontend AiCopilotPanel.jsx
- *     → POST /api/assistant/chat (with JWT cookie)
- *     → authenticate middleware (sets req.user)
- *     → chat() controller
- *     → runAssistantAgent({ message, conversationHistory, contextPayload, user })
- *     → Groq tool-calling loop → MySQL tools
- *     → { answer, sources, suggestedActions }
- *     → JSON response → React renders message + source cards + action buttons
  */
-export const chat = async (req, res) => {
+export const chat = async (req, res, next) => {
   try {
     const { message, conversationHistory = [], contextPayload = {} } = req.body;
 
-    // Validate required field
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'A non-empty message is required.'
-      });
+      return sendErrorResponse(res, 400, 'A non-empty message is required.');
     }
 
-    // Attach user from JWT middleware to agent context
     const user = {
-      id:   req.user.id,
+      id: req.user.id,
       name: req.user.name || req.user.email,
       email: req.user.email,
-      role: req.user.role || 'accountant'
+      role: req.user.role || req.user.role_name || 'accountant',
+      role_name: req.user.role_name || req.user.role || 'accountant'
     };
 
-    // Run the assistant agent
-    // conversationHistory: frontend sends last 10 messages (Phase 1 — no DB persistence)
     const result = await runAssistantAgent({
-      message:             message.trim(),
-      conversationHistory: conversationHistory.slice(-10),  // Enforce 10-message limit server-side too
+      message: message.trim(),
+      conversationHistory: conversationHistory.slice(-10),
       contextPayload,
       user
     });
 
-    return res.status(200).json({
-      success: true,
-      data: result
+    // Check if any proposals were generated during this run and attach active list
+    const activeProposals = await findActiveProposalsByUserId(req.user.id);
+
+    return sendSuccessResponse(res, 200, 'AI Copilot response generated successfully', {
+      ...result,
+      activeProposals
     });
 
   } catch (err) {
-    console.error('[Assistant Controller Error]', err.message);
-    return res.status(500).json({
-      success: false,
-      message: 'AI Assistant encountered an error. Please try again.',
-      error:   err.message
-    });
+    return next(err);
   }
 };
 
 /**
- * wakeContext — Pre-load Context for Investigate Button
- *
- * Purpose:
- *   When a user clicks the [Ask AI] button on a record (e.g., Payment #1042),
- *   this endpoint returns a brief summary of that record to pre-populate
- *   the copilot panel context badge and opening message.
- *
- * Data flow:
- *   Frontend: user clicks [Ask AI] on Payment #1042
- *     → GET /api/assistant/wake/payment/1042
- *     → wakeContext()
- *     → Returns { title, snippet, recordType, recordId }
- *     → Frontend sets contextPayload + shows context badge "📄 Payment #1042"
- *     → Panel opens ready for user to ask about that payment
+ * getActiveProposals — List active pending proposals for the authenticated user
  */
-export const wakeContext = async (req, res) => {
+export const getActiveProposals = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const proposals = await findActiveProposalsByUserId(userId);
+    return sendSuccessResponse(res, 200, 'Active proposals retrieved successfully', proposals);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+/**
+ * confirmProposal — Human Confirmation & ACID State Mutation Gate
+ */
+export const confirmProposal = async (req, res, next) => {
+  try {
+    const proposalId = parseInt(req.params.id, 10);
+    const correlationId = req.correlationId || req.headers['x-correlation-id'];
+    const ipAddress = req.ip || req.socket.remoteAddress;
+
+    const result = await confirmActionProposal(proposalId, req.user, {
+      correlationId,
+      ipAddress
+    });
+
+    return sendSuccessResponse(res, 200, 'Action proposal confirmed and executed successfully', result);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+/**
+ * dismissProposal — Dismiss proposal without mutating database
+ */
+export const dismissProposal = async (req, res, next) => {
+  try {
+    const proposalId = parseInt(req.params.id, 10);
+    const result = await dismissActionProposal(proposalId, req.user);
+    return sendSuccessResponse(res, 200, 'Action proposal dismissed', result);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+/**
+ * wakeContext — Pre-load context for Quick Ask button
+ */
+export const wakeContext = async (req, res, next) => {
   try {
     const { recordType, recordId } = req.params;
     const parsedId = parseInt(recordId, 10);
 
     if (!recordType || !parsedId) {
-      return res.status(400).json({ success: false, message: 'recordType and recordId are required.' });
+      return sendErrorResponse(res, 400, 'recordType and recordId are required.');
     }
 
-    // Build a minimal context summary using the tool's meta
     const { executeAssistantTool } = await import('../tools/assistantTools.js');
 
     let toolName = null;
@@ -149,23 +141,19 @@ export const wakeContext = async (req, res) => {
         toolArgs = { documentId: parsedId };
         break;
       default:
-        return res.status(400).json({ success: false, message: `Unknown recordType: ${recordType}` });
+        return sendErrorResponse(res, 400, `Unknown recordType: ${recordType}`);
     }
 
     const { meta } = await executeAssistantTool(toolName, toolArgs, req.user);
 
-    return res.status(200).json({
-      success: true,
-      data: {
-        recordType,
-        recordId:  parsedId,
-        title:     meta.title,
-        snippet:   meta.snippet
-      }
+    return sendSuccessResponse(res, 200, 'Context loaded successfully', {
+      recordType,
+      recordId: parsedId,
+      title: meta.title,
+      snippet: meta.snippet
     });
 
   } catch (err) {
-    console.error('[Assistant wakeContext Error]', err.message);
-    return res.status(500).json({ success: false, message: 'Failed to load context.' });
+    return next(err);
   }
 };

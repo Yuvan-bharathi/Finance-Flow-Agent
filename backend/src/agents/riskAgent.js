@@ -111,7 +111,7 @@ export const runRiskAssessmentAgent = async (companyId, triggeredBy = null) => {
     try {
       const userPrompt = `
 Analyze credit risk profile for borrower '${company.company_name}' (ID #${company.id}):
-- Active Loans Count: ${loanData.active_loans.length}
+- Active Loans Count: ${loanData.loans ? loanData.loans.length : 0}
 - Overdue Installments: ${overdueCount} (Total Overdue Amount: ₹${totalOverdueAmount})
 - Payment History Records: ${paymentHistory.length}
 - Initial Calculated Risk Score: ${riskScore} (${riskLevel})

@@ -1187,35 +1187,26 @@ const _getTokenUsageSummary = async (days = 7) => {
 // SECTION 4: Phase 3 Action Proposal Executors (Stores to assistant_action_proposals)
 // =============================================================================
 
+import { generateActionProposal } from '../services/assistantAction.service.js';
+
 /**
- * Helper to generate unique proposal ID and insert into database.
+ * Helper to generate unique proposal and insert via Phase 7 Safety Gate service.
  */
 const _createActionProposal = async (actionType, targetEntity, targetId, requestedParams, reason, user) => {
-  const proposalId = `ACT-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minute expiry window
-  const userId = user?.id || 3; // Fallback to Senior Accountant if unassigned
-
-  await pool.query(`
-    INSERT INTO assistant_action_proposals (
-      id, action_type, target_entity, target_id, requested_params, reason,
-      created_by, created_by_name, created_by_role, status, expires_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?)
-  `, [
-    proposalId,
-    actionType,
-    targetEntity,
-    targetId,
-    JSON.stringify(requestedParams),
-    reason || 'Proposed via FinanceFlow AI Copilot conversation',
+  const userId = user?.id || 1;
+  const proposal = await generateActionProposal({
     userId,
-    user?.name || 'Authorized User',
-    user?.role || 'accountant',
-    expiresAt
-  ]);
+    actionType,
+    targetEntityType: targetEntity,
+    targetId: parseInt(targetId, 10),
+    parametersPayload: requestedParams,
+    evidenceSummary: reason || 'Proposed via FinanceFlow AI Copilot conversation',
+    confidenceScore: 92
+  });
 
   return {
-    proposalId,
-    expiresAt,
+    proposalId: proposal.id,
+    expiresAt: new Date(proposal.expires_at),
     actionType,
     targetEntity,
     targetId,

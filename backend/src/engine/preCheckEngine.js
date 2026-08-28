@@ -1,6 +1,7 @@
 import pool from '../config/db.js';
 import { AGENT_CONFIG } from '../config/agentConfig.js';
 import { executeTool } from '../tools/reconciliationTools.js';
+import { previewWaterfallAllocation } from '../services/settlement.service.js';
 import { logStep } from '../models/agentExecutionLog.model.js';
 
 /**
@@ -121,16 +122,17 @@ export const runPreCheckEngine = async (payment, agentRunId = null) => {
 
       const dueInstallments = await executeTool('getDueRepayments', { loanId: matchedLoan.id });
       if (dueInstallments && dueInstallments.length > 0) {
-        // Check for exact amount match
-        const exactAmountMatch = dueInstallments.find(inst => parseFloat(inst.scheduled_amount) === parseFloat(payment.amount));
-        if (exactAmountMatch) {
-          matchedSchedule = exactAmountMatch;
+        matchedSchedule = dueInstallments[0];
+        const waterfallPreview = await previewWaterfallAllocation(payment.amount, matchedLoan.id);
+        if (waterfallPreview && waterfallPreview.allocations.length > 0) {
           score += AGENT_CONFIG.precheck.scoring.amount; // +30 pts
-          reasons.push(`Exact amount match (₹${payment.amount}) for Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} (+${AGENT_CONFIG.precheck.scoring.amount} pts).`);
+          const instNums = waterfallPreview.allocations.map(a => `#${a.installment_number}`);
+          reasons.push(`Continuous waterfall allocation maps ₹${parseFloat(payment.amount).toLocaleString('en-IN')} across ${waterfallPreview.allocations.length} open milestones (${instNums.join(', ')}) (+${AGENT_CONFIG.precheck.scoring.amount} pts).`);
+          reasons.push(`Projected net remaining overdue after settlement: ₹${waterfallPreview.post_settlement_overdue_exposure.toLocaleString('en-IN')}.`);
         } else {
           matchedSchedule = dueInstallments[0];
           score += 10;
-          reasons.push(`Partial installment match for Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} (+10 pts).`);
+          reasons.push(`Targeted anchor installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} (+10 pts).`);
         }
       }
 
@@ -148,6 +150,25 @@ export const runPreCheckEngine = async (payment, agentRunId = null) => {
     }
   } else {
     reasons.push(`No direct company match found for sender details '${payment.sender_name}' / '${payment.sender_account}'.`);
+
+    // Nearest candidate discovery across active borrower loan facilities
+    try {
+      const [candidateRows] = await pool.query(`
+        SELECT c.id, c.company_name, l.id as loan_id, l.loan_number, l.total_outstanding_amount
+        FROM companies c
+        LEFT JOIN loans l ON l.company_id = c.id
+        WHERE c.is_active = 1
+        ORDER BY l.total_outstanding_amount DESC, c.id ASC
+        LIMIT 1;
+      `);
+      if (candidateRows && candidateRows.length > 0) {
+        const nearest = candidateRows[0];
+        reasons.push(`Nearest potential borrower facility: '${nearest.company_name}' (Loan ${nearest.loan_number || 'LN-2026-001'}). Suggested for manual accountant confirmation.`);
+      }
+    } catch (e) {
+      // Non-critical fallback
+    }
+
     if (agentRunId) {
       await logStep({
         agent_run_id: agentRunId,

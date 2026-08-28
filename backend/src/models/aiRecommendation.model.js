@@ -22,7 +22,6 @@ export const insertAIRecommendation = async (recData, connection = null) => {
   const executor = connection || pool;
   const {
     reconciliation_case_id,
-    agent_name = 'PaymentReconciliationAgent',
     recommended_company_id = null,
     recommended_loan_id = null,
     recommended_schedule_id = null,
@@ -33,16 +32,20 @@ export const insertAIRecommendation = async (recData, connection = null) => {
 
   const query = `
     INSERT INTO ai_recommendations (
-      reconciliation_case_id, agent_name, recommended_company_id,
+      reconciliation_case_id, recommended_company_id,
       recommended_loan_id, recommended_schedule_id, confidence_score,
       reasoning, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    ) VALUES (?, ?, ?, ?, ?, ?, ?);
   `;
 
   const [result] = await executor.execute(query, [
-    reconciliation_case_id, agent_name, recommended_company_id,
-    recommended_loan_id, recommended_schedule_id, confidence_score,
-    reasoning, status
+    reconciliation_case_id,
+    recommended_company_id,
+    recommended_loan_id,
+    recommended_schedule_id,
+    confidence_score,
+    reasoning,
+    status
   ]);
 
   return result.insertId;

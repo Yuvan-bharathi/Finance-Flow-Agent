@@ -31,7 +31,10 @@ export const executeCollectionTool = async (name, args) => {
       FROM repayment_schedules rs
       JOIN loans l ON rs.loan_id = l.id
       JOIN companies c ON l.company_id = c.id
-      WHERE l.company_id = ? AND rs.status = 'overdue'
+      WHERE l.company_id = ?
+        AND rs.due_date < CURDATE()
+        AND rs.status NOT IN ('paid', 'cancelled')
+        AND (rs.scheduled_amount - COALESCE(rs.paid_amount, 0)) > 0
       ORDER BY rs.due_date ASC;
     `, [args.companyId]);
     return rows;

@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { parsePagination, buildPaginatedResponse } from '../utils/paginationHelper.js';
 
 /**
  * Model: Payment Model / Repository
@@ -89,29 +90,97 @@ export const insertPayment = async (paymentData, connection = null) => {
 };
 
 /**
- * Retrieves all raw payment records with optional status filtering.
+ * Retrieves payment records with status filtering, search, and pagination.
  * 
  * Called by:
  * - payment.service.js (getPayments)
  * 
- * @param {string|null} status - Optional status filter ('unmatched', 'completed', etc.).
- * @returns {Promise<Array>} List of payments.
+ * @param {Object|string|null} filterOrQuery - Status string or req.query object.
+ * @returns {Promise<Object|Array>} Paginated envelope or list of payments.
  */
-export const findAllPayments = async (status = null) => {
-  let query = `
-    SELECT p.*, rc.id AS case_id, rc.status AS case_status
-    FROM payments p
-    LEFT JOIN reconciliation_cases rc ON p.id = rc.payment_id
-  `;
-  const params = [];
+export const findAllPayments = async (filterOrQuery = null) => {
+  // If called with a simple string status (legacy), wrap as object
+  const query = typeof filterOrQuery === 'string' ? { status: filterOrQuery } : (filterOrQuery || {});
 
-  if (status) {
-    query += ` WHERE p.status = ?`;
-    params.push(status);
+  const { page, limit, offset, sortBy, order } = parsePagination(
+    query,
+    ['id', 'created_at', 'amount', 'payment_date', 'status', 'sender_name'],
+    'created_at'
+  );
+
+  let whereClauses = [];
+  let params = [];
+
+  if (query.status) {
+    whereClauses.push('p.status = ?');
+    params.push(query.status);
   }
 
-  query += ` ORDER BY p.created_at DESC;`;
-  const [rows] = await pool.execute(query, params);
+  if (query.startDate) {
+    whereClauses.push('p.payment_date >= ?');
+    params.push(query.startDate);
+  }
+
+  if (query.endDate) {
+    whereClauses.push('p.payment_date <= ?');
+    params.push(query.endDate);
+  }
+
+  if (query.search) {
+    whereClauses.push('(p.transaction_id LIKE ? OR p.sender_name LIKE ? OR p.reference LIKE ?)');
+    const term = `%${query.search}%`;
+    params.push(term, term, term);
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  // 1. Total Count Query
+  const countQuery = `SELECT COUNT(*) AS total FROM payments p ${whereSql};`;
+  const [countRows] = await pool.execute(countQuery, params);
+  const totalRecords = countRows[0]?.total || 0;
+
+  // 2. Paginated Data Query with latest Anomaly Detection data
+  const dataQuery = `
+    SELECT
+      p.*,
+      rc.id AS case_id,
+      rc.status AS case_status,
+      pa.id AS anomaly_id,
+      pa.anomaly_detected,
+      pa.anomaly_score,
+      pa.severity AS anomaly_severity,
+      pa.anomaly_types,
+      pa.explanation AS anomaly_explanation,
+      pa.recommendation AS anomaly_recommendation,
+      pa.score_breakdown AS anomaly_breakdown,
+      pa.status AS anomaly_status
+    FROM payments p
+    LEFT JOIN reconciliation_cases rc ON p.id = rc.payment_id
+    LEFT JOIN (
+      SELECT pa1.*
+      FROM payment_anomalies pa1
+      INNER JOIN (
+        SELECT payment_id, MAX(id) AS max_id
+        FROM payment_anomalies
+        GROUP BY payment_id
+      ) pa2 ON pa1.id = pa2.max_id
+    ) pa ON p.id = pa.payment_id
+    ${whereSql}
+    ORDER BY p.${sortBy} ${order}
+    LIMIT ? OFFSET ?;
+  `;
+
+  const [rows] = await pool.query(dataQuery, [...params, limit, offset]);
+
+  // If client passed specific pagination query params, return envelope; otherwise return array with pagination metadata attached
+  const paginatedResult = buildPaginatedResponse(rows, totalRecords, { page, limit });
+
+  if (query.page || query.limit) {
+    return paginatedResult;
+  }
+
+  // Backwards compatibility: attach pagination object to array
+  rows.pagination = paginatedResult.pagination;
   return rows;
 };
 

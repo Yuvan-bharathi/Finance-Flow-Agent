@@ -1,5 +1,7 @@
 import { runNotificationAgent } from '../agents/notificationAgent.js';
 import pool from '../config/db.js';
+import { sendEscalationNoticeEmail } from '../utils/emailService.js';
+import { cacheService } from '../services/cache.service.js';
 
 /**
  * Controller: Notification & Escalation Agent
@@ -50,6 +52,9 @@ export const triggerEscalationScan = async (req, res) => {
   try {
     const triggeredBy = req.user?.id || null;
     const result = await runNotificationAgent(triggeredBy);
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
 
     return res.status(200).json({
       success: true,
@@ -121,8 +126,8 @@ export const getAlerts = async (req, res) => {
       LEFT JOIN users u ON na.approved_by = u.id
       ${whereClause}
       ORDER BY
-        FIELD(na.severity, 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'),
-        na.created_at DESC
+        na.created_at DESC,
+        na.id DESC
       LIMIT ?
     `, [...params, limit]);
 
@@ -152,17 +157,59 @@ export const getAlerts = async (req, res) => {
 export const approveAlert = async (req, res) => {
   try {
     const alertId     = parseInt(req.params.id, 10);
-    const approvedBy  = req.user?.id;
+    const approvedBy  = req.user?.id || 1;
+
+    // Fetch full alert and company details
+    const [alertRows] = await pool.query(`
+      SELECT na.*, c.company_name, c.contact_name, c.contact_email
+      FROM notification_alerts na
+      JOIN companies c ON na.company_id = c.id
+      WHERE na.id = ?
+    `, [alertId]);
 
     await pool.execute(`
       UPDATE notification_alerts
-      SET notification_status = 'approved', approved_by = ?, actioned_at = NOW()
+      SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
       WHERE id = ?
     `, [approvedBy, alertId]);
 
-    return res.status(200).json({ success: true, message: 'Alert approved successfully.' });
+    const alert = alertRows[0] || {};
+
+    // Trigger Nodemailer / Email Service dispatch
+    const emailResult = await sendEscalationNoticeEmail({
+      recipientEmail: alert.contact_email || 'finance@abctech.com',
+      fromEmail: 'yuvanbharathin@gmail.com',
+      companyName: alert.company_name || 'ABC Technologies Pvt Ltd',
+      subject: alert.subject || alert.title || `Official Financial Escalation Notice — ${alert.company_name || 'Facility Debt'}`,
+      body: alert.message || alert.ai_reasoning || 'Please review your delinquent loan account balance immediately.',
+      priority: (alert.severity || 'HIGH').toLowerCase(),
+      alertId: alert.id
+    });
+
+    // Record action in audit_logs
+    await pool.query(`
+      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+      VALUES (?, 'APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
+    `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
+
+    return res.status(200).json({
+      success: true,
+      message: `Escalation notice approved & email successfully triggered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`,
+      data: {
+        alertId,
+        recipient: alert.recommended_recipient,
+        recipientEmail: alert.contact_email,
+        companyName: alert.company_name,
+        dispatchedAt: new Date().toISOString(),
+        email_delivery: emailResult
+      }
+    });
 
   } catch (err) {
+    console.error('[Notification Controller approveAlert Error]', err);
     return res.status(500).json({ success: false, message: 'Failed to approve alert.' });
   }
 };
@@ -177,17 +224,149 @@ export const approveAlert = async (req, res) => {
 export const dismissAlert = async (req, res) => {
   try {
     const alertId    = parseInt(req.params.id, 10);
-    const dismissedBy = req.user?.id;
+    const dismissedBy = req.user?.id || 1;
 
     await pool.execute(`
       UPDATE notification_alerts
-      SET notification_status = 'dismissed', approved_by = ?, actioned_at = NOW()
+      SET notification_status = 'dismissed', approved_by = ?, approved_at = NOW()
       WHERE id = ?
     `, [dismissedBy, alertId]);
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
 
     return res.status(200).json({ success: true, message: 'Alert dismissed.' });
 
   } catch (err) {
+    console.error('[Notification Controller dismissAlert Error]', err);
     return res.status(500).json({ success: false, message: 'Failed to dismiss alert.' });
+  }
+};
+
+/**
+ * batchApproveAlerts
+ *
+ * Purpose:
+ *   Approves and dispatches multiple notification alerts in a single batch.
+ *   Body: { alertIds: [1, 2, 3] } or empty body to approve all pending alerts.
+ */
+export const batchApproveAlerts = async (req, res) => {
+  try {
+    let { alertIds } = req.body || {};
+    const approvedBy = req.user?.id || 1;
+
+    let targetIds = [];
+    if (Array.isArray(alertIds) && alertIds.length > 0) {
+      targetIds = alertIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+    } else {
+      const [pendingRows] = await pool.query(`SELECT id FROM notification_alerts WHERE notification_status = 'pending'`);
+      targetIds = pendingRows.map(r => r.id);
+    }
+
+    if (targetIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No pending alerts to approve.',
+        data: { count: 0, dispatched: [] }
+      });
+    }
+
+    // Fetch alert details
+    const [alertRows] = await pool.query(`
+      SELECT na.*, c.company_name, c.contact_name, c.contact_email
+      FROM notification_alerts na
+      JOIN companies c ON na.company_id = c.id
+      WHERE na.id IN (?)
+    `, [targetIds]);
+
+    // Update status in bulk
+    await pool.query(`
+      UPDATE notification_alerts
+      SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
+      WHERE id IN (?)
+    `, [approvedBy, targetIds]);
+
+    // Send emails and record audit logs
+    const dispatched = [];
+    for (const alert of alertRows) {
+      const emailResult = await sendEscalationNoticeEmail({
+        recipientEmail: alert.contact_email || alert.recommended_recipient || 'contact@borrower.com',
+        companyName: alert.company_name || 'Borrower Company',
+        subject: alert.subject || `Official Financial Escalation Notice — ${alert.company_name || 'Facility Debt'}`,
+        body: alert.message_draft || alert.reasoning || 'Please review your delinquent loan account balance immediately.',
+        priority: (alert.severity || 'HIGH').toLowerCase(),
+        alertId: alert.id
+      });
+
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+        VALUES (?, 'BATCH_APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
+      `, [approvedBy, alert.id, JSON.stringify({ alertId: alert.id, email_delivery: emailResult })]);
+
+      dispatched.push({
+        alertId: alert.id,
+        companyName: alert.company_name,
+        recipient: alert.contact_name,
+        recipientEmail: alert.contact_email
+      });
+    }
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
+
+    return res.status(200).json({
+      success: true,
+      message: `Batch dispatched ${dispatched.length} follow-up notices successfully!`,
+      data: {
+        count: dispatched.length,
+        dispatched
+      }
+    });
+
+  } catch (err) {
+    console.error('[Notification Controller batchApproveAlerts Error]', err);
+    return res.status(500).json({ success: false, message: 'Failed to batch approve alerts.' });
+  }
+};
+
+/**
+ * batchDismissAlerts
+ *
+ * Purpose:
+ *   Dismisses multiple notification alerts in a single batch.
+ *   Body: { alertIds: [1, 2, 3] }
+ */
+export const batchDismissAlerts = async (req, res) => {
+  try {
+    let { alertIds } = req.body || {};
+    const dismissedBy = req.user?.id || 1;
+
+    let targetIds = [];
+    if (Array.isArray(alertIds) && alertIds.length > 0) {
+      targetIds = alertIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+    }
+
+    if (targetIds.length === 0) {
+      return res.status(200).json({ success: true, message: 'No alerts to dismiss.', data: { count: 0 } });
+    }
+
+    await pool.query(`
+      UPDATE notification_alerts
+      SET notification_status = 'dismissed', approved_by = ?, approved_at = NOW()
+      WHERE id IN (?)
+    `, [dismissedBy, targetIds]);
+
+    // Invalidate notification cache tag
+    cacheService.invalidateByTag('notifications');
+
+    return res.status(200).json({
+      success: true,
+      message: `Dismissed ${targetIds.length} alerts in batch.`,
+      data: { count: targetIds.length }
+    });
+
+  } catch (err) {
+    console.error('[Notification Controller batchDismissAlerts Error]', err);
+    return res.status(500).json({ success: false, message: 'Failed to batch dismiss alerts.' });
   }
 };

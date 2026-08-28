@@ -53,6 +53,21 @@ export const getUsers = async (req, res, next) => {
   }
 };
 
+export const getDemoUsers = async (req, res, next) => {
+  try {
+    const users = await getAllUsers();
+    const demoAccounts = users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role_name || u.role
+    }));
+    return sendSuccessResponse(res, 200, 'Demo users retrieved successfully', { users: demoAccounts });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const createUser = async (req, res, next) => {
   try {
     const { name, email, role } = req.body;

@@ -4,6 +4,7 @@ import {
   overrideRecommendationService,
   getAllAllocationsService
 } from '../services/settlement.service.js';
+import { findRecommendationsByCaseId } from '../models/aiRecommendation.model.js';
 import { sendSuccessResponse } from '../utils/apiResponse.js';
 
 /**
@@ -19,19 +20,31 @@ import { sendSuccessResponse } from '../utils/apiResponse.js';
  * Endpoint: POST /api/reconciliations/approve
  * Access: Admin, Manager, Accountant
  * 
- * Payload: `{ recommendationId: number, notes?: string }`
+ * Payload: `{ recommendationId?: number, caseId?: number, notes?: string }`
  */
 export const approveRecommendation = async (req, res, next) => {
   try {
-    const { recommendationId, notes } = req.body;
-    if (!recommendationId) {
-      const error = new Error('recommendationId is required.');
+    const caseId = req.body.caseId || req.body.case_id;
+    const recommendationId = req.body.recommendationId || req.body.recommendation_id;
+    const notes = req.body.notes;
+    let recId = recommendationId;
+
+    if (!recId && caseId) {
+      const recs = await findRecommendationsByCaseId(caseId);
+      if (recs && recs.length > 0) {
+        recId = recs[0].id;
+      }
+    }
+
+    if (!recId) {
+      const error = new Error('recommendationId or valid caseId is required.');
       error.statusCode = 400;
       throw error;
     }
 
     const ipAddress = req.ip || req.socket.remoteAddress;
-    const result = await approveRecommendationService(recommendationId, req.user.id, notes, ipAddress);
+    const correlationId = req.correlationId || null;
+    const result = await approveRecommendationService(recId, req.user.id, notes, ipAddress, correlationId);
     return sendSuccessResponse(res, 200, 'AI Recommendation approved and payment allocated successfully', result);
   } catch (error) {
     return next(error);
@@ -43,19 +56,29 @@ export const approveRecommendation = async (req, res, next) => {
  * Endpoint: POST /api/reconciliations/reject
  * Access: Admin, Manager, Accountant
  * 
- * Payload: `{ recommendationId: number, reason: string }`
+ * Payload: `{ recommendationId?: number, caseId?: number, reason: string }`
  */
 export const rejectRecommendation = async (req, res, next) => {
   try {
-    const { recommendationId, reason } = req.body;
-    if (!recommendationId) {
-      const error = new Error('recommendationId is required.');
+    const { recommendationId, caseId, reason } = req.body;
+    let recId = recommendationId;
+
+    if (!recId && caseId) {
+      const recs = await findRecommendationsByCaseId(caseId);
+      if (recs && recs.length > 0) {
+        recId = recs[0].id;
+      }
+    }
+
+    if (!recId) {
+      const error = new Error('recommendationId or valid caseId is required.');
       error.statusCode = 400;
       throw error;
     }
 
     const ipAddress = req.ip || req.socket.remoteAddress;
-    const result = await rejectRecommendationService(recommendationId, req.user.id, reason, ipAddress);
+    const correlationId = req.correlationId || null;
+    const result = await rejectRecommendationService(recId, req.user.id, reason, ipAddress, correlationId);
     return sendSuccessResponse(res, 200, 'AI Recommendation rejected', result);
   } catch (error) {
     return next(error);
@@ -79,11 +102,12 @@ export const overrideRecommendation = async (req, res, next) => {
     }
 
     const ipAddress = req.ip || req.socket.remoteAddress;
+    const correlationId = req.correlationId || null;
     const result = await overrideRecommendationService(caseId, {
       repayment_schedule_id,
       allocated_amount,
       override_reason
-    }, req.user, ipAddress);
+    }, req.user, ipAddress, correlationId);
 
     return sendSuccessResponse(res, 200, 'Reconciliation manually overridden and settled', result);
   } catch (error) {
