@@ -1,6 +1,6 @@
 import { runNotificationAgent } from '../agents/notificationAgent.js';
 import pool from '../config/db.js';
-import { sendEscalationNoticeEmail } from '../utils/emailService.js';
+import { sendEscalationNoticeEmail, testSmtpConnection } from '../utils/emailService.js';
 import { cacheService } from '../services/cache.service.js';
 
 /**
@@ -373,5 +373,28 @@ export const batchDismissAlerts = async (req, res) => {
   } catch (err) {
     console.error('[Notification Controller batchDismissAlerts Error]', err);
     return res.status(500).json({ success: false, message: 'Failed to batch dismiss alerts.' });
+  }
+};
+
+/**
+ * triggerSmtpTest
+ * Production diagnostic ping to test real SMTP delivery from Render
+ */
+export const triggerSmtpTest = async (req, res) => {
+  try {
+    const targetEmail = req.body?.email || req.query?.email || 'mani30saravanan@gmail.com';
+    const result = await testSmtpConnection(targetEmail);
+    return res.status(200).json({
+      success: result.success,
+      message: result.success ? `SMTP Test email delivered to ${targetEmail}` : 'SMTP Test delivery failed',
+      data: {
+        smtp_user: process.env.SMTP_USER,
+        smtp_host: process.env.SMTP_HOST,
+        smtp_port: process.env.SMTP_PORT,
+        result
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 };

@@ -49,6 +49,64 @@ const getTransporter = () => {
   return null;
 };
 
+// Helper: Sends an email attempting Port 465 SSL first, then Port 587 TLS fallback
+const sendWithTransporterFallback = async (mailOptions) => {
+  const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
+  const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
+  const host = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
+
+  if (!user || !pass) {
+    return { success: false, notConfigured: true };
+  }
+
+  // Attempt 1: Port 465 (Direct SSL) with explicit IPv4
+  try {
+    const transporter465 = nodemailer.createTransport({
+      host,
+      port: 465,
+      secure: true,
+      auth: { user, pass },
+      family: 4,
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
+
+    const info = await transporter465.sendMail(mailOptions);
+    console.log(`[EmailService] ✅ Delivered via Port 465 SSL to ${mailOptions.to} (Message ID: ${info.messageId})`);
+    return { success: true, messageId: info.messageId, port: 465, response: info.response };
+  } catch (err465) {
+    console.warn(`[EmailService] ⚠️ Port 465 SSL failed (${err465.message}), attempting Port 587 TLS fallback...`);
+
+    // Attempt 2: Port 587 (STARTTLS) with explicit IPv4
+    try {
+      const transporter587 = nodemailer.createTransport({
+        host,
+        port: 587,
+        secure: false,
+        auth: { user, pass },
+        family: 4,
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+      });
+
+      const info587 = await transporter587.sendMail(mailOptions);
+      console.log(`[EmailService] ✅ Delivered via Port 587 TLS to ${mailOptions.to} (Message ID: ${info587.messageId})`);
+      return { success: true, messageId: info587.messageId, port: 587, response: info587.response };
+    } catch (err587) {
+      console.error(`[EmailService Error] Both Port 465 & 587 failed to send to ${mailOptions.to}:`, err587.message);
+      return {
+        success: false,
+        error: `Port 465 error: ${err465.message}; Port 587 error: ${err587.message}`,
+        mode: 'smtp_failed'
+      };
+    }
+  }
+};
+
 /**
  * Sends a User Invitation & Password Setup Email
  * 
@@ -67,23 +125,24 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
     <head>
       <meta charset="utf-8">
       <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
-        .header { background: linear-gradient(135deg, #0b0f17 0%, #1e1b4b 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
-        .header h1 { margin: 0; font-size: 24px; font-weight: 800; }
-        .header span { color: #818cf8; }
-        .content { padding: 32px 24px; }
-        .badge { display: inline-block; background: #e0e7ff; color: #4338ca; font-weight: 700; font-size: 12px; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; margin-top: 8px; }
-        .btn { display: inline-block; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 28px; border-radius: 10px; margin: 24px 0; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35); }
-        .footer { background: #f1f5f9; padding: 16px 24px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
-        .link-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-size: 12px; word-break: break-all; color: #475569; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding: 20px; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .header { background: #111827; padding: 24px; text-align: center; color: #ffffff; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+        .header h1 span { color: #818cf8; }
+        .content { padding: 32px 28px; }
+        .content h2 { font-size: 18px; color: #111827; margin-top: 0; margin-bottom: 12px; }
+        .content p { font-size: 14px; line-height: 1.6; color: #4b5563; margin: 8px 0; }
+        .badge { display: inline-block; background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+        .btn { display: inline-block; background: #4f46e5; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; margin: 24px 0 16px 0; }
+        .footer { background: #f9fafb; padding: 16px 28px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
           <h1>FinanceFlow <span>AI</span></h1>
-          <p style="margin: 4px 0 0 0; font-size: 13px; color: #9ca3af;">Agentic Financial Operations & Repayment Platform</p>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #9ca3af;">Agentic Financial Operations &amp; Repayment Platform</p>
         </div>
         <div class="content">
           <h2>Welcome, ${name}! 👋</h2>
@@ -97,75 +156,62 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
           <p>To activate your account and establish your secure credentials, please click the link below to set your password:</p>
           
           <div style="text-align: center;">
-            <a href="${invitationUrl}" class="btn" target="_blank">Set Password & Activate Account</a>
+            <a href="${invitationUrl}" class="btn" target="_blank">Set Password &amp; Activate Account</a>
           </div>
-
-          <p style="font-size: 13px; color: #64748b;">This link is valid for <strong>24 hours</strong>. If you did not request this account, please notify your platform administrator.</p>
-
-          <div style="margin-top: 24px;">
-            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Or copy and paste this link into your browser:</p>
-            <div class="link-box">${invitationUrl}</div>
-          </div>
+          
+          <p style="font-size: 12px; color: #6b7280; word-break: break-all; margin-top: 16px;">
+            Link not working? Paste this URL into your browser:<br>
+            <a href="${invitationUrl}" style="color: #4f46e5;">${invitationUrl}</a>
+          </p>
         </div>
         <div class="footer">
-          &copy; ${new Date().getFullYear()} FinanceFlow AI Platform. All rights reserved.
+          This automated security notification was sent by FinanceFlow AI Platform. &copy; ${new Date().getFullYear()}
         </div>
       </div>
     </body>
     </html>
   `;
 
-  const transporter = getTransporter();
+  const senderFrom = process.env.SMTP_FROM || `FinanceFlow AI <${process.env.SMTP_USER || 'yuvanbharathin@gmail.com'}>`;
+  const result = await sendWithTransporterFallback({
+    from: senderFrom,
+    to: email,
+    subject,
+    html: htmlContent,
+  });
 
-  if (transporter) {
-    try {
-      const info = await transporter.sendMail({
-        from: config.smtp.from,
-        to: email,
-        subject,
-        html: htmlContent,
-      });
-      console.log(`[EmailService] ✅ Sent account invitation email to ${email} (Message ID: ${info.messageId})`);
-      return { success: true, messageId: info.messageId, mode: 'smtp' };
-    } catch (err) {
-      console.error(`[EmailService Error] Failed to send email to ${email} via SMTP:`, err.message);
-      return { success: false, error: err.message, mode: 'smtp_failed' };
-    }
-  } else {
-    // Console Fallback when SMTP credentials are not configured
-    console.log('\n=============================================================');
-    console.log('📧 [MOCK EMAIL DISPATCH — SMTP CREDENTIALS NOT SET IN .ENV]');
-    console.log(`TO: ${name} <${email}>`);
-    console.log(`SUBJECT: ${subject}`);
-    console.log(`INVITATION URL: ${invitationUrl}`);
-    console.log('=============================================================\n');
-    return { success: true, mode: 'mock_console', invitationUrl };
+  if (result.notConfigured) {
+    console.log('📧 [MOCK INVITATION EMAIL — SMTP CREDENTIALS NOT CONFIGURED]');
+    return { success: true, mode: 'mock_console' };
   }
+
+  return result;
 };
 
 /**
- * Sends an AI Escalation / Collection Notice Email to Borrower Company
+ * Sends an Automated Financial Escalation & Collection Follow-Up Email
  * 
  * @param {Object} params
- * @param {string} params.recipientEmail - Borrower contact email
- * @param {string} params.companyName - Borrower company name
- * @param {string} params.subject - Email subject
- * @param {string} params.body - AI-drafted email body content
- * @param {string} params.priority - Urgency priority ('critical', 'high', 'medium', 'low')
- * @param {number|string} [params.alertId] - Optional escalation alert ID reference
+ * @param {string} params.recipientEmail - Recipient email (borrower finance team)
+ * @param {string} params.fromEmail - Sender address
+ * @param {string} params.companyName - Delinquent company name
+ * @param {string} params.subject - Email subject line
+ * @param {string} params.body - Email message content / notice
+ * @param {string} params.priority - Urgency priority ('low', 'medium', 'high', 'critical')
+ * @param {number|string} params.alertId - Alert ID
  */
 export const sendEscalationNoticeEmail = async ({
   recipientEmail,
-  fromEmail = 'yuvanbharathin@gmail.com',
-  companyName = 'Borrower Company',
+  fromEmail,
+  companyName,
   subject,
   body,
-  priority = 'high',
+  priority = 'HIGH',
   alertId
 }) => {
-  const priorityColor = priority === 'critical' ? '#dc2626' : priority === 'high' ? '#ea580c' : '#f59e0b';
+  const priorityColor = priority.toLowerCase() === 'critical' ? '#dc2626' : priority.toLowerCase() === 'high' ? '#ea580c' : '#f59e0b';
   const targetRecipient = recipientEmail || 'finance@abctech.com';
-  const senderFrom = `"FinanceFlow AI Operations" <${fromEmail || 'yuvanbharathin@gmail.com'}>`;
+  const senderFrom = `"FinanceFlow AI Operations" <${fromEmail || process.env.SMTP_USER || 'yuvanbharathin@gmail.com'}>`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -198,7 +244,7 @@ export const sendEscalationNoticeEmail = async ({
           <div class="message-box">${body}</div>
 
           <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-            If you have already processed this payment, please disregard this notice or reply directly to this email (<a href="mailto:${fromEmail}">${fromEmail}</a>).
+            If you have already processed this payment, please disregard this notice or reply directly to this email (<a href="mailto:${fromEmail || 'yuvanbharathin@gmail.com'}">${fromEmail || 'yuvanbharathin@gmail.com'}</a>).
           </p>
         </div>
         <div class="footer">
@@ -209,38 +255,41 @@ export const sendEscalationNoticeEmail = async ({
     </html>
   `;
 
-  const transporter = getTransporter();
+  const result = await sendWithTransporterFallback({
+    from: senderFrom,
+    to: targetRecipient,
+    subject,
+    html: htmlContent,
+  });
 
-  if (transporter) {
-    try {
-      const info = await transporter.sendMail({
-        from: senderFrom,
-        to: targetRecipient,
-        subject,
-        html: htmlContent,
-      });
-      console.log(`[EmailService] ✅ Sent escalation notice email from ${fromEmail} to ${targetRecipient} (Message ID: ${info.messageId})`);
-      return { success: true, messageId: info.messageId, mode: 'smtp', from: fromEmail, to: targetRecipient };
-    } catch (err) {
-      console.error(`[EmailService Error] Failed to send escalation notice to ${targetRecipient} via SMTP:`, err.message);
-      return { success: false, error: err.message, mode: 'smtp_failed', from: fromEmail, to: targetRecipient };
-    }
-  } else {
-    // Console Fallback when SMTP credentials are not configured in environment variables
-    console.log('\n=============================================================');
+  if (result.notConfigured) {
     console.log('📧 [MOCK ESCALATION MAIL DISPATCH — REAL SMTP CREDENTIALS NOT SET]');
-    console.log(`FROM: ${senderFrom}`);
-    console.log(`TO: ${companyName} <${targetRecipient}>`);
-    console.log(`PRIORITY: ${priority.toUpperCase()}`);
-    console.log(`SUBJECT: ${subject}`);
-    console.log(`BODY:\n${body}`);
-    console.log('=============================================================\n');
     return {
       success: true,
       mode: 'mock_console',
       from: fromEmail,
       to: targetRecipient,
-      notice: 'Email logged to server console. To deliver real emails, set SMTP_USER and SMTP_PASS in your Render Environment Variables.'
+      notice: 'Email logged to server console.'
     };
   }
+
+  return {
+    ...result,
+    from: fromEmail,
+    to: targetRecipient
+  };
+};
+
+/**
+ * Diagnostic utility: tests SMTP connectivity and returns connection details
+ */
+export const testSmtpConnection = async (targetEmail = 'mani30saravanan@gmail.com') => {
+  const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
+  
+  return await sendWithTransporterFallback({
+    from: `"FinanceFlow Diagnostics" <${user}>`,
+    to: targetEmail,
+    subject: '🧪 FinanceFlow AI — SMTP Production Diagnostic Ping',
+    html: `<p>Production SMTP ping from Render container to ${targetEmail} at ${new Date().toISOString()}</p>`
+  });
 };
