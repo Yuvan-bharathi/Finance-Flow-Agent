@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Zap,
@@ -12,7 +12,10 @@ import {
   CheckSquare,
   Square,
   Send,
+  Building2,
+  FileSpreadsheet,
 } from 'lucide-react';
+import api from '../services/api';
 import {
   analyzeCase,
   approveRecommendation,
@@ -26,6 +29,8 @@ import {
 import { StatusBadge } from './Dashboard/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import type { ReconciliationCase, AIRecommendation } from '../types/reconciliation';
+import type { Company } from '../types/company';
+import type { LoanAccount } from '../types/loan';
 
 const formatAuditTimestamp = (dateStr?: string) => {
   if (!dateStr) return '—';
@@ -127,9 +132,80 @@ export const ActionCenterDrawer = ({
   const [overrideAmount, setOverrideAmount] = useState<string | number>(caseItem?.amount || '');
   const [overrideReasonText, setOverrideReasonText] = useState('');
 
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loans, setLoans] = useState<LoanAccount[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  const [loadingLookups, setLoadingLookups] = useState(false);
+
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [playbook, setPlaybook] = useState<PlaybookData | null>(null);
+
+  // Fetch companies and loans for manual override target selection
+  useEffect(() => {
+    if (showOverrideForm && companies.length === 0) {
+      setLoadingLookups(true);
+      void Promise.all([
+        api.get('/companies').then(res => setCompanies((res.data?.data || []) as Company[])),
+        api.get('/loans').then(res => setLoans((res.data?.data || []) as LoanAccount[])),
+      ])
+        .catch(err => console.warn('[ActionCenterDrawer] Failed to fetch companies/loans:', err))
+        .finally(() => setLoadingLookups(false));
+    }
+  }, [showOverrideForm, companies.length]);
+
+  // If activeCase has a company_id, preselect it
+  useEffect(() => {
+    if (caseItem?.company_id && !selectedCompanyId) {
+      setSelectedCompanyId(String(caseItem.company_id));
+    }
+    if (caseItem?.amount) {
+      setOverrideAmount(caseItem.amount);
+    }
+  }, [caseItem, selectedCompanyId]);
+
+  // Compute available loan repayment schedules for the chosen company
+  const availableSchedules = useMemo(() => {
+    if (!selectedCompanyId) return [];
+    const companyLoans = loans.filter(l => String(l.company_id) === String(selectedCompanyId));
+    const schedList: Array<{
+      id: number;
+      loan_id: number;
+      loan_ref?: string;
+      installment_number?: number;
+      due_date?: string;
+      total_due?: number;
+      scheduled_amount?: number;
+      outstanding?: number;
+    }> = [];
+
+    companyLoans.forEach(l => {
+      if (Array.isArray(l.schedules) && l.schedules.length > 0) {
+        l.schedules.forEach(s => {
+          schedList.push({
+            id: s.id,
+            loan_id: l.id,
+            loan_ref: l.loan_reference || l.loan_number || `LN-${l.id}`,
+            installment_number: s.installment_number,
+            due_date: s.due_date,
+            total_due: s.total_due ?? s.scheduled_amount ?? s.outstanding,
+            scheduled_amount: s.scheduled_amount,
+            outstanding: s.outstanding,
+          });
+        });
+      } else {
+        schedList.push({
+          id: l.id,
+          loan_id: l.id,
+          loan_ref: l.loan_reference || l.loan_number || `LN-${l.id}`,
+          installment_number: 1,
+          due_date: l.start_date,
+          total_due: typeof l.principal_amount === 'number' ? l.principal_amount : parseFloat(String(l.principal_amount || 0)),
+        });
+      }
+    });
+    return schedList;
+  }, [selectedCompanyId, loans]);
 
   useEffect(() => {
     setActiveCase(caseItem as EnrichedCase | null);
@@ -407,7 +483,7 @@ export const ActionCenterDrawer = ({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <button
               onClick={() => {
                 onAskAI?.('reconciliation_case', caseItem.id);
@@ -418,18 +494,19 @@ export const ActionCenterDrawer = ({
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: '8px',
-                padding: '7px 12px',
-                fontSize: '0.75rem',
+                padding: '6px 10px',
+                fontSize: '0.72rem',
                 fontWeight: '700',
                 cursor: 'pointer',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '5px',
+                whiteSpace: 'nowrap',
                 boxShadow: '0 2px 6px rgba(124,58,237,0.25)',
               }}
             >
-              <Bot size={14} />
-              <span>Ask AI to Explain</span>
+              <Bot size={13} />
+              <span>Ask AI</span>
             </button>
 
             <button
@@ -437,17 +514,18 @@ export const ActionCenterDrawer = ({
               style={{
                 background: '#ffffff',
                 border: '1px solid #cbd5e1',
-                borderRadius: '10px',
-                width: '36px',
-                height: '36px',
+                borderRadius: '8px',
+                width: '32px',
+                height: '32px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#64748b',
                 cursor: 'pointer',
+                flexShrink: 0,
               }}
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -908,36 +986,128 @@ export const ActionCenterDrawer = ({
 
               {/* Override Form */}
               {showOverrideForm && (
-                <form onSubmit={handleOverride} style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#f1f5f9', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a' }}>Manual Accountant Override</div>
-                  <input
-                    type="number"
-                    required
-                    placeholder="Target Schedule ID (e.g. 1)"
-                    value={overrideScheduleId}
-                    onChange={(e) => setOverrideScheduleId(e.target.value)}
-                    style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem' }}
-                  />
-                  <input
-                    type="number"
-                    required
-                    step="0.01"
-                    placeholder="Allocated Amount"
-                    value={overrideAmount}
-                    onChange={(e) => setOverrideAmount(e.target.value)}
-                    style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem' }}
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Override rationale text..."
-                    value={overrideReasonText}
-                    onChange={(e) => setOverrideReasonText(e.target.value)}
-                    style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem' }}
-                  />
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button type="submit" disabled={submitting} style={{ flex: 1, background: '#4f46e5', color: '#ffffff', border: 'none', padding: '8px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}>Apply Override</button>
-                    <button type="button" onClick={() => setShowOverrideForm(false)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+                <form onSubmit={handleOverride} style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1.5px solid #cbd5e1' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0f172a' }}>Manual Accountant Override &amp; Company Allocation</div>
+                    <span style={{ fontSize: '0.68rem', fontWeight: '800', background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '6px' }}>HUMAN-IN-THE-LOOP</span>
+                  </div>
+
+                  {/* 1. Target Company Selector */}
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                      <Building2 size={13} color="#4f46e5" />
+                      1. Select Target Borrower Company
+                    </label>
+                    <select
+                      value={selectedCompanyId}
+                      onChange={(e) => {
+                        setSelectedCompanyId(e.target.value);
+                        setOverrideScheduleId('');
+                      }}
+                      required
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600' }}
+                    >
+                      <option value="">{loadingLookups ? 'Loading companies...' : '-- Choose Borrower Company --'}</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name || c.company_name} ({c.pan || c.cin || c.registration_number || `ID #${c.id}`})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 2. Target Loan / Repayment Schedule Selector */}
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                      <FileSpreadsheet size={13} color="#4f46e5" />
+                      2. Select Target Loan Facility &amp; Repayment Schedule
+                    </label>
+                    <select
+                      value={overrideScheduleId}
+                      onChange={(e) => setOverrideScheduleId(e.target.value)}
+                      required
+                      disabled={!selectedCompanyId}
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600' }}
+                    >
+                      <option value="">
+                        {!selectedCompanyId
+                          ? '-- Select Borrower Company First --'
+                          : availableSchedules.length === 0
+                          ? '-- No Active Loan Schedules Found --'
+                          : '-- Choose Loan Schedule / Installment --'}
+                      </option>
+                      {availableSchedules.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.loan_ref} — EMI #{s.installment_number || 1} (Due: {s.due_date || 'Current'}, Balance: ₹{Number(s.total_due || 0).toLocaleString('en-IN')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 3. Allocated Amount */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                      3. Allocated Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      step="0.01"
+                      placeholder="Allocated Amount"
+                      value={overrideAmount}
+                      onChange={(e) => setOverrideAmount(e.target.value)}
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '700' }}
+                    />
+                  </div>
+
+                  {/* 4. Rationale Text */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#475569', marginBottom: '4px' }}>
+                      4. Audit Rationale &amp; Investigation Notes
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Verified sender Apex Logistic is legal subsidiary of Apex Logistics Pvt Ltd"
+                      value={overrideReasonText}
+                      onChange={(e) => setOverrideReasonText(e.target.value)}
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      style={{
+                        flex: 1,
+                        background: '#4f46e5',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '9px',
+                        borderRadius: '8px',
+                        fontWeight: '700',
+                        cursor: submitting ? 'not-allowed' : 'pointer',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      {submitting ? 'Allocating...' : 'Apply Override & Settle'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowOverrideForm(false)}
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        padding: '9px 14px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                      }}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </form>
               )}

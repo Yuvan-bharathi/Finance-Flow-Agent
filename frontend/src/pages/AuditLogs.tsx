@@ -1,6 +1,19 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import { History, X, Eye, Search, Copy, Check, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import {
+  History,
+  X,
+  Eye,
+  Search,
+  Copy,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Code,
+  FileText,
+  CheckCircle2,
+} from 'lucide-react';
 
 export interface AuditLogItem {
   id: number | string;
@@ -45,6 +58,254 @@ const formatRoleBadge = (roleName?: string) => {
     viewer: 'Viewer',
   };
   return map[roleName.toLowerCase()] || roleName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
+const humanizeKey = (key: string): string => {
+  const map: Record<string, string> = {
+    company_name: 'Company Name',
+    bank_account_number: 'Bank Account Number',
+    contact_name: 'Contact Person',
+    contact_email: 'Contact Email',
+    contact_phone: 'Contact Phone Number',
+    registration_number: 'Registration / CIN',
+    tax_identifier: 'Tax ID / GSTIN / PAN',
+    address: 'Registered Address',
+    status: 'Operational Status',
+    allocated_amount: 'Allocated Amount',
+    repayment_schedule_id: 'Repayment Schedule ID',
+    override_reason: 'Audit Override Rationale',
+    case_id: 'Reconciliation Case ID',
+    loan_id: 'Loan Facility ID',
+    loan_account_id: 'Loan Account ID',
+    interest_rate: 'Interest Rate (% p.a.)',
+    tenure_months: 'Tenure (Months)',
+    principal_amount: 'Principal Amount',
+    sanctioned_amount: 'Sanctioned Amount',
+    outstanding_amount: 'Outstanding Balance',
+    due_date: 'Due Date',
+    alert_id: 'Notification Alert ID',
+    approved_by: 'Approved By',
+    action_taken: 'Action Taken',
+    rejection_reason: 'Rejection Reason',
+    workflow: 'Pipeline Workflow',
+  };
+  if (map[key]) return map[key];
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+};
+
+const renderFormattedValue = (key: string, val: unknown) => {
+  if (val === null || val === undefined || val === '') {
+    return <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None</span>;
+  }
+
+  if (typeof val === 'boolean') {
+    return (
+      <span style={{
+        background: val ? '#dcfce7' : '#f1f5f9',
+        color: val ? '#15803d' : '#475569',
+        padding: '2px 8px',
+        borderRadius: '6px',
+        fontWeight: '700',
+        fontSize: '0.75rem',
+      }}>
+        {val ? 'Yes' : 'No'}
+      </span>
+    );
+  }
+
+  const isCurrency = /(amount|due|balance|principal|interest_due|total)/i.test(key) && typeof val === 'number';
+  if (isCurrency) {
+    return (
+      <span style={{ fontWeight: '800', color: '#0f172a' }}>
+        ₹{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </span>
+    );
+  }
+
+  if (key.toLowerCase() === 'status' && typeof val === 'string') {
+    const isGood = ['active', 'completed', 'resolved', 'approved', 'success'].includes(val.toLowerCase());
+    const isBad = ['inactive', 'defaulted', 'rejected', 'failed', 'error'].includes(val.toLowerCase());
+    return (
+      <span style={{
+        background: isGood ? '#dcfce7' : isBad ? '#fee2e2' : '#fef3c7',
+        color: isGood ? '#15803d' : isBad ? '#b91c1c' : '#b45309',
+        padding: '2px 8px',
+        borderRadius: '6px',
+        fontWeight: '800',
+        fontSize: '0.75rem',
+        textTransform: 'uppercase',
+      }}>
+        {val}
+      </span>
+    );
+  }
+
+  if (typeof val === 'string' && val.includes('@') && !val.includes(' ')) {
+    return (
+      <span style={{ color: '#2563eb', fontWeight: '600', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+        {val}
+      </span>
+    );
+  }
+
+  if (typeof val === 'string' && (key.includes('account') || key.includes('tax') || key.includes('phone') || key.includes('registration') || key.includes('id'))) {
+    return (
+      <code style={{ background: '#f1f5f9', color: '#0f172a', padding: '2px 6px', borderRadius: '4px', fontWeight: '700', fontSize: '0.8rem' }}>
+        {val}
+      </code>
+    );
+  }
+
+  if (typeof val === 'object') {
+    if (Array.isArray(val)) {
+      return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {val.map((item, idx) => (
+            <span key={idx} style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>
+              {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+            </span>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', fontSize: '0.75rem' }}>
+        {Object.entries(val as Record<string, unknown>).map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '2px 0' }}>
+            <span style={{ color: '#64748b' }}>{humanizeKey(k)}:</span>
+            <span style={{ fontWeight: '600', color: '#0f172a' }}>{String(v)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <span style={{ color: '#0f172a', fontWeight: '600' }}>{String(val)}</span>;
+};
+
+interface AuditSnapshotViewerProps {
+  title: string;
+  data: unknown;
+  variant?: 'after' | 'before';
+}
+
+const AuditSnapshotViewer = ({ title, data, variant = 'after' }: AuditSnapshotViewerProps) => {
+  const [showRaw, setShowRaw] = useState(false);
+
+  let parsed: Record<string, unknown> | null = null;
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      parsed = null;
+    }
+  } else if (data && typeof data === 'object') {
+    parsed = data as Record<string, unknown>;
+  }
+
+  const isAfter = variant === 'after';
+  const borderColor = isAfter ? '#bbf7d0' : '#fca5a5';
+  const headerBg = isAfter ? '#dcfce7' : '#fee2e2';
+  const headerText = isAfter ? '#15803d' : '#991b1b';
+
+  return (
+    <div style={{
+      background: '#ffffff',
+      border: `1px solid ${borderColor}`,
+      borderRadius: '12px',
+      overflow: 'hidden',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+    }}>
+      <div style={{
+        background: headerBg,
+        padding: '10px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: `1px solid ${borderColor}`,
+      }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: '800', color: headerText, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {isAfter ? <CheckCircle2 size={15} /> : <FileText size={15} />}
+          {title}
+        </span>
+
+        <button
+          onClick={() => setShowRaw(!showRaw)}
+          style={{
+            background: 'rgba(255,255,255,0.85)',
+            border: `1px solid ${borderColor}`,
+            borderRadius: '6px',
+            padding: '3px 8px',
+            fontSize: '0.7rem',
+            fontWeight: '700',
+            color: headerText,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          <Code size={12} />
+          <span>{showRaw ? 'Show Formatted Table' : 'Show Raw JSON'}</span>
+        </button>
+      </div>
+
+      {showRaw ? (
+        <pre style={{
+          background: isAfter ? '#f0fdf4' : '#fff1f2',
+          padding: '14px',
+          fontSize: '0.775rem',
+          color: isAfter ? '#166534' : '#9f1239',
+          overflowX: 'auto',
+          margin: 0,
+          fontFamily: 'monospace',
+          lineHeight: '1.4',
+        }}>
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      ) : !parsed || Object.keys(parsed).length === 0 ? (
+        <div style={{ padding: '16px', color: '#64748b', fontSize: '0.8rem', fontStyle: 'italic', textAlign: 'center' }}>
+          No structured properties recorded in this snapshot.
+        </div>
+      ) : (
+        <div style={{ padding: '4px 0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <tbody>
+              {Object.entries(parsed).map(([key, val], idx) => (
+                <tr
+                  key={key}
+                  style={{
+                    borderBottom: idx === Object.keys(parsed!).length - 1 ? 'none' : '1px solid #f1f5f9',
+                    background: idx % 2 === 0 ? '#ffffff' : '#f8fafc',
+                  }}
+                >
+                  <td style={{
+                    padding: '9px 16px',
+                    color: '#475569',
+                    fontWeight: '700',
+                    width: '42%',
+                    verticalAlign: 'top',
+                  }}>
+                    {humanizeKey(key)}
+                  </td>
+                  <td style={{
+                    padding: '9px 16px',
+                    color: '#0f172a',
+                    width: '58%',
+                    verticalAlign: 'top',
+                  }}>
+                    {renderFormattedValue(key, val)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export const AuditLogs = () => {
@@ -379,20 +640,24 @@ export const AuditLogs = () => {
               </div>
 
               {selectedLog.old_values && (
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#dc2626', marginBottom: '6px' }}>Before State (Old Values)</div>
-                  <pre style={{ background: '#fee2e2', border: '1px solid #fca5a5', padding: '12px', borderRadius: '10px', fontSize: '0.775rem', color: '#991b1b', overflowX: 'auto', margin: 0, fontWeight: '600' }}>
-                    {JSON.stringify(selectedLog.old_values, null, 2)}
-                  </pre>
-                </div>
+                <AuditSnapshotViewer
+                  title="Before State (Old Values)"
+                  data={selectedLog.old_values}
+                  variant="before"
+                />
               )}
 
-              <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#059669', marginBottom: '6px' }}>After State (New Audit Snapshot)</div>
-                <pre style={{ background: '#d1fae5', border: '1px solid #a7f3d0', padding: '14px', borderRadius: '10px', fontSize: '0.775rem', color: '#065f46', overflowX: 'auto', margin: 0, fontWeight: '600' }}>
-                  {JSON.stringify(selectedLog.new_values, null, 2)}
-                </pre>
-              </div>
+              {selectedLog.new_values ? (
+                <AuditSnapshotViewer
+                  title="After State (New Audit Snapshot)"
+                  data={selectedLog.new_values}
+                  variant="after"
+                />
+              ) : (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', color: '#64748b', fontSize: '0.8rem', fontStyle: 'italic', textAlign: 'center' }}>
+                  No state mutation recorded for this event.
+                </div>
+              )}
             </div>
           </div>
         </div>

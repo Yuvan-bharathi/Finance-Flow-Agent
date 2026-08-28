@@ -897,7 +897,7 @@ export const AgentControlCenter = () => {
                   gap: '4px',
                 }}
               >
-                <Play size={12} />
+                <Zap size={13} />
                 <span>Batch Run</span>
               </button>
             </div>

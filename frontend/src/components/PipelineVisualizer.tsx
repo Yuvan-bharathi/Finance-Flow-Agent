@@ -98,6 +98,27 @@ interface StepBusinessViewProps {
   user: User | null;
 }
 
+export const formatAgentName = (rawName: string): string => {
+  if (!rawName) return '';
+  const knownNames: Record<string, string> = {
+    PaymentReconciliationAgent: 'Payment Reconciliation Agent',
+    AnomalyDetectionAgent: 'Anomaly Detection Agent',
+    RepaymentRiskAssessmentAgent: 'Repayment Risk Assessment Agent',
+    AutomatedCollectionFollowUpAgent: 'Automated Collection Follow-Up Agent',
+    AccountingLedgerAgent: 'Accounting Ledger & ERP Sync Agent',
+    ComplianceAuditAgent: 'Compliance & Audit Trail Agent',
+    MultiChannelNotificationAgent: 'Multi-Channel Notification Agent',
+  };
+  if (knownNames[rawName]) return knownNames[rawName];
+
+  const clean = rawName.replace(/Agent$/, '').trim();
+  const withSpaces = clean
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .trim();
+  return withSpaces.endsWith('Agent') ? withSpaces : `${withSpaces} Agent`;
+};
+
 /**
  * Component: Executive Step Business Inspector View
  */
@@ -456,7 +477,7 @@ const StepBusinessView = ({ step }: StepBusinessViewProps) => {
   return (
     <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
-        {step.agent_name.replace(/Agent$/, '')} Execution Summary
+        {formatAgentName(step.agent_name)} Execution Summary
       </div>
       <div style={{ fontSize: '0.825rem', color: '#334155', lineHeight: '1.6' }}>
         {output.summary || output.message || output.explanation || 'Step executed successfully and recorded in operational audit ledger.'}
@@ -714,7 +735,7 @@ export const PipelineVisualizer = ({ pipeline, onClose, onRefresh }: PipelineVis
                   </div>
 
                   <div style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a', marginBottom: '8px', lineHeight: 1.3 }}>
-                    {step.agent_name.replace(/Agent$/, '')} Agent
+                    {formatAgentName(step.agent_name)}
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '8px', marginTop: '4px' }}>
@@ -767,7 +788,7 @@ export const PipelineVisualizer = ({ pipeline, onClose, onRefresh }: PipelineVis
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                  Step #{selectedStep.step_index}: {selectedStep.agent_name}
+                  Step #{selectedStep.step_index}: {formatAgentName(selectedStep.agent_name)}
                 </h3>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '3px' }}>
                   Status: <strong style={{

@@ -2,7 +2,7 @@
 // reconciliation.ts — Reconciliation case & payment domain types
 // ============================================================
 
-import type { Playbook, PlaybookStep as Step } from './playbook';
+import type { Playbook } from './playbook';
 
 export type CaseStatus = 'open' | 'pending_review' | 'approved' | 'resolved' | 'rejected' | 'escalated';
 export type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -78,7 +78,6 @@ export interface ReconciliationCase {
 }
 
 export type EnrichedCase = ReconciliationCase;
-export type PlaybookStep = Step;
 export type OperationalPlaybook = Playbook;
 
 export interface DashboardKPIs {
