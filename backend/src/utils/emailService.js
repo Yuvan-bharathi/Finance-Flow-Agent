@@ -35,11 +35,32 @@ const resolveIPv4Address = async (hostname = 'smtp.gmail.com') => {
  * 2. AI Escalation & Collection Follow-Up Notices (Agent 3 & Agent 6 dispatch)
  */
 
-// Helper: Sends an email attempting Port 465 SSL first, then Port 587 TLS fallback with direct IPv4 resolution
+// Helper: Creates a transport instance configured for a specific port and direct IPv4 host
+const createTransporterForPort = (ipv4Host, rawHost, port, user, pass) => {
+  const isSecure = port === 465;
+  return nodemailer.createTransport({
+    host: ipv4Host,
+    port,
+    secure: isSecure,
+    requireTLS: !isSecure, // Ensures STARTTLS handshake on port 587
+    auth: { user, pass },
+    tls: {
+      servername: rawHost, // Preserves SSL certificate domain verification (smtp.gmail.com)
+      rejectUnauthorized: false
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+  });
+};
+
+// Helper: Sends an email attempting configured port first (e.g. 587), then fallback port (e.g. 465)
 const sendWithTransporterFallback = async (mailOptions) => {
   const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
   const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
   const rawHost = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
+  const configuredPort = parseInt(process.env.SMTP_PORT || config.smtp.port || '587', 10);
+  const fallbackPort = configuredPort === 587 ? 465 : 587;
 
   if (!user || !pass) {
     return { success: false, notConfigured: true };
@@ -48,52 +69,26 @@ const sendWithTransporterFallback = async (mailOptions) => {
   // Resolve pure IPv4 IP to bypass Render IPv6 container networking drop
   const ipv4Host = await resolveIPv4Address(rawHost);
 
-  // Attempt 1: Port 465 (Direct SSL) with explicit IPv4
+  // Attempt 1: User's Configured Port (e.g., 587 TLS)
   try {
-    const transporter465 = nodemailer.createTransport({
-      host: ipv4Host,
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-      tls: {
-        servername: rawHost, // Preserves SSL certificate domain verification
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    });
+    const transporter1 = createTransporterForPort(ipv4Host, rawHost, configuredPort, user, pass);
+    const info = await transporter1.sendMail(mailOptions);
+    console.log(`[EmailService] ✅ Delivered via Port ${configuredPort} (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info.messageId})`);
+    return { success: true, messageId: info.messageId, port: configuredPort, response: info.response, host: ipv4Host };
+  } catch (err1) {
+    console.warn(`[EmailService] ⚠️ Port ${configuredPort} failed (${err1.message}), attempting Port ${fallbackPort} fallback...`);
 
-    const info = await transporter465.sendMail(mailOptions);
-    console.log(`[EmailService] ✅ Delivered via Port 465 SSL (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info.messageId})`);
-    return { success: true, messageId: info.messageId, port: 465, response: info.response, host: ipv4Host };
-  } catch (err465) {
-    console.warn(`[EmailService] ⚠️ Port 465 SSL failed (${err465.message}), attempting Port 587 TLS fallback...`);
-
-    // Attempt 2: Port 587 (STARTTLS) with explicit IPv4
+    // Attempt 2: Fallback Port (e.g., 465 SSL)
     try {
-      const transporter587 = nodemailer.createTransport({
-        host: ipv4Host,
-        port: 587,
-        secure: false,
-        auth: { user, pass },
-        tls: {
-          servername: rawHost,
-          rejectUnauthorized: false
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-      });
-
-      const info587 = await transporter587.sendMail(mailOptions);
-      console.log(`[EmailService] ✅ Delivered via Port 587 TLS (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info587.messageId})`);
-      return { success: true, messageId: info587.messageId, port: 587, response: info587.response, host: ipv4Host };
-    } catch (err587) {
-      console.error(`[EmailService Error] Both Port 465 & 587 failed to send to ${mailOptions.to}:`, err587.message);
+      const transporter2 = createTransporterForPort(ipv4Host, rawHost, fallbackPort, user, pass);
+      const info2 = await transporter2.sendMail(mailOptions);
+      console.log(`[EmailService] ✅ Delivered via Port ${fallbackPort} (${ipv4Host}) to ${mailOptions.to} (Message ID: ${info2.messageId})`);
+      return { success: true, messageId: info2.messageId, port: fallbackPort, response: info2.response, host: ipv4Host };
+    } catch (err2) {
+      console.error(`[EmailService Error] Both Port ${configuredPort} & ${fallbackPort} failed to send to ${mailOptions.to}:`, err2.message);
       return {
         success: false,
-        error: `Port 465: ${err465.message}; Port 587: ${err587.message}`,
+        error: `Port ${configuredPort}: ${err1.message}; Port ${fallbackPort}: ${err2.message}`,
         mode: 'smtp_failed'
       };
     }
