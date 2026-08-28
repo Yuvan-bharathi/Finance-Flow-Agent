@@ -174,11 +174,12 @@ export const approveAlert = async (req, res) => {
     `, [approvedBy, alertId]);
 
     const alert = alertRows[0] || {};
+    const fromSender = process.env.SMTP_FROM || process.env.SMTP_USER || 'yuvanbharathin@gmail.com';
 
     // Trigger Nodemailer / Email Service dispatch
     const emailResult = await sendEscalationNoticeEmail({
       recipientEmail: alert.contact_email || 'finance@abctech.com',
-      fromEmail: 'yuvanbharathin@gmail.com',
+      fromEmail: fromSender,
       companyName: alert.company_name || 'ABC Technologies Pvt Ltd',
       subject: alert.subject || alert.title || `Official Financial Escalation Notice — ${alert.company_name || 'Facility Debt'}`,
       body: alert.message || alert.ai_reasoning || 'Please review your delinquent loan account balance immediately.',
@@ -195,9 +196,13 @@ export const approveAlert = async (req, res) => {
     // Invalidate notification cache tag
     cacheService.invalidateByTag('notifications');
 
+    const statusMessage = emailResult.success
+      ? `Escalation notice approved & email successfully delivered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`
+      : `Escalation notice approved, but email delivery encountered: ${emailResult.error || 'SMTP delivery issue'}`;
+
     return res.status(200).json({
       success: true,
-      message: `Escalation notice approved & email successfully triggered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`,
+      message: statusMessage,
       data: {
         alertId,
         recipient: alert.recommended_recipient,

@@ -8,7 +8,7 @@ import { clientCache } from './cacheService';
 const BASE_URL: string =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.PROD
-    ? 'https://finance-flow-agent-1.onrender.com/api'
+    ? 'https://finance-flow-agent.onrender.com/api'
     : 'http://localhost:5000/api');
 
 export const generateCorrelationId = (): string => {

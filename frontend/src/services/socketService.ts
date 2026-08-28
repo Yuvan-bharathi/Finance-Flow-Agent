@@ -23,7 +23,7 @@ export const connectSocket = (): Socket => {
     const SOCKET_URL =
       import.meta.env.VITE_SOCKET_URL ||
       (import.meta.env.PROD
-        ? 'https://finance-flow-agent-1.onrender.com'
+        ? 'https://finance-flow-agent.onrender.com'
         : 'http://localhost:5000');
 
     socket = io(SOCKET_URL, {

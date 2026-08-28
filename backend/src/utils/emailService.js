@@ -1,5 +1,11 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 import { config } from '../config/env.js';
+
+// Force Node.js DNS resolver to prioritize IPv4 on Cloud/Render containers
+try {
+  dns.setDefaultResultOrder?.('ipv4first');
+} catch (_) {}
 
 /**
  * Utility: Centralized Email Service (Nodemailer + SMTP)
@@ -16,37 +22,27 @@ import { config } from '../config/env.js';
 
 // Dynamic Nodemailer Transporter Getter (Optimized for Gmail & Cloud Hosting)
 const getTransporter = () => {
-  const user = process.env.SMTP_USER || config.smtp.user;
-  const pass = process.env.SMTP_PASS || config.smtp.pass;
-  const host = process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com';
+  const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
+  const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
+  const host = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
   const port = parseInt(process.env.SMTP_PORT || config.smtp.port || '465', 10);
-  const secure = port === 465 || (process.env.SMTP_SECURE || config.smtp.secure) === true || (process.env.SMTP_SECURE === 'true');
+  const secure = port === 465;
 
-  if (user && pass && user.trim() !== '' && pass.trim() !== '') {
-    // If using Gmail, use nodemailer's optimized 'gmail' preset to prevent Render/Cloud STARTTLS port 587 timeouts
-    if (host.includes('gmail') || user.includes('@gmail.com')) {
-      return nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: user.trim(),
-          pass: pass.replace(/\s+/g, ''),
-        },
-        connectionTimeout: 15000,
-        greetingTimeout: 15000,
-        socketTimeout: 20000,
-      });
-    }
-
+  if (user && pass && user !== '' && pass !== '') {
     return nodemailer.createTransport({
-      host,
-      port,
-      secure,
+      host: host || 'smtp.gmail.com',
+      port: port || 465,
+      secure: secure,
       auth: {
-        user: user.trim(),
-        pass: pass.replace(/\s+/g, ''),
+        user,
+        pass,
       },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
+      family: 4, // CRITICAL: Force IPv4 to prevent Render Linux IPv6 timeout
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 12000,
+      greetingTimeout: 12000,
       socketTimeout: 20000,
     });
   }

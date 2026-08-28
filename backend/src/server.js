@@ -1,9 +1,15 @@
 import http from 'http';
+import dns from 'dns';
 import app from './app.js';
 import { config } from './config/env.js';
 import pool, { testConnection } from './config/db.js';
 import { initSocket } from './config/socket.js';
 import { agentQueue } from './services/agentQueue.service.js';
+
+// Force global IPv4 resolution on Node.js to eliminate ENETUNREACH on Cloud/Render environments
+try {
+  dns.setDefaultResultOrder?.('ipv4first');
+} catch (_) {}
 
 /**
  * HTTP & WebSocket Server Entry Point (Phase 6 Production-Hardened)
