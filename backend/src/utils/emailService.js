@@ -14,23 +14,44 @@ import { config } from '../config/env.js';
  * the service logs formatted email previews to console without throwing errors or halting operations.
  */
 
-// Initialize Nodemailer Transporter
-const createTransporter = () => {
-  if (config.smtp.user && config.smtp.pass) {
+// Dynamic Nodemailer Transporter Getter (Optimized for Gmail & Cloud Hosting)
+const getTransporter = () => {
+  const user = process.env.SMTP_USER || config.smtp.user;
+  const pass = process.env.SMTP_PASS || config.smtp.pass;
+  const host = process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || config.smtp.port || '465', 10);
+  const secure = port === 465 || (process.env.SMTP_SECURE || config.smtp.secure) === true || (process.env.SMTP_SECURE === 'true');
+
+  if (user && pass && user.trim() !== '' && pass.trim() !== '') {
+    // If using Gmail, use nodemailer's optimized 'gmail' preset to prevent Render/Cloud STARTTLS port 587 timeouts
+    if (host.includes('gmail') || user.includes('@gmail.com')) {
+      return nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: user.trim(),
+          pass: pass.replace(/\s+/g, ''),
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
+      });
+    }
+
     return nodemailer.createTransport({
-      host: config.smtp.host,
-      port: config.smtp.port,
-      secure: config.smtp.secure,
+      host,
+      port,
+      secure,
       auth: {
-        user: config.smtp.user.trim(),
-        pass: config.smtp.pass.replace(/\s+/g, ''),
+        user: user.trim(),
+        pass: pass.replace(/\s+/g, ''),
       },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
     });
   }
   return null;
 };
-
-const transporter = createTransporter();
 
 /**
  * Sends a User Invitation & Password Setup Email
@@ -98,6 +119,8 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
     </html>
   `;
 
+  const transporter = getTransporter();
+
   if (transporter) {
     try {
       const info = await transporter.sendMail({
@@ -135,9 +158,19 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
  * @param {string} params.priority - Urgency priority ('critical', 'high', 'medium', 'low')
  * @param {number|string} [params.alertId] - Optional escalation alert ID reference
  */
-export const sendEscalationNoticeEmail = async ({ recipientEmail, companyName, subject, body, priority = 'high', alertId }) => {
+export const sendEscalationNoticeEmail = async ({
+  recipientEmail,
+  fromEmail = 'yuvanbharathin@gmail.com',
+  companyName = 'Borrower Company',
+  subject,
+  body,
+  priority = 'high',
+  alertId
+}) => {
   const priorityColor = priority === 'critical' ? '#dc2626' : priority === 'high' ? '#ea580c' : '#f59e0b';
-  
+  const targetRecipient = recipientEmail || 'finance@abctech.com';
+  const senderFrom = `"FinanceFlow AI Operations" <${fromEmail || 'yuvanbharathin@gmail.com'}>`;
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -169,7 +202,7 @@ export const sendEscalationNoticeEmail = async ({ recipientEmail, companyName, s
           <div class="message-box">${body}</div>
 
           <p style="font-size: 13px; color: #64748b; margin-top: 24px;">
-            If you have already processed this payment, please disregard this notice or reply with your transaction reference number.
+            If you have already processed this payment, please disregard this notice or reply directly to this email (<a href="mailto:${fromEmail}">${fromEmail}</a>).
           </p>
         </div>
         <div class="footer">
@@ -180,29 +213,38 @@ export const sendEscalationNoticeEmail = async ({ recipientEmail, companyName, s
     </html>
   `;
 
+  const transporter = getTransporter();
+
   if (transporter) {
     try {
       const info = await transporter.sendMail({
-        from: config.smtp.from,
-        to: recipientEmail,
+        from: senderFrom,
+        to: targetRecipient,
         subject,
         html: htmlContent,
       });
-      console.log(`[EmailService] ✅ Sent escalation notice email to ${recipientEmail} (Message ID: ${info.messageId})`);
-      return { success: true, messageId: info.messageId, mode: 'smtp' };
+      console.log(`[EmailService] ✅ Sent escalation notice email from ${fromEmail} to ${targetRecipient} (Message ID: ${info.messageId})`);
+      return { success: true, messageId: info.messageId, mode: 'smtp', from: fromEmail, to: targetRecipient };
     } catch (err) {
-      console.error(`[EmailService Error] Failed to send escalation notice to ${recipientEmail} via SMTP:`, err.message);
-      return { success: false, error: err.message, mode: 'smtp_failed' };
+      console.error(`[EmailService Error] Failed to send escalation notice to ${targetRecipient} via SMTP:`, err.message);
+      return { success: false, error: err.message, mode: 'smtp_failed', from: fromEmail, to: targetRecipient };
     }
   } else {
-    // Console Fallback when SMTP credentials are not configured
+    // Console Fallback when SMTP credentials are not configured in environment variables
     console.log('\n=============================================================');
-    console.log('📧 [MOCK ESCALATION MAIL DISPATCH — SMTP CREDENTIALS NOT SET IN .ENV]');
-    console.log(`TO: ${companyName} <${recipientEmail}>`);
+    console.log('📧 [MOCK ESCALATION MAIL DISPATCH — REAL SMTP CREDENTIALS NOT SET]');
+    console.log(`FROM: ${senderFrom}`);
+    console.log(`TO: ${companyName} <${targetRecipient}>`);
     console.log(`PRIORITY: ${priority.toUpperCase()}`);
     console.log(`SUBJECT: ${subject}`);
     console.log(`BODY:\n${body}`);
     console.log('=============================================================\n');
-    return { success: true, mode: 'mock_console' };
+    return {
+      success: true,
+      mode: 'mock_console',
+      from: fromEmail,
+      to: targetRecipient,
+      notice: 'Email logged to server console. To deliver real emails, set SMTP_USER and SMTP_PASS in your Render Environment Variables.'
+    };
   }
 };

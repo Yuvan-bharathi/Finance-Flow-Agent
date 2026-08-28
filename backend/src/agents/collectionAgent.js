@@ -61,13 +61,35 @@ export const runCollectionAgent = async (companyId, triggeredBy = null) => {
     if (overdueList.length > 0) {
       oldestDueDate = new Date(overdueList[0].due_date);
       overdueList.forEach(item => {
-        totalOverdue += parseFloat(item.scheduled_amount) - parseFloat(item.paid_amount);
+        const remaining = parseFloat(item.scheduled_amount) - parseFloat(item.paid_amount || 0);
+        if (remaining > 0) totalOverdue += remaining;
       });
     }
 
     const daysOverdue = overdueList.length > 0
       ? Math.max(0, Math.floor((Date.now() - oldestDueDate.getTime()) / (1000 * 60 * 60 * 24)))
       : 0;
+
+    // Guard: Do not generate collection notice if borrower has zero overdue
+    if (overdueList.length === 0 || totalOverdue <= 0) {
+      const skippedPayload = {
+        status: 'SKIPPED',
+        skipped: true,
+        company_id: company.id,
+        company_name: company.company_name,
+        total_overdue_amount: 0,
+        days_overdue: 0,
+        message: `Borrower '${company.company_name}' has no pending or overdue installments. Account is in good standing (₹0.00 overdue). Collection notice was not generated.`
+      };
+
+      await updateAgentRun(runId, {
+        status: 'completed',
+        output_data: skippedPayload,
+        total_duration_ms: Date.now() - startTime
+      });
+
+      return skippedPayload;
+    }
 
     let urgencyLevel = 'POLITE_REMINDER';
     if (daysOverdue > 30 || company.risk_level === 'CRITICAL') {
@@ -79,7 +101,7 @@ export const runCollectionAgent = async (companyId, triggeredBy = null) => {
     let finalDraft = {
       company_id: company.id,
       recipient_name: company.contact_name || 'Finance Department',
-      recipient_email: `${company.company_name.toLowerCase().replace(/[^a-z0-9]/g, '')}@borrower.com`,
+      recipient_email: company.contact_email || 'finance@abctech.com',
       urgency_level: urgencyLevel,
       days_overdue: daysOverdue,
       total_overdue_amount: totalOverdue,
@@ -165,12 +187,42 @@ Output JSON format:
       duration_ms: durationMs
     });
 
+    // Save drafted collection notice into notification_alerts for human review/dispatch in Notification Center
+    try {
+      const [alertInsert] = await pool.execute(`
+        INSERT INTO notification_alerts (
+          agent_run_id, company_id, severity, overdue_days, outstanding_amount,
+          title, message, ai_reasoning, recommended_recipient, recommended_action,
+          escalation_level, notification_status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+      `, [
+        runId,
+        company.id,
+        urgencyLevel === 'FINAL_DEMAND' ? 'CRITICAL' : urgencyLevel === 'URGENT_WARNING' ? 'HIGH' : 'MEDIUM',
+        daysOverdue,
+        totalOverdue,
+        finalDraft.subject,
+        finalDraft.email_body,
+        finalDraft.email_body,
+        `${finalDraft.recipient_name} <${finalDraft.recipient_email}>`,
+        `Dispatch formal ${urgencyLevel.replace(/_/g, ' ')} notice to borrower contact.`,
+        'Borrower Contact'
+      ]);
+      finalDraft.alert_id = alertInsert.insertId;
+    } catch (alertErr) {
+      console.warn('[Collection Agent] Warning: Failed to insert into notification_alerts:', alertErr.message);
+    }
+
     // Emit real-time WebSocket event
     emitSocketEvent('COLLECTION_DRAFTED', {
       company_id: company.id,
       company_name: company.company_name,
       urgency: urgencyLevel,
       subject: finalDraft.subject
+    });
+    emitSocketEvent('escalation_alert_created', {
+      company_id: company.id,
+      title: finalDraft.subject
     });
 
     return finalDraft;

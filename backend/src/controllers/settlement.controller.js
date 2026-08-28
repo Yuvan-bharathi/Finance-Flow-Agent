@@ -24,7 +24,9 @@ import { sendSuccessResponse } from '../utils/apiResponse.js';
  */
 export const approveRecommendation = async (req, res, next) => {
   try {
-    const { recommendationId, caseId, notes } = req.body;
+    const caseId = req.body.caseId || req.body.case_id;
+    const recommendationId = req.body.recommendationId || req.body.recommendation_id;
+    const notes = req.body.notes;
     let recId = recommendationId;
 
     if (!recId && caseId) {
@@ -41,7 +43,8 @@ export const approveRecommendation = async (req, res, next) => {
     }
 
     const ipAddress = req.ip || req.socket.remoteAddress;
-    const result = await approveRecommendationService(recId, req.user.id, notes, ipAddress);
+    const correlationId = req.correlationId || null;
+    const result = await approveRecommendationService(recId, req.user.id, notes, ipAddress, correlationId);
     return sendSuccessResponse(res, 200, 'AI Recommendation approved and payment allocated successfully', result);
   } catch (error) {
     return next(error);
@@ -74,7 +77,8 @@ export const rejectRecommendation = async (req, res, next) => {
     }
 
     const ipAddress = req.ip || req.socket.remoteAddress;
-    const result = await rejectRecommendationService(recId, req.user.id, reason, ipAddress);
+    const correlationId = req.correlationId || null;
+    const result = await rejectRecommendationService(recId, req.user.id, reason, ipAddress, correlationId);
     return sendSuccessResponse(res, 200, 'AI Recommendation rejected', result);
   } catch (error) {
     return next(error);
@@ -98,11 +102,12 @@ export const overrideRecommendation = async (req, res, next) => {
     }
 
     const ipAddress = req.ip || req.socket.remoteAddress;
+    const correlationId = req.correlationId || null;
     const result = await overrideRecommendationService(caseId, {
       repayment_schedule_id,
       allocated_amount,
       override_reason
-    }, req.user, ipAddress);
+    }, req.user, ipAddress, correlationId);
 
     return sendSuccessResponse(res, 200, 'Reconciliation manually overridden and settled', result);
   } catch (error) {

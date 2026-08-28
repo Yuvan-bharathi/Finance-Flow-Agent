@@ -1,0 +1,204 @@
+/**
+ * Module: Permission-Based Access Control (PBAC) Matrix & Definitions
+ * Purpose: Provides a granular, security-hardened permission model for FinanceFlow AI.
+ *          Instead of checking rigid role strings directly across controllers, routes declare
+ *          fine-grained permissions (e.g. `CASE_APPROVE`, `AI_ACTION_CONFIRM`, `PAYMENT_CREATE`).
+ * 
+ * Called by:
+ * - permission.middleware.js
+ * - auth.controller.js (returns user permissions in login/profile payload)
+ * - AI Copilot tool authorization guard
+ * 
+ * Data flow:
+ * User Request ➔ JWT Payload (contains `role_name`) ➔ PBAC Matrix ➔ Verified Permissions Set
+ */
+
+export const PERMISSIONS = {
+  // 1. Reconciliation & Case Management
+  CASE_VIEW: 'CASE_VIEW',
+  CASE_UPDATE: 'CASE_UPDATE',
+  CASE_APPROVE: 'CASE_APPROVE',
+  CASE_REJECT: 'CASE_REJECT',
+  CASE_OVERRIDE: 'CASE_OVERRIDE',
+  CASE_ESCALATE: 'CASE_ESCALATE',
+
+  // 2. Payments & Financial Transactions
+  PAYMENT_VIEW: 'PAYMENT_VIEW',
+  PAYMENT_CREATE: 'PAYMENT_CREATE',
+  PAYMENT_ALLOCATE: 'PAYMENT_ALLOCATE',
+
+  // 3. AI Copilot & Agent Actions
+  AI_QUERY: 'AI_QUERY',
+  AI_ACTION_PROPOSE: 'AI_ACTION_PROPOSE',
+  AI_ACTION_CONFIRM: 'AI_ACTION_CONFIRM',
+  AI_EVALUATE: 'AI_EVALUATE',
+
+  // 4. Autonomous Agent Operations
+  AGENT_VIEW: 'AGENT_VIEW',
+  AGENT_RUN: 'AGENT_RUN',
+  AGENT_REANALYZE: 'AGENT_REANALYZE',
+  AGENT_CONTROL: 'AGENT_CONTROL',
+
+  // 5. Portfolio & Notification Operations
+  PORTFOLIO_VIEW: 'PORTFOLIO_VIEW',
+  PORTFOLIO_ANALYZE: 'PORTFOLIO_ANALYZE',
+  NOTIFICATION_VIEW: 'NOTIFICATION_VIEW',
+  NOTIFICATION_MANAGE: 'NOTIFICATION_MANAGE',
+
+  // 6. Master Entities (Companies, Loans, Documents)
+  COMPANY_VIEW: 'COMPANY_VIEW',
+  COMPANY_MANAGE: 'COMPANY_MANAGE',
+  LOAN_VIEW: 'LOAN_VIEW',
+  LOAN_MANAGE: 'LOAN_MANAGE',
+  DOCUMENT_VIEW: 'DOCUMENT_VIEW',
+  DOCUMENT_UPLOAD: 'DOCUMENT_UPLOAD',
+  DOCUMENT_MANAGE: 'DOCUMENT_MANAGE',
+
+  // 7. Audit Logs & System Settings
+  AUDIT_VIEW: 'AUDIT_VIEW',
+  AUDIT_EXPORT: 'AUDIT_EXPORT',
+  SETTINGS_VIEW: 'SETTINGS_VIEW',
+  SETTINGS_UPDATE: 'SETTINGS_UPDATE',
+  USER_MANAGE: 'USER_MANAGE'
+};
+
+/**
+ * Role-to-Permissions Mapping Matrix
+ */
+export const ROLE_PERMISSIONS = {
+  owner: Object.values(PERMISSIONS),
+  super_admin: Object.values(PERMISSIONS),
+
+  admin: [
+    PERMISSIONS.CASE_VIEW,
+    PERMISSIONS.CASE_UPDATE,
+    PERMISSIONS.CASE_APPROVE,
+    PERMISSIONS.CASE_REJECT,
+    PERMISSIONS.CASE_OVERRIDE,
+    PERMISSIONS.CASE_ESCALATE,
+    PERMISSIONS.PAYMENT_VIEW,
+    PERMISSIONS.PAYMENT_CREATE,
+    PERMISSIONS.PAYMENT_ALLOCATE,
+    PERMISSIONS.AI_QUERY,
+    PERMISSIONS.AI_ACTION_PROPOSE,
+    PERMISSIONS.AI_ACTION_CONFIRM,
+    PERMISSIONS.AI_EVALUATE,
+    PERMISSIONS.AGENT_VIEW,
+    PERMISSIONS.AGENT_RUN,
+    PERMISSIONS.AGENT_REANALYZE,
+    PERMISSIONS.AGENT_CONTROL,
+    PERMISSIONS.PORTFOLIO_VIEW,
+    PERMISSIONS.PORTFOLIO_ANALYZE,
+    PERMISSIONS.NOTIFICATION_VIEW,
+    PERMISSIONS.NOTIFICATION_MANAGE,
+    PERMISSIONS.COMPANY_VIEW,
+    PERMISSIONS.COMPANY_MANAGE,
+    PERMISSIONS.LOAN_VIEW,
+    PERMISSIONS.LOAN_MANAGE,
+    PERMISSIONS.DOCUMENT_VIEW,
+    PERMISSIONS.DOCUMENT_UPLOAD,
+    PERMISSIONS.DOCUMENT_MANAGE,
+    PERMISSIONS.AUDIT_VIEW,
+    PERMISSIONS.AUDIT_EXPORT,
+    PERMISSIONS.SETTINGS_VIEW,
+    PERMISSIONS.SETTINGS_UPDATE,
+    PERMISSIONS.USER_MANAGE
+  ],
+
+  manager: [
+    PERMISSIONS.CASE_VIEW,
+    PERMISSIONS.CASE_UPDATE,
+    PERMISSIONS.CASE_APPROVE,
+    PERMISSIONS.CASE_REJECT,
+    PERMISSIONS.CASE_OVERRIDE,
+    PERMISSIONS.CASE_ESCALATE,
+    PERMISSIONS.PAYMENT_VIEW,
+    PERMISSIONS.PAYMENT_CREATE,
+    PERMISSIONS.PAYMENT_ALLOCATE,
+    PERMISSIONS.AI_QUERY,
+    PERMISSIONS.AI_ACTION_PROPOSE,
+    PERMISSIONS.AI_ACTION_CONFIRM,
+    PERMISSIONS.AI_EVALUATE,
+    PERMISSIONS.AGENT_VIEW,
+    PERMISSIONS.AGENT_RUN,
+    PERMISSIONS.AGENT_REANALYZE,
+    PERMISSIONS.PORTFOLIO_VIEW,
+    PERMISSIONS.PORTFOLIO_ANALYZE,
+    PERMISSIONS.NOTIFICATION_VIEW,
+    PERMISSIONS.NOTIFICATION_MANAGE,
+    PERMISSIONS.COMPANY_VIEW,
+    PERMISSIONS.LOAN_VIEW,
+    PERMISSIONS.DOCUMENT_VIEW,
+    PERMISSIONS.DOCUMENT_UPLOAD,
+    PERMISSIONS.AUDIT_VIEW,
+    PERMISSIONS.SETTINGS_VIEW
+  ],
+
+  accountant: [
+    PERMISSIONS.CASE_VIEW,
+    PERMISSIONS.CASE_UPDATE,
+    PERMISSIONS.CASE_APPROVE,
+    PERMISSIONS.CASE_REJECT,
+    PERMISSIONS.CASE_OVERRIDE,
+    PERMISSIONS.PAYMENT_VIEW,
+    PERMISSIONS.PAYMENT_CREATE,
+    PERMISSIONS.PAYMENT_ALLOCATE,
+    PERMISSIONS.AI_QUERY,
+    PERMISSIONS.AI_ACTION_PROPOSE,
+    PERMISSIONS.AGENT_VIEW,
+    PERMISSIONS.AGENT_RUN,
+    PERMISSIONS.PORTFOLIO_VIEW,
+    PERMISSIONS.NOTIFICATION_VIEW,
+    PERMISSIONS.COMPANY_VIEW,
+    PERMISSIONS.LOAN_VIEW,
+    PERMISSIONS.DOCUMENT_VIEW,
+    PERMISSIONS.DOCUMENT_UPLOAD,
+    PERMISSIONS.AUDIT_VIEW,
+    PERMISSIONS.SETTINGS_VIEW
+  ],
+
+  viewer: [
+    PERMISSIONS.CASE_VIEW,
+    PERMISSIONS.PAYMENT_VIEW,
+    PERMISSIONS.AI_QUERY,
+    PERMISSIONS.AGENT_VIEW,
+    PERMISSIONS.PORTFOLIO_VIEW,
+    PERMISSIONS.NOTIFICATION_VIEW,
+    PERMISSIONS.COMPANY_VIEW,
+    PERMISSIONS.LOAN_VIEW,
+    PERMISSIONS.DOCUMENT_VIEW,
+    PERMISSIONS.AUDIT_VIEW,
+    PERMISSIONS.SETTINGS_VIEW
+  ]
+};
+
+/**
+ * Returns the list of permission strings granted to a given role name.
+ * 
+ * @param {string} roleName - e.g. 'admin', 'manager', 'accountant', 'viewer'
+ * @returns {Array<string>} Array of granted permission identifiers
+ */
+export const getPermissionsForRole = (roleName) => {
+  if (!roleName) return [];
+  const normalized = roleName.toLowerCase().trim();
+  return ROLE_PERMISSIONS[normalized] || [];
+};
+
+/**
+ * Checks if a specific role possesses a required permission.
+ * 
+ * @param {string} roleName - Role string
+ * @param {string} permission - Permission constant from PERMISSIONS
+ * @returns {boolean} True if authorized
+ */
+export const checkRoleHasPermission = (roleName, permission) => {
+  const granted = getPermissionsForRole(roleName);
+  return granted.includes(permission);
+};
+
+export default {
+  PERMISSIONS,
+  ROLE_PERMISSIONS,
+  getPermissionsForRole,
+  checkRoleHasPermission
+};

@@ -15,9 +15,11 @@ export const generateCollectionReminderService = async (companyId) => {
 
 export const sendCollectionReminderService = async (companyId, draftPayload, userId) => {
   // 1. Dispatch Email via Email Service (Nodemailer / Console Fallback)
+  const targetTo = draftPayload.recipient_email || 'finance@abctech.com';
   const emailResult = await sendEscalationNoticeEmail({
-    recipientEmail: draftPayload.recipient_email || 'contact@borrowercompany.com',
-    companyName: draftPayload.company_name || 'Borrower Facility Company',
+    recipientEmail: targetTo,
+    fromEmail: 'yuvanbharathin@gmail.com',
+    companyName: draftPayload.company_name || 'ABC Technologies Pvt Ltd',
     subject: draftPayload.subject || 'Official Repayment Reminder Notice',
     body: draftPayload.body || draftPayload.message || 'Please review your outstanding debt balance.',
     priority: draftPayload.urgency || draftPayload.priority || 'high',

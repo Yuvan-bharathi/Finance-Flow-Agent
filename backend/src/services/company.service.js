@@ -2,8 +2,12 @@ import {
   findAllCompanies,
   findCompanyById,
   insertCompany,
-  updateCompanyById
+  updateCompanyById,
+  deleteCompanyById
 } from '../models/company.model.js';
+import pool from '../config/db.js';
+import { cacheService } from './cache.service.js';
+import { emitSocketEvent } from '../config/socket.js';
 
 /**
  * Service: Company Service
@@ -53,10 +57,11 @@ export const getCompanyByIdService = async (companyId) => {
  * - company.controller.js -> createCompany
  * 
  * @param {Object} companyData - Input body data.
+ * @param {number} [userId] - Current authenticated user ID.
  * @returns {Promise<Object>} Created company record.
  * @throws {Error} 400 if validation fails.
  */
-export const createCompanyService = async (companyData) => {
+export const createCompanyService = async (companyData, userId = null) => {
   if (!companyData.company_name) {
     const error = new Error('company_name is required.');
     error.statusCode = 400;
@@ -64,7 +69,20 @@ export const createCompanyService = async (companyData) => {
   }
 
   const insertId = await insertCompany(companyData);
-  return await findCompanyById(insertId);
+  const createdCompany = await findCompanyById(insertId);
+
+  // Invalidate cache
+  try {
+    await cacheService.invalidateByTag('reports');
+    await cacheService.invalidateByTag('payments');
+  } catch (cErr) {
+    console.warn('[Company Service] Cache invalidation notice:', cErr.message);
+  }
+
+  // Real-time broadcast
+  emitSocketEvent('COMPANY_CREATED', { company: createdCompany });
+
+  return createdCompany;
 };
 
 /**
@@ -75,9 +93,10 @@ export const createCompanyService = async (companyData) => {
  * 
  * @param {number} companyId - Target company ID.
  * @param {Object} companyData - Fields to update.
+ * @param {number} [userId] - Current authenticated user ID.
  * @returns {Promise<Object>} Updated company object.
  */
-export const updateCompanyService = async (companyId, companyData) => {
+export const updateCompanyService = async (companyId, companyData, userId = null) => {
   const existingCompany = await findCompanyById(companyId);
   if (!existingCompany) {
     const error = new Error(`Company with ID ${companyId} not found.`);
@@ -98,5 +117,117 @@ export const updateCompanyService = async (companyId, companyData) => {
   };
 
   await updateCompanyById(companyId, updatedData);
-  return await findCompanyById(companyId);
+  const updatedCompany = await findCompanyById(companyId);
+
+  // Audit logging
+  try {
+    await pool.query(`
+      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+      VALUES (?, 'UPDATE_COMPANY', 'company', ?, ?, '127.0.0.1');
+    `, [userId || null, companyId, JSON.stringify(updatedData)]);
+  } catch (aErr) {
+    console.warn('[Company Service] Audit log notice:', aErr.message);
+  }
+
+  // Invalidate cache
+  try {
+    await cacheService.invalidateByTag('reports');
+    await cacheService.invalidateByTag('payments');
+  } catch (cErr) {
+    console.warn('[Company Service] Cache invalidation notice:', cErr.message);
+  }
+
+  // Real-time broadcast
+  emitSocketEvent('COMPANY_UPDATED', { company: updatedCompany });
+
+  return updatedCompany;
+};
+
+/**
+ * Deactivates or deletes a company based on financial integrity constraints.
+ * 
+ * Called by:
+ * - company.controller.js -> deleteCompany
+ * 
+ * @param {number} companyId - Target company ID.
+ * @param {number} [userId] - Current authenticated user ID.
+ * @returns {Promise<Object>} Deletion or deactivation outcome.
+ */
+export const deleteCompanyService = async (companyId, userId = null) => {
+  const existingCompany = await findCompanyById(companyId);
+  if (!existingCompany) {
+    const error = new Error(`Company with ID ${companyId} not found.`);
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Check for active or historical loan facilities
+  const [loans] = await pool.query(`SELECT id, loan_number, status FROM loans WHERE company_id = ?`, [companyId]);
+
+  if (loans.length > 0) {
+    // Financial Safety Guard: Perform safe deactivation/archival
+    await updateCompanyById(companyId, {
+      company_name: existingCompany.company_name,
+      registration_number: existingCompany.registration_number,
+      tax_identifier: existingCompany.tax_identifier,
+      bank_account_number: existingCompany.bank_account_number,
+      contact_name: existingCompany.contact_name,
+      contact_email: existingCompany.contact_email,
+      contact_phone: existingCompany.contact_phone,
+      address: existingCompany.address,
+      status: 'inactive'
+    });
+
+    try {
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+        VALUES (?, 'DEACTIVATE_COMPANY', 'company', ?, ?, '127.0.0.1');
+      `, [userId || null, companyId, JSON.stringify({ reason: `Company has ${loans.length} associated loan contract(s). Safe deactivation applied.` })]);
+    } catch (aErr) {
+      console.warn('[Company Service] Audit log notice:', aErr.message);
+    }
+
+    try {
+      await cacheService.invalidateByTag('reports');
+      await cacheService.invalidateByTag('payments');
+    } catch (cErr) {
+      console.warn('[Company Service] Cache invalidation notice:', cErr.message);
+    }
+
+    emitSocketEvent('COMPANY_DEACTIVATED', { companyId });
+
+    return {
+      action: 'deactivated',
+      status: 'inactive',
+      message: `Company '${existingCompany.company_name}' has ${loans.length} associated loan contract(s). Profile has been safely deactivated/archived to preserve ledger integrity.`,
+      companyId
+    };
+  }
+
+  // If 0 loans, perform full hard delete
+  await deleteCompanyById(companyId);
+
+  try {
+    await pool.query(`
+      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+      VALUES (?, 'DELETE_COMPANY', 'company', ?, ?, '127.0.0.1');
+    `, [userId || null, companyId, JSON.stringify({ deleted_company: existingCompany.company_name })]);
+  } catch (aErr) {
+    console.warn('[Company Service] Audit log notice:', aErr.message);
+  }
+
+  try {
+    await cacheService.invalidateByTag('reports');
+    await cacheService.invalidateByTag('payments');
+  } catch (cErr) {
+    console.warn('[Company Service] Cache invalidation notice:', cErr.message);
+  }
+
+  emitSocketEvent('COMPANY_DELETED', { companyId });
+
+  return {
+    action: 'deleted',
+    message: `Company '${existingCompany.company_name}' was successfully deleted.`,
+    companyId
+  };
 };

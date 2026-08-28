@@ -68,6 +68,34 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--primary);
 }
 
+/* Universal Card Shadow & Modern SaaS Hover Effects */
+:root {
+  --app-card-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  --app-card-shadow-hover: 0 12px 28px -4px rgba(15, 23, 42, 0.09), 0 6px 12px -2px rgba(15, 23, 42, 0.04);
+}
+
+/* Global Card Styling for All Application Pages */
+.card,
+.kpi-card,
+.dashboard-card,
+.table-card,
+.data-card,
+.stat-card,
+.filter-card,
+.overview-card,
+div[style*="borderRadius: '16px'"],
+div[style*="border-radius: 16px"],
+div[style*="borderRadius: '12px'"],
+div[style*="border-radius: 12px"] {
+  box-shadow: var(--app-card-shadow) !important;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+div[style*="borderRadius: '16px'"]:hover,
+div[style*="border-radius: 16px"]:hover {
+  box-shadow: var(--app-card-shadow-hover) !important;
+}
+
 /* Glassmorphism Card Utility */
 .glass-card {
   background: var(--bg-card);
@@ -75,13 +103,70 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  box-shadow: var(--app-card-shadow);
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
 }
 
 .glass-card:hover {
   border-color: var(--border-hover);
-  box-shadow: 0 12px 40px 0 var(--primary-glow);
+  box-shadow: var(--app-card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+/* Chart On-Load Keyframe Animations */
+@keyframes drawSmoothCurve {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes riseGradientArea {
+  0% {
+    opacity: 0;
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+}
+
+@keyframes donutSegmentGrow {
+  0% {
+    stroke-dashoffset: 600;
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.92);
+    transform-origin: center;
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-90deg) scale(1);
+    transform-origin: center;
+  }
+}
+
+@keyframes popInDot {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Status Badges */
@@ -270,31 +355,100 @@ aside {
   gap: 16px;
 }
 
-/* Responsive Media Queries */
-@media (max-width: 1200px) {
-  .kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+/* Responsive Grid Utilities for Agent Control Center & Dashboards */
+.agent-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.agent-overview-card {
+  grid-column: span 2;
+}
+
+.pipelines-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.telemetry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.telemetry-stats-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.overview-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+/* Tablet Breakpoint (768px - 1100px) */
+@media (max-width: 1100px) {
+  .agent-cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px !important;
+  }
+  .agent-overview-card {
+    grid-column: span 2 !important;
+  }
+  .pipelines-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 
-@media (max-width: 1024px) {
-  .header-search-box {
-    width: 220px !important;
-  }
-  .dashboard-main-content {
-    padding: 16px !important;
-  }
-}
-
+/* Mobile Breakpoint (< 768px) */
 @media (max-width: 768px) {
+  .dashboard-header {
+    padding: 14px 16px !important;
+  }
   .header-content {
     flex-direction: column !important;
     align-items: flex-start !important;
     gap: 12px !important;
-    padding: 14px 16px !important;
+  }
+  .header-controls-wrap {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
   }
   .header-search-box {
     width: 100% !important;
+    min-width: 100% !important;
+  }
+  .agent-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .agent-overview-card {
+    grid-column: span 1 !important;
+  }
+  .pipelines-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .telemetry-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 16px !important;
+  }
+  .telemetry-stats-group {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+  }
+  .overview-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
   }
   .drawer-panel {
     width: 100vw !important;
@@ -302,8 +456,13 @@ aside {
     border-radius: 0 !important;
   }
   .kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+    gap: 10px !important;
+  }
+  .table-responsive-wrapper {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 }
 

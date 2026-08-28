@@ -7,6 +7,7 @@ import { insertAIRecommendation } from '../models/aiRecommendation.model.js';
 import { createAgentRun, updateAgentRun } from '../models/agentRun.model.js';
 import { logStep } from '../models/agentExecutionLog.model.js';
 import { runPreCheckEngine } from '../engine/preCheckEngine.js';
+import { previewWaterfallAllocation } from '../services/settlement.service.js';
 import { emitSocketEvent } from '../config/socket.js';
 
 /**
@@ -39,14 +40,15 @@ const runFallbackRuleBasedMatching = async (payment, agentRunId = null) => {
 
       const dueInstallments = await executeTool('getDueRepayments', { loanId: matchedLoan.id });
       if (dueInstallments && dueInstallments.length > 0) {
-        const exactAmountMatch = dueInstallments.find(inst => parseFloat(inst.scheduled_amount) === parseFloat(payment.amount));
-        if (exactAmountMatch) {
-          matchedSchedule = exactAmountMatch;
+        matchedSchedule = dueInstallments[0];
+        const waterfallPreview = await previewWaterfallAllocation(payment.amount, matchedLoan.id);
+        if (waterfallPreview && waterfallPreview.allocations.length > 0) {
           confidence += 10.0;
-          reasoningLines.push(`Exact amount match found for Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date} for amount ₹${payment.amount}.`);
+          const instNums = waterfallPreview.allocations.map(a => `#${a.installment_number}`);
+          reasoningLines.push(`Continuous waterfall algorithm will allocate ₹${parseFloat(payment.amount).toLocaleString('en-IN')} across ${waterfallPreview.allocations.length} open milestones (${instNums.join(', ')}).`);
+          reasoningLines.push(`Projected remaining overdue balance after settlement: ₹${waterfallPreview.post_settlement_overdue_exposure.toLocaleString('en-IN')}.`);
         } else {
-          matchedSchedule = dueInstallments[0];
-          reasoningLines.push(`Selected nearest pending Installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date}.`);
+          reasoningLines.push(`Identified anchor installment #${matchedSchedule.installment_number} due on ${matchedSchedule.due_date}.`);
         }
       }
     }
@@ -332,24 +334,23 @@ export const runReconciliationAgent = async (caseId, triggeredBy = null, trigger
     console.error(`[Reconciliation Agent Error] Case #${caseId} failed:`, error.message);
 
     // Revert case status to open
-    await pool.execute(`UPDATE reconciliation_cases SET status = 'open' WHERE id = ?;`, [caseId]);
+    try {
+      await pool.execute(`UPDATE reconciliation_cases SET status = 'open' WHERE id = ?;`, [caseId]);
+    } catch (revertErr) {
+      console.error('Failed to revert case status:', revertErr.message);
+    }
 
-    // Update agent_runs record to failed
-    await updateAgentRun(runId, {
-      status: 'failed',
-      duration_ms: Date.now() - startTime,
-      error_message: error.message
-    });
-
-    await logStep({
-      agent_run_id: runId,
-      agent_id: agentId,
-      step_type: 'ERROR',
-      step_name: 'RUN_FAILED',
-      status: 'failed',
-      error_message: error.message,
-      duration_ms: Date.now() - startTime
-    });
+    if (runId) {
+      try {
+        await updateAgentRun(runId, {
+          status: 'failed',
+          duration_ms: Date.now() - startTime,
+          error_message: error.message
+        });
+      } catch (runErr) {
+        console.error('Failed to update agent run:', runErr.message);
+      }
+    }
 
     throw error;
   }
