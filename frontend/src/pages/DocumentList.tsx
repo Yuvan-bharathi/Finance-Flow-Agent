@@ -77,12 +77,24 @@ export const DocumentList = () => {
   // Upload Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadForm, setUploadForm] = useState({
     file_name: '',
     company_name: 'Sunrise Solar Energy',
     document_type: 'loan_agreement',
     file_size_kb: 420
   });
+
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+    const sizeKb = Math.max(10, Math.round(file.size / 1024));
+    setUploadForm(prev => ({
+      ...prev,
+      file_name: file.name,
+      file_size_kb: sizeKb
+    }));
+  };
 
   // Generated Document Preview Modal
   const [generatedDocModal, setGeneratedDocModal] = useState<GeneratedDocModal | null>(null);
@@ -165,20 +177,22 @@ export const DocumentList = () => {
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadForm.file_name.trim()) return;
+    const finalFileName = selectedFile ? selectedFile.name : uploadForm.file_name;
+    if (!finalFileName.trim()) return;
 
     try {
       setUploading(true);
       const payload = {
-        file_name: uploadForm.file_name.endsWith('.pdf') ? uploadForm.file_name : `${uploadForm.file_name}.pdf`,
+        file_name: finalFileName.endsWith('.pdf') || finalFileName.includes('.') ? finalFileName : `${finalFileName}.pdf`,
         document_type: uploadForm.document_type,
-        file_size: uploadForm.file_size_kb * 1024
+        file_size: (uploadForm.file_size_kb || 350) * 1024
       };
 
       await api.post('/documents/upload', payload);
-      setShowUploadModal(false);
-      setUploadForm({ file_name: '', company_name: 'Sunrise Solar Energy', document_type: 'loan_agreement', file_size_kb: 420 });
       await fetchDocuments();
+      setShowUploadModal(false);
+      setSelectedFile(null);
+      setUploadForm({ file_name: '', company_name: 'Sunrise Solar Energy', document_type: 'loan_agreement', file_size_kb: 420 });
     } catch (err) {
       console.error('Upload failed:', err);
     } finally {
@@ -1190,9 +1204,77 @@ export const DocumentList = () => {
             </div>
 
             <form onSubmit={(e) => void handleUploadSubmit(e)} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Interactive Drag & Drop File Picker Box */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                  Document File Name (PDF)
+                  Select PDF / Legal Document File
+                </label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleFileSelect(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  style={{
+                    border: selectedFile || uploadForm.file_name ? '2px solid #10b981' : '2px dashed #818cf8',
+                    borderRadius: '14px',
+                    padding: '20px 16px',
+                    textAlign: 'center',
+                    background: selectedFile || uploadForm.file_name ? '#f0fdf4' : '#f8fafc',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleFileSelect(e.target.files[0]);
+                      }
+                    }}
+                    accept=".pdf,.doc,.docx,.csv,.xlsx,.jpg,.jpeg,.png"
+                    style={{ display: 'none' }}
+                  />
+
+                  {selectedFile || uploadForm.file_name ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ padding: '8px', borderRadius: '50%', background: '#d1fae5', color: '#059669' }}>
+                        <Check size={22} />
+                      </div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a', wordBreak: 'break-all' }}>
+                        {selectedFile ? selectedFile.name : uploadForm.file_name}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#047857', fontWeight: '700' }}>
+                        Size: {uploadForm.file_size_kb} KB • Ready for Vault Registration
+                      </div>
+                      <span style={{ fontSize: '0.725rem', color: '#4f46e5', fontWeight: '700', textDecoration: 'underline', marginTop: '2px' }}>
+                        Click to change selected file
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ padding: '10px', borderRadius: '12px', background: '#e0e7ff', color: '#4f46e5' }}>
+                        <Upload size={22} />
+                      </div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a' }}>
+                        Click to Choose File or Drag &amp; Drop Here
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        Supports PDF, DOCX, CSV, PNG, JPG (up to 25MB)
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                  Document Name / Title
                 </label>
                 <input
                   type="text"
@@ -1206,7 +1288,8 @@ export const DocumentList = () => {
                     borderRadius: '10px',
                     border: '1px solid #cbd5e1',
                     fontSize: '0.875rem',
-                    outline: 'none'
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
@@ -1225,7 +1308,8 @@ export const DocumentList = () => {
                     border: '1px solid #cbd5e1',
                     fontSize: '0.875rem',
                     outline: 'none',
-                    background: '#ffffff'
+                    background: '#ffffff',
+                    boxSizing: 'border-box'
                   }}
                 >
                   <option value="loan_agreement">Loan Agreement / Facility Contract</option>
@@ -1236,29 +1320,13 @@ export const DocumentList = () => {
                 </select>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                  Estimated File Size (KB)
-                </label>
-                <input
-                  type="number"
-                  value={uploadForm.file_size_kb}
-                  onChange={(e) => setUploadForm({ ...uploadForm, file_size_kb: parseInt(e.target.value, 10) || 100 })}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '0.875rem',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
               <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setSelectedFile(null);
+                  }}
                   style={{
                     flex: 1,
                     padding: '10px',
