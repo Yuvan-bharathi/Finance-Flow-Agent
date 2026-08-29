@@ -52,8 +52,9 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
   if (brevoApiKey) {
     try {
       console.log(`[EmailService HTTPS] 🚀 Attempting Brevo REST API dispatch to ${to}...`);
-      const rawUser = (process.env.SMTP_USER || 'yuvanbharathin@gmail.com').trim();
-      const senderEmail = rawUser.includes('@') ? rawUser : 'yuvanbharathin@gmail.com';
+      const rawUser = (process.env.SMTP_USER || process.env.SMTP_FROM || 'nyuvanbharathi@gmail.com').trim();
+      const extractedEmail = rawUser.includes('<') ? rawUser.match(/<([^>]+)>/)?.[1] || rawUser : rawUser;
+      const senderEmail = extractedEmail.includes('@') ? extractedEmail : 'nyuvanbharathi@gmail.com';
 
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -296,7 +297,7 @@ export const sendUserInvitationEmail = async ({ email, name, roleName, invitatio
     </html>
   `;
 
-  const senderFrom = process.env.SMTP_FROM || `FinanceFlow AI <${process.env.SMTP_USER || 'yuvanbharathin@gmail.com'}>`;
+  const senderFrom = process.env.SMTP_FROM || `Finance Flow AI <${process.env.SMTP_USER || 'nyuvanbharathi@gmail.com'}>`;
   const result = await sendWithTransporterFallback({ from: senderFrom, to: email, subject, html: htmlContent });
 
   if (result.notConfigured) {
@@ -321,7 +322,8 @@ export const sendEscalationNoticeEmail = async ({
 }) => {
   const priorityColor = priority.toLowerCase() === 'critical' ? '#dc2626' : priority.toLowerCase() === 'high' ? '#ea580c' : '#f59e0b';
   const targetRecipient = recipientEmail || 'finance@abctech.com';
-  const senderFrom = `"FinanceFlow AI Operations" <${fromEmail || process.env.SMTP_USER || 'yuvanbharathin@gmail.com'}>`;
+  const rawSender = fromEmail || process.env.SMTP_USER || 'nyuvanbharathi@gmail.com';
+  const senderFrom = rawSender.includes('<') ? rawSender : `"Finance Flow AI Operations" <${rawSender}>`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -445,7 +447,7 @@ export const testBrevoConnection = async (targetEmail = 'yuvanbharathinaveen@gma
     };
   }
 
-  const senderEmail = (process.env.SMTP_USER || 'yuvanbharathin@gmail.com').trim();
+  const senderEmail = (process.env.SMTP_USER || 'nyuvanbharathi@gmail.com').trim();
   return await sendWithHttpsApiFallback({
     from: `FinanceFlow AI Operations <${senderEmail}>`,
     to: targetEmail,

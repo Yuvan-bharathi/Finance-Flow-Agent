@@ -67,9 +67,9 @@ export const config = {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
     secure: process.env.SMTP_SECURE === 'true',
-    user: process.env.SMTP_USER || '',
+    user: process.env.SMTP_USER || 'nyuvanbharathi@gmail.com',
     pass: process.env.SMTP_PASS || '',
-    from: process.env.SMTP_FROM || 'FinanceFlow AI <no-reply@financeflow.com>',
+    from: process.env.SMTP_FROM || 'Finance Flow AI <nyuvanbharathi@gmail.com>',
     resendApiKey: process.env.RESEND_API_KEY || '',
     brevoApiKey: process.env.BREVO_API_KEY || ''
   }

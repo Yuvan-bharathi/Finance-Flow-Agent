@@ -168,7 +168,7 @@ export const approveAlert = async (req, res) => {
     `, [alertId]);
 
     const alert = alertRows[0] || {};
-    const fromSender = process.env.SMTP_FROM || process.env.SMTP_USER || 'yuvanbharathin@gmail.com';
+    const fromSender = process.env.SMTP_FROM || process.env.SMTP_USER || 'nyuvanbharathi@gmail.com';
 
     // 1. Trigger Nodemailer / Email Service dispatch FIRST (before updating DB)
     const emailResult = await sendEscalationNoticeEmail({
@@ -478,7 +478,7 @@ export const triggerBrevoTest = async (req, res) => {
       message: result?.success ? `Brevo API test email delivered to ${targetEmail}` : 'Brevo API test delivery failed',
       data: {
         brevo_key_configured: Boolean(process.env.BREVO_API_KEY || (process.env.SMTP_PASS || '').startsWith('xsmtpsib-')),
-        sender_email: process.env.SMTP_USER || 'yuvanbharathin@gmail.com',
+        sender_email: process.env.SMTP_USER || 'nyuvanbharathi@gmail.com',
         result
       }
     });
