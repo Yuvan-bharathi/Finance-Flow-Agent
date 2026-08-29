@@ -43,8 +43,9 @@ const resolveIPv4Address = (hostname) => {
  * Port 443 is 100% open on Render, Vercel, AWS, and GCP free tiers (immune to SMTP port blocks).
  */
 const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
-  const resendKey = (process.env.RESEND_API_KEY || '').trim();
-  const brevoKey = (process.env.BREVO_API_KEY || '').trim();
+  const smtpPass = (process.env.SMTP_PASS || config.smtp.pass || '').trim();
+  const resendKey = (process.env.RESEND_API_KEY || config.smtp.resendApiKey || (smtpPass.startsWith('re_') ? smtpPass : '')).trim();
+  const brevoKey = (process.env.BREVO_API_KEY || config.smtp.brevoApiKey || (smtpPass.startsWith('xkeysib-') ? smtpPass : '')).trim();
 
   // 1. Resend HTTPS API (Port 443)
   if (resendKey) {

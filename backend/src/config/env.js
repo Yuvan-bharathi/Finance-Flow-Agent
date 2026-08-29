@@ -69,6 +69,8 @@ export const config = {
     secure: process.env.SMTP_SECURE === 'true',
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
-    from: process.env.SMTP_FROM || 'FinanceFlow AI <no-reply@financeflow.com>'
+    from: process.env.SMTP_FROM || 'FinanceFlow AI <no-reply@financeflow.com>',
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    brevoApiKey: process.env.BREVO_API_KEY || ''
   }
 };
