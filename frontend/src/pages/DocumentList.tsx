@@ -278,6 +278,45 @@ export const DocumentList = () => {
         { item: '4. Current Scheduled Principal Repayment', scheduled: principalAmt, settled: principalAmt, outstanding: 0, status: 'CLEARED' }
       ],
 
+      xml_content: `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>Vouchers</ID>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Receipt" ACTION="Create">
+            <DATE>20260828</DATE>
+            <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>RCP-2026-${String(caseId).padStart(5, '0')}</VOUCHERNUMBER>
+            <REFERENCE>Case #${caseId} / ${txnId}</REFERENCE>
+            <NARRATION>Loan Repayment Credit from ${companyName} against Facility LN-2026-${String(caseId).padStart(3, '0')} (UTR: ${txnId})</NARRATION>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>HDFC Bank Operating A/c</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${amount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Loan Asset - ${companyName}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${principalAmt}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Interest Income (12.5% P.A.)</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${interestAmt}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`,
+
       status: 'RESOLVED & SETTLED',
       summary: `Inbound RTGS wire deposit of ₹${amount.toLocaleString('en-IN')} received from ${companyName} has been reconciled and settled across statutory waterfall priorities with zero residual overdue.`
     };
@@ -1305,11 +1344,166 @@ export const DocumentList = () => {
             {/* Document Printable Body */}
             <div id="printable-invoice" style={{ padding: '32px', overflowY: 'auto', flex: 1, background: '#ffffff', color: '#0f172a' }}>
               {generatedDocModal.type === 'tally_xml' ? (
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#64748b', marginBottom: '8px' }}>Standardized Tally Prime XML Double-Entry Voucher:</div>
-                  <pre style={{ background: '#0f172a', color: '#38bdf8', padding: '20px', borderRadius: '12px', fontSize: '0.775rem', overflowX: 'auto', fontFamily: 'Consolas, monospace', lineHeight: '1.5' }}>
-                    {String(generatedDocModal.data.xml_content || '')}
-                  </pre>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a' }}>
+                      Standardized Tally Prime ERP XML Voucher (Double-Entry Ledger Journal):
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: '#059669', background: '#d1fae5', padding: '3px 10px', borderRadius: '6px', fontWeight: '800' }}>
+                      ✓ READY FOR ERP IMPORT
+                    </span>
+                  </div>
+
+                  <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '14px', padding: '20px', position: 'relative' }}>
+                    <pre style={{ color: '#38bdf8', margin: 0, fontSize: '0.775rem', overflowX: 'auto', fontFamily: 'Consolas, Monaco, monospace', lineHeight: '1.5' }}>
+                      {String(generatedDocModal.data.xml_content || `<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>\n  <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>\n</ENVELOPE>`)}
+                    </pre>
+                  </div>
+                </div>
+              ) : generatedDocModal.type === 'settlement_statement' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Top Letterhead */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '20px' }}>
+                    <div>
+                      <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#1e3a8a', letterSpacing: '-0.5px' }}>
+                        FINANCEFLOW CAPITAL NBFC LTD
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                        RBI Reg No: RBI-NBFC-N-07.00892 • GSTIN: 29AAACF1234F1Z5 • PAN: AAACF1234F
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        Tech Park One, Tower B, Outer Ring Road, Bangalore - 560103
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '4px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '800', display: 'inline-block' }}>
+                        ✓ {String(generatedDocModal.data.status || 'SETTLED')}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginTop: '6px' }}>
+                        Ref: {String(generatedDocModal.data.statement_ref || generatedDocModal.data.reference_id || 'SET-STMT-2026-001')}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: 28-Aug-2026</div>
+                    </div>
+                  </div>
+
+                  {/* Document Title */}
+                  <div style={{ textAlign: 'center', background: '#e0e7ff', padding: '12px', borderRadius: '10px', border: '1px solid #c7d2fe' }}>
+                    <h2 style={{ fontSize: '1.15rem', fontWeight: '900', color: '#3730a3', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      WATERFALL SETTLEMENT STATEMENT &amp; AUDIT CERTIFICATE
+                    </h2>
+                    <div style={{ fontSize: '0.75rem', color: '#4338ca', marginTop: '2px', fontWeight: '600' }}>
+                      Statutory Priority Allocation Sequence Advice under RBI Master Directions
+                    </div>
+                  </div>
+
+                  {/* Borrower & Facility Summary */}
+                  {(() => {
+                    const dData = generatedDocModal.data || {};
+                    const borrowerObj = (dData.borrower || {}) as Record<string, string>;
+                    const facilityObj = (dData.facility || {}) as Record<string, string | number>;
+                    const borrowerName = borrowerObj.company_name || String(dData.matched_borrower || dData.payer || 'Borrower Representative');
+                    const totalAmt = Number(dData.amount || dData.total_received || dData.total_inbound || 100000);
+                    const loanAcc = String(facilityObj.loan_account || dData.loan_account || `LN-2026-${String(dData.case_id || 1).padStart(3, '0')}`);
+                    const utrNum = String(dData.utr_number || dData.transaction_id || `TXN-BANK-${dData.case_id || 1}`);
+
+                    const interestAmt = Math.round(totalAmt * 0.2);
+                    const principalAmt = Math.round(totalAmt * 0.8);
+
+                    return (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '0.8rem' }}>
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#4f46e5', textTransform: 'uppercase', marginBottom: '4px' }}>BORROWER ENTITY</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>{borrowerName}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>PAN: {borrowerObj.pan || 'AABCA1234F'} • CIN: {borrowerObj.cin || 'U60200TN2018PTC123456'}</div>
+                          </div>
+
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0284c7', textTransform: 'uppercase', marginBottom: '4px' }}>LOAN ACCOUNT &amp; UTR</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>{loanAcc}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>UTR: {utrNum}</div>
+                          </div>
+                        </div>
+
+                        {/* Statutory 6-Tier Waterfall Priority Allocation */}
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Statutory 6-Tier Waterfall Allocation Priority Sequence
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #cbd5e1' }}>
+                            <thead>
+                              <tr style={{ background: '#1e1b4b', color: '#ffffff', textAlign: 'left' }}>
+                                <th style={{ padding: '10px 14px' }}>Priority Tier Description</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Scheduled (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Allocated (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'center' }}>Allocation Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 1: Penalties &amp; Delayed Interest Charges</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 2: Overdue Milestone Interest Charges</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 3: Current Scheduled Period Interest (20%)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>ALLOCATED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 4: Overdue Milestone Principal Repayments</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 5: Current Scheduled Principal Repayment (80%)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>ALLOCATED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 6: Surplus Unallocated Advance Credit</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#64748b', fontWeight: '700' }}>N/A</span></td>
+                              </tr>
+                              <tr style={{ background: '#e0e7ff', fontWeight: '900', borderTop: '2px solid #4f46e5' }}>
+                                <td style={{ padding: '12px 14px', color: '#1e1b4b' }}>TOTAL INBOUND WATERFALL SETTLEMENT</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '1rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'center', color: '#059669' }}>100% SETTLED</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Principal Progression Summary Card */}
+                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '0.8rem' }}>
+                          <div>
+                            <div style={{ fontSize: '0.725rem', color: '#166534', fontWeight: '700' }}>Opening Principal Balance</div>
+                            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.opening_principal || Math.max(totalAmt, 1250000)).toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.725rem', color: '#166534', fontWeight: '700' }}>Principal Deducted</div>
+                            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>- ₹{principalAmt.toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.725rem', color: '#166534', fontWeight: '700' }}>Closing Principal Balance</div>
+                            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.closing_principal || Math.max(0, Math.max(totalAmt, 1250000) - principalAmt)).toLocaleString('en-IN')}</div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -1555,7 +1749,7 @@ export const DocumentList = () => {
                   disabled={isGeneratingPdf}
                   onClick={async () => {
                     if (generatedDocModal.type === 'tally_xml') {
-                      void handleDownloadGeneratedDoc('tally_xml', generatedDocModal.title);
+                      void handleDownloadGeneratedDoc('tally_xml', generatedDocModal.title, Number(generatedDocModal.data.case_id || 1));
                       setGeneratedDocModal(null);
                       return;
                     }
@@ -1570,10 +1764,24 @@ export const DocumentList = () => {
                     }
                   }}
                   className="btn-primary"
-                  style={{ padding: '8px 16px', borderRadius: '8px', fontWeight: '700', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    fontWeight: '700',
+                    fontSize: '0.85rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
                 >
-                  {isGeneratingPdf ? <RefreshCw size={16} className="animate-spin" /> : <Download size={16} />}
-                  <span>{isGeneratingPdf ? 'Generating PDF...' : 'Download Official PDF'}</span>
+                  {generatedDocModal.type === 'tally_xml' ? <FileCode size={16} /> : (isGeneratingPdf ? <RefreshCw size={16} className="animate-spin" /> : <Download size={16} />)}
+                  <span>
+                    {generatedDocModal.type === 'tally_xml'
+                      ? 'Download Tally XML (.xml)'
+                      : isGeneratingPdf
+                      ? 'Generating PDF...'
+                      : 'Download Official PDF'}
+                  </span>
                 </button>
               </div>
             </div>
