@@ -16,7 +16,9 @@ import {
   Mail,
   Send,
   Printer,
-  Search
+  Search,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { exportElementToPdf } from '../utils/pdfGenerator';
@@ -187,6 +189,8 @@ export const DocumentList = () => {
   // Filter states for high-volume transactions
   const [docSearchQuery, setDocSearchQuery] = useState('');
   const [docCompanyFilter, setDocCompanyFilter] = useState('ALL');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [showCaseDropdown, setShowCaseDropdown] = useState(false);
 
   const buildFallbackDocumentData = (_type: string, title: string, caseId = 1): Record<string, unknown> => {
     const selectedCaseObj = availableCases.find(c => c.id === caseId);
@@ -618,59 +622,223 @@ export const DocumentList = () => {
                     />
                   </div>
 
-                  {/* Company Filter Dropdown */}
-                  <div>
-                    <select
-                      value={docCompanyFilter}
-                      onChange={(e) => setDocCompanyFilter(e.target.value)}
+                  {/* Custom Company Filter Dropdown */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCompanyDropdown(!showCompanyDropdown);
+                        setShowCaseDropdown(false);
+                      }}
                       style={{
                         width: '100%',
-                        padding: '7px 10px',
+                        padding: '7px 12px',
+                        background: '#ffffff',
+                        border: showCompanyDropdown ? '1.5px solid #6366f1' : '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        color: '#0f172a',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: showCompanyDropdown ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {docCompanyFilter === 'ALL'
+                          ? `🏢 All Companies / Borrowers (${uniqueCompanies.length})`
+                          : `🏢 ${docCompanyFilter}`}
+                      </span>
+                      <ChevronDown size={14} color="#64748b" style={{ transform: showCompanyDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                    </button>
+
+                    {showCompanyDropdown && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
                         background: '#ffffff',
                         border: '1px solid #cbd5e1',
-                        borderRadius: '8px',
-                        fontSize: '0.8rem',
-                        fontWeight: '700',
-                        color: '#0f172a',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      <option value="ALL">🏢 All Companies / Borrowers ({uniqueCompanies.length})</option>
-                      {uniqueCompanies.map(cName => (
-                        <option key={cName} value={cName}>{cName}</option>
-                      ))}
-                    </select>
+                        borderRadius: '12px',
+                        boxShadow: '0 12px 30px rgba(15,23,42,0.18)',
+                        zIndex: 50,
+                        maxHeight: '190px',
+                        overflowY: 'auto',
+                        padding: '6px'
+                      }}>
+                        <div
+                          onClick={() => {
+                            setDocCompanyFilter('ALL');
+                            setShowCompanyDropdown(false);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            background: docCompanyFilter === 'ALL' ? '#e0e7ff' : 'transparent',
+                            color: docCompanyFilter === 'ALL' ? '#4f46e5' : '#1e293b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '4px'
+                          }}
+                        >
+                          <span>🏢 All Companies / Borrowers ({uniqueCompanies.length})</span>
+                          {docCompanyFilter === 'ALL' && <Check size={14} color="#4f46e5" />}
+                        </div>
+
+                        {uniqueCompanies.map(cName => {
+                          const isSelected = docCompanyFilter === cName;
+                          return (
+                            <div
+                              key={cName}
+                              onClick={() => {
+                                setDocCompanyFilter(cName);
+                                setShowCompanyDropdown(false);
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                fontSize: '0.8rem',
+                                fontWeight: isSelected ? '700' : '600',
+                                cursor: 'pointer',
+                                background: isSelected ? '#e0e7ff' : 'transparent',
+                                color: isSelected ? '#4f46e5' : '#334155',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                transition: 'background 0.1s ease',
+                                marginBottom: '2px'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = '#f1f5f9';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cName}</span>
+                              {isSelected && <Check size={14} color="#4f46e5" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Target Case Selector */}
-                  <div>
-                    <select
-                      value={selectedCaseId}
-                      onChange={(e) => setSelectedCaseId(Number(e.target.value))}
-                      style={{
-                        width: '100%',
-                        padding: '7px 10px',
-                        background: '#ffffff',
-                        border: '1.5px solid #6366f1',
-                        color: '#0f172a',
-                        borderRadius: '8px',
-                        fontSize: '0.8rem',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      {filteredCasesList.length > 0 ? (
-                        filteredCasesList.map(c => (
-                          <option key={c.id} value={c.id}>
-                            Case #{c.id} — {c.company_name} (₹{c.amount.toLocaleString('en-IN')})
-                          </option>
-                        ))
-                      ) : (
-                        <option value={1}>Case #5090006 — ABC Technologies Pvt Ltd (₹2,50,00,000.00)</option>
-                      )}
-                    </select>
+                  {/* Custom Target Case Selector Dropdown */}
+                  <div style={{ position: 'relative' }}>
+                    {(() => {
+                      const activeCaseObj = availableCases.find(c => c.id === selectedCaseId);
+                      const displayLabel = activeCaseObj
+                        ? `Case #${activeCaseObj.id} — ${activeCaseObj.company_name} (₹${activeCaseObj.amount.toLocaleString('en-IN')})`
+                        : `Case #${selectedCaseId} — Select Target Case`;
+
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowCaseDropdown(!showCaseDropdown);
+                              setShowCompanyDropdown(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '7px 12px',
+                              background: '#ffffff',
+                              border: showCaseDropdown ? '2px solid #4f46e5' : '1.5px solid #6366f1',
+                              borderRadius: '8px',
+                              fontSize: '0.8rem',
+                              fontWeight: '700',
+                              color: '#4f46e5',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              boxShadow: '0 1px 3px rgba(99,102,241,0.12)',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              🎯 {displayLabel}
+                            </span>
+                            <ChevronDown size={14} color="#4f46e5" style={{ transform: showCaseDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                          </button>
+
+                          {showCaseDropdown && (
+                            <div style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 6px)',
+                              left: 0,
+                              right: 0,
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '12px',
+                              boxShadow: '0 12px 30px rgba(15,23,42,0.18)',
+                              zIndex: 50,
+                              maxHeight: '190px',
+                              overflowY: 'auto',
+                              padding: '6px'
+                            }}>
+                              {filteredCasesList.length > 0 ? (
+                                filteredCasesList.map(c => {
+                                  const isSelected = selectedCaseId === c.id;
+                                  return (
+                                    <div
+                                      key={c.id}
+                                      onClick={() => {
+                                        setSelectedCaseId(c.id);
+                                        setShowCaseDropdown(false);
+                                      }}
+                                      style={{
+                                        padding: '8px 12px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: isSelected ? '800' : '600',
+                                        cursor: 'pointer',
+                                        background: isSelected ? '#e0e7ff' : 'transparent',
+                                        color: isSelected ? '#4f46e5' : '#334155',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        transition: 'background 0.1s ease',
+                                        marginBottom: '2px'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (!isSelected) e.currentTarget.style.background = '#f1f5f9';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>
+                                          Case #{c.id} — {c.company_name}
+                                        </span>
+                                        <span style={{ fontSize: '0.725rem', color: isSelected ? '#6366f1' : '#64748b' }}>
+                                          Amount: ₹{c.amount.toLocaleString('en-IN')} • Ref: {c.txn_id}
+                                        </span>
+                                      </div>
+                                      {isSelected && <Check size={14} color="#4f46e5" />}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div style={{ padding: '12px', fontSize: '0.78rem', color: '#64748b', textAlign: 'center' }}>
+                                  No matching transaction cases found.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
