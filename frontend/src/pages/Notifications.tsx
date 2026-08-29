@@ -178,6 +178,7 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
       return;
     }
     const alertId = typeof alertOrId === 'object' ? alertOrId.id : alertOrId;
+    if (actionLoading[alertId] === 'approving') return;
     const alertObj = typeof alertOrId === 'object' ? alertOrId : alerts.find(a => a.id === alertId);
 
     try {
