@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import {
   FileText,
@@ -191,6 +191,26 @@ export const DocumentList = () => {
   const [docCompanyFilter, setDocCompanyFilter] = useState('ALL');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [showCaseDropdown, setShowCaseDropdown] = useState(false);
+
+  // Dropdown Refs for Click Outside Handler
+  const companyDropdownRef = useRef<HTMLDivElement>(null);
+  const caseDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (companyDropdownRef.current && !companyDropdownRef.current.contains(event.target as Node)) {
+        setShowCompanyDropdown(false);
+      }
+      if (caseDropdownRef.current && !caseDropdownRef.current.contains(event.target as Node)) {
+        setShowCaseDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const buildFallbackDocumentData = (_type: string, title: string, caseId = 1): Record<string, unknown> => {
     const selectedCaseObj = availableCases.find(c => c.id === caseId);
@@ -623,7 +643,7 @@ export const DocumentList = () => {
                   </div>
 
                   {/* Custom Company Filter Dropdown */}
-                  <div style={{ position: 'relative' }}>
+                  <div ref={companyDropdownRef} style={{ position: 'relative' }}>
                     <button
                       type="button"
                       onClick={() => {
@@ -733,7 +753,7 @@ export const DocumentList = () => {
                   </div>
 
                   {/* Custom Target Case Selector Dropdown */}
-                  <div style={{ position: 'relative' }}>
+                  <div ref={caseDropdownRef} style={{ position: 'relative' }}>
                     {(() => {
                       const activeCaseObj = availableCases.find(c => c.id === selectedCaseId);
                       const displayLabel = activeCaseObj
