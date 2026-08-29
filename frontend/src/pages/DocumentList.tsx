@@ -18,7 +18,8 @@ import {
   Printer,
   Search,
   ChevronDown,
-  Check
+  Check,
+  Copy
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { exportElementToPdf } from '../utils/pdfGenerator';
@@ -191,6 +192,7 @@ export const DocumentList = () => {
   const [docCompanyFilter, setDocCompanyFilter] = useState('ALL');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [showCaseDropdown, setShowCaseDropdown] = useState(false);
+  const [xmlCopied, setXmlCopied] = useState(false);
 
   // Dropdown Refs for Click Outside Handler
   const companyDropdownRef = useRef<HTMLDivElement>(null);
@@ -1344,21 +1346,133 @@ export const DocumentList = () => {
             {/* Document Printable Body */}
             <div id="printable-invoice" style={{ padding: '32px', overflowY: 'auto', flex: 1, background: '#ffffff', color: '#0f172a' }}>
               {generatedDocModal.type === 'tally_xml' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a' }}>
-                      Standardized Tally Prime ERP XML Voucher (Double-Entry Ledger Journal):
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Top Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '16px' }}>
+                    <div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#1e3a8a' }}>FINANCEFLOW CAPITAL NBFC LTD</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Tally Prime ERP 9 &amp; Tally Prime Double-Entry Accounting Journal</div>
                     </div>
-                    <span style={{ fontSize: '0.75rem', color: '#059669', background: '#d1fae5', padding: '3px 10px', borderRadius: '6px', fontWeight: '800' }}>
-                      ✓ READY FOR ERP IMPORT
-                    </span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#065f46', background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '4px 12px', borderRadius: '8px', fontWeight: '800' }}>
+                        ✓ READY FOR TALLY ERP IMPORT
+                      </span>
+                    </div>
                   </div>
 
-                  <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '14px', padding: '20px', position: 'relative' }}>
-                    <pre style={{ color: '#38bdf8', margin: 0, fontSize: '0.775rem', overflowX: 'auto', fontFamily: 'Consolas, Monaco, monospace', lineHeight: '1.5' }}>
-                      {String(generatedDocModal.data.xml_content || `<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE>\n  <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>\n</ENVELOPE>`)}
-                    </pre>
-                  </div>
+                  {/* Accounting Journal Advice Table */}
+                  {(() => {
+                    const dData = generatedDocModal.data || {};
+                    const borrowerObj = (dData.borrower || {}) as Record<string, string>;
+                    const borrowerName = borrowerObj.company_name || String(dData.matched_borrower || dData.payer || 'Borrower Representative');
+                    const totalAmt = Number(dData.amount || dData.total_received || 100000);
+                    const caseIdNum = Number(dData.case_id || selectedCaseId);
+                    const loanAcc = `LN-2026-${String(caseIdNum).padStart(3, '0')}`;
+                    const voucherNum = `RCP-2026-${String(caseIdNum).padStart(5, '0')}`;
+                    const interestAmt = Math.round(totalAmt * 0.2);
+                    const principalAmt = Math.round(totalAmt * 0.8);
+                    const xmlCode = String(dData.xml_content || '');
+
+                    return (
+                      <>
+                        <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '14px 18px', fontSize: '0.8rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>Voucher Type &amp; Number</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>Receipt ({voucherNum})</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>Target Borrower &amp; Loan</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#4f46e5', marginTop: '2px' }}>{borrowerName} ({loanAcc})</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>Total Voucher Amount</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>₹{totalAmt.toLocaleString('en-IN')}</div>
+                          </div>
+                        </div>
+
+                        {/* Double-Entry Ledger Posting Table */}
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Tally Double-Entry Ledger Posting Breakdown
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #cbd5e1' }}>
+                            <thead>
+                              <tr style={{ background: '#0f172a', color: '#ffffff', textAlign: 'left' }}>
+                                <th style={{ padding: '10px 14px' }}>Tally Ledger Name</th>
+                                <th style={{ padding: '10px 14px' }}>Account Classification</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Debit (Dr) ₹</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Credit (Cr) ₹</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '700', color: '#0f172a' }}>HDFC Bank Operating A/c</td>
+                                <td style={{ padding: '10px 14px', color: '#64748b' }}>Bank Ledger (Current Asset)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#059669' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', color: '#94a3b8' }}>-</td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '700', color: '#0f172a' }}>Loan Asset - {borrowerName}</td>
+                                <td style={{ padding: '10px 14px', color: '#64748b' }}>Loan Asset Ledger (Principal Reduction)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', color: '#94a3b8' }}>-</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '700', color: '#0f172a' }}>Interest Income (12.5% P.A.)</td>
+                                <td style={{ padding: '10px 14px', color: '#64748b' }}>Direct Revenue Ledger (Interest Realized)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', color: '#94a3b8' }}>-</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                              </tr>
+                              <tr style={{ background: '#e0e7ff', fontWeight: '900', borderTop: '2px solid #4f46e5' }}>
+                                <td colSpan={2} style={{ padding: '12px 14px', color: '#1e1b4b' }}>TOTAL BALANCED JOURNAL ENTRY</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '0.9rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#4f46e5', fontSize: '0.9rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Raw XML Explorer Box */}
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a' }}>
+                              Raw Tally XML Code Payload:
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(xmlCode);
+                                setXmlCopied(true);
+                                setTimeout(() => setXmlCopied(false), 2000);
+                              }}
+                              style={{
+                                background: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                color: '#334155',
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              {xmlCopied ? <Check size={12} color="#059669" /> : <Copy size={12} />}
+                              <span>{xmlCopied ? 'Copied to Clipboard!' : 'Copy XML Code'}</span>
+                            </button>
+                          </div>
+
+                          <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', padding: '16px', maxHeight: '180px', overflowY: 'auto' }}>
+                            <pre style={{ color: '#38bdf8', margin: 0, fontSize: '0.75rem', fontFamily: 'Consolas, Monaco, monospace', lineHeight: '1.5' }}>
+                              {xmlCode}
+                            </pre>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ) : generatedDocModal.type === 'settlement_statement' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
