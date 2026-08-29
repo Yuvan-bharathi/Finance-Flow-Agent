@@ -44,20 +44,21 @@ const resolveIPv4Address = (hostname) => {
  */
 const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
   const smtpPass = (process.env.SMTP_PASS || config.smtp.pass || '').trim();
-  const brevoKey = (process.env.BREVO_API_KEY || config.smtp.brevoApiKey || (smtpPass.startsWith('xsmtpsib-') || smtpPass.startsWith('xkeysib-') ? smtpPass : '')).trim();
   const resendKey = (process.env.RESEND_API_KEY || config.smtp.resendApiKey || (smtpPass.startsWith('re_') ? smtpPass : '')).trim();
+  // Brevo REST API requires an API key (xkeysib-). Brevo SMTP keys (xsmtpsib-) are for SMTP Relay.
+  const brevoApiKey = (process.env.BREVO_API_KEY || config.smtp.brevoApiKey || (smtpPass.startsWith('xkeysib-') ? smtpPass : '')).trim();
 
-  // 1. Brevo HTTPS API (Port 443 — Primary Provider)
-  if (brevoKey) {
+  // 1. Brevo HTTPS API (Port 443 — Primary REST Provider if xkeysib- API key provided)
+  if (brevoApiKey) {
     try {
-      console.log(`[EmailService HTTPS] 🚀 Attempting Brevo API dispatch to ${to}...`);
+      console.log(`[EmailService HTTPS] 🚀 Attempting Brevo REST API dispatch to ${to}...`);
       const rawUser = (process.env.SMTP_USER || 'yuvanbharathin@gmail.com').trim();
       const senderEmail = rawUser.includes('@') ? rawUser : 'yuvanbharathin@gmail.com';
 
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
-          'api-key': brevoKey,
+          'api-key': brevoApiKey,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
@@ -72,7 +73,7 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
       console.log(`[EmailService HTTPS] Brevo API Response Status: ${res.status}`, data);
 
       if (res.ok && (data.messageId || data.id)) {
-        console.log(`[EmailService HTTPS] ✅ Delivered via Brevo API Port 443 (Message ID: ${data.messageId || data.id})`);
+        console.log(`[EmailService HTTPS] ✅ Delivered via Brevo REST API Port 443 (Message ID: ${data.messageId || data.id})`);
         return { success: true, messageId: data.messageId || data.id, mode: 'brevo_https_api', status: res.status };
       } else {
         const errorMsg = data?.message || data?.code || `HTTP ${res.status}`;
@@ -178,7 +179,11 @@ const sendWithTransporterFallback = async (mailOptions) => {
 
   const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
   const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
-  const rawHost = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
+  let rawHost = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
+  if ((pass.startsWith('xsmtpsib-') || pass.startsWith('xkeysib-')) && (rawHost === 'smtp.gmail.com' || !process.env.SMTP_HOST)) {
+    rawHost = 'smtp-relay.brevo.com';
+  }
+
   let configuredPort = parseInt(process.env.SMTP_PORT || config.smtp.port || '587', 10);
   if (configuredPort === 443) {
     // Port 443 is for HTTPS REST APIs. For raw Nodemailer TCP sockets, map to SSL (465)
