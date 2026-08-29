@@ -39,6 +39,76 @@ const resolveIPv4Address = (hostname) => {
 };
 
 /**
+ * Helper: Sends email via HTTPS REST API (Port 443)
+ * Port 443 is 100% open on Render, Vercel, AWS, and GCP free tiers (immune to SMTP port blocks).
+ */
+const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
+  const resendKey = (process.env.RESEND_API_KEY || '').trim();
+  const brevoKey = (process.env.BREVO_API_KEY || '').trim();
+
+  // 1. Resend HTTPS API (Port 443)
+  if (resendKey) {
+    try {
+      console.log(`[EmailService HTTPS] 🚀 Attempting Resend API dispatch to ${to}...`);
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>',
+          to: [to],
+          subject,
+          html
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.id) {
+        console.log(`[EmailService HTTPS] ✅ Delivered via Resend API (Message ID: ${data.id})`);
+        return { success: true, messageId: data.id, mode: 'resend_https_api' };
+      } else {
+        console.warn('[EmailService HTTPS] Resend API response error:', data);
+      }
+    } catch (err) {
+      console.warn('[EmailService HTTPS] Resend fetch exception:', err.message);
+    }
+  }
+
+  // 2. Brevo HTTPS API (Port 443)
+  if (brevoKey) {
+    try {
+      console.log(`[EmailService HTTPS] 🚀 Attempting Brevo API dispatch to ${to}...`);
+      const senderEmail = (process.env.SMTP_USER || 'yuvanbharathin@gmail.com').trim();
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { email: senderEmail, name: 'FinanceFlow AI Operations' },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.messageId) {
+        console.log(`[EmailService HTTPS] ✅ Delivered via Brevo API (Message ID: ${data.messageId})`);
+        return { success: true, messageId: data.messageId, mode: 'brevo_https_api' };
+      } else {
+        console.warn('[EmailService HTTPS] Brevo API response error:', data);
+      }
+    } catch (err) {
+      console.warn('[EmailService HTTPS] Brevo fetch exception:', err.message);
+    }
+  }
+
+  return null;
+};
+
+/**
  * Helper: Creates a Nodemailer transport that connects via direct IPv4 address
  * with proper SNI (servername) so Gmail's TLS cert is validated correctly.
  */
@@ -54,16 +124,22 @@ const createTransporterForPort = (ipv4Host, rawHost, port, user, pass) => {
       servername: rawHost,   // Use smtp.gmail.com as SNI for cert validation
       rejectUnauthorized: false
     },
-    connectionTimeout: 12000,
-    greetingTimeout: 12000,
-    socketTimeout: 15000,
+    connectionTimeout: 6000, // 6s fast fail on blocked cloud ports
+    greetingTimeout: 6000,
+    socketTimeout: 8000,
   });
 };
 
 /**
- * Core dispatch helper — tries configured port first, then auto-falls back.
+ * Core dispatch helper — tries HTTPS API first, then SMTP ports (587 / 465)
  */
 const sendWithTransporterFallback = async (mailOptions) => {
+  // 1. Check for HTTPS API Keys (Port 443 - immune to Render outbound port blocking)
+  const httpsResult = await sendWithHttpsApiFallback(mailOptions);
+  if (httpsResult && httpsResult.success) {
+    return httpsResult;
+  }
+
   const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
   const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
   const rawHost = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
@@ -78,7 +154,7 @@ const sendWithTransporterFallback = async (mailOptions) => {
   console.log(`[EmailService] 📨 Dispatching to: ${mailOptions.to}`);
   console.log(`[EmailService] 📤 From: ${user} | Host: ${rawHost} | Configured port: ${configuredPort}`);
 
-  // Resolve to IPv4 using Node callback-style DNS (guaranteed IPv4-only)
+  // Resolve to IPv4 using Node callback-style DNS
   const ipv4Host = await resolveIPv4Address(rawHost);
 
   // Attempt 1: Configured port (e.g., 587 STARTTLS)
@@ -86,7 +162,7 @@ const sendWithTransporterFallback = async (mailOptions) => {
     console.log(`[EmailService] 🔌 Connecting to ${ipv4Host}:${configuredPort} (SNI: ${rawHost}, Mode: ${configuredPort === 465 ? 'SSL' : 'STARTTLS'})...`);
     const t1 = createTransporterForPort(ipv4Host, rawHost, configuredPort, user, pass);
     const info = await t1.sendMail(mailOptions);
-    console.log(`[EmailService] ✅ Email delivered! Port: ${configuredPort}, MsgID: ${info.messageId}, Response: ${info.response}`);
+    console.log(`[EmailService] ✅ Email delivered! Port: ${configuredPort}, MsgID: ${info.messageId}`);
     return { success: true, messageId: info.messageId, port: configuredPort, response: info.response, host: ipv4Host };
   } catch (err1) {
     console.warn(`[EmailService] ⚠️ Port ${configuredPort} failed: "${err1.message}" — trying fallback port ${fallbackPort}...`);
@@ -99,13 +175,15 @@ const sendWithTransporterFallback = async (mailOptions) => {
       console.log(`[EmailService] ✅ Email delivered via fallback! Port: ${fallbackPort}, MsgID: ${info2.messageId}`);
       return { success: true, messageId: info2.messageId, port: fallbackPort, response: info2.response, host: ipv4Host };
     } catch (err2) {
-      console.error(`[EmailService] ❌ BOTH ports failed!`);
-      console.error(`  Port ${configuredPort} error: ${err1.message}`);
-      console.error(`  Port ${fallbackPort} error: ${err2.message}`);
-      console.error(`  Resolved host: ${ipv4Host}, Raw host: ${rawHost}, User: ${user}`);
+      const isCloudBlocked = err1.message.includes('timeout') && err2.message.includes('timeout');
+      const errMessage = isCloudBlocked
+        ? `Outbound SMTP ports (465/587) are blocked by cloud hosting provider (Render Free Tier). Add RESEND_API_KEY or BREVO_API_KEY in Render Environment Variables for HTTPS (Port 443) delivery.`
+        : `Port ${configuredPort}: ${err1.message}; Port ${fallbackPort}: ${err2.message}`;
+
+      console.error(`[EmailService] ❌ Email dispatch failed to ${mailOptions.to}: ${errMessage}`);
       return {
         success: false,
-        error: `Port ${configuredPort}: ${err1.message}; Port ${fallbackPort}: ${err2.message}`,
+        error: errMessage,
         mode: 'smtp_failed',
         resolvedHost: ipv4Host,
         rawHost,
