@@ -51,7 +51,7 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
   if (resendKey) {
     try {
       console.log(`[EmailService HTTPS] 🚀 Attempting Resend API dispatch to ${to}...`);
-      const defaultResendFrom = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>';
+      const defaultResendFrom = from || process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || `"FinanceFlow AI Operations" <yuvanbharathin@gmail.com>`;
 
       let res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -68,9 +68,9 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
       });
       let data = await res.json();
 
-      // If custom domain unverified on Resend free tier, automatically fallback to onboarding@resend.dev
+      // If custom domain unverified on Resend free tier, retry with yuvanbharathin@gmail.com format
       if (!res.ok && (data?.message?.includes('domain') || data?.statusCode === 403 || data?.name === 'validation_error')) {
-        console.warn('[EmailService HTTPS] ⚠️ Custom Resend domain unverified, retrying with onboarding@resend.dev...');
+        console.warn(`[EmailService HTTPS] ⚠️ Custom domain retry with yuvanbharathin@gmail.com...`);
         res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -78,7 +78,7 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'FinanceFlow AI <onboarding@resend.dev>',
+            from: `"FinanceFlow AI Operations" <yuvanbharathin@gmail.com>`,
             to: [to],
             subject,
             html
