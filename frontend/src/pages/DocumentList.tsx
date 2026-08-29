@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   Mail,
   Send,
-  Printer
+  Printer,
+  Search
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { exportElementToPdf } from '../utils/pdfGenerator';
@@ -84,6 +85,10 @@ export const DocumentList = () => {
   // Generated Document Preview Modal
   const [generatedDocModal, setGeneratedDocModal] = useState<GeneratedDocModal | null>(null);
 
+  // Case selection for document generator
+  const [selectedCaseId, setSelectedCaseId] = useState<number>(1);
+  const [availableCases, setAvailableCases] = useState<Array<{ id: number; company_name: string; amount: number; txn_id: string }>>([]);
+
   const fetchDocuments = async () => {
     try {
       setLoading(true);
@@ -98,6 +103,36 @@ export const DocumentList = () => {
 
   useEffect(() => {
     void fetchDocuments();
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const caseIdParam = searchParams.get('caseId');
+    if (caseIdParam) {
+      setActiveTab('generated');
+      setSelectedCaseId(parseInt(caseIdParam, 10));
+    }
+
+    const fetchCasesList = async () => {
+      try {
+        const res = await api.get('/reconciliations/cases');
+        const caseData = res.data?.data || [];
+        if (Array.isArray(caseData) && caseData.length > 0) {
+          const mapped = caseData.map((c: Record<string, unknown>) => ({
+            id: Number(c.id),
+            company_name: String(c.company_name || c.sender_name || `Case #${c.id}`),
+            amount: Number(c.payment_amount || c.amount || 0),
+            txn_id: String(c.transaction_id || `TXN-${c.id}`)
+          }));
+          setAvailableCases(mapped);
+          if (!caseIdParam && mapped[0]) {
+            setSelectedCaseId(mapped[0].id);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch cases for document generator:', err);
+      }
+    };
+
+    void fetchCasesList();
   }, []);
 
   const handleInspectDocument = async (doc: DocumentItem) => {
@@ -149,22 +184,32 @@ export const DocumentList = () => {
     }
   };
 
+  // Filter states for high-volume transactions
+  const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [docCompanyFilter, setDocCompanyFilter] = useState('ALL');
+
   const buildFallbackDocumentData = (_type: string, title: string, caseId = 1): Record<string, unknown> => {
-    const now = new Date().toISOString();
+    const selectedCaseObj = availableCases.find(c => c.id === caseId);
+    const companyName = selectedCaseObj?.company_name || 'Borrower Representative';
+    const amount = selectedCaseObj?.amount || 100000;
+    const txnId = selectedCaseObj?.txn_id || `TXN-BANK-SIM-${caseId}`;
     const dateStr = '28-Aug-2026';
-    const amount = 100000;
+
+    const interestAmt = Math.round(amount * 0.2);
+    const principalAmt = Math.round(amount * 0.8);
 
     return {
       document_type: title,
       reference_id: `INV-2026-08-${String(caseId).padStart(4, '0')}`,
       case_id: caseId,
-      receipt_number: `RCP-2026-00125`,
-      statement_ref: `SET-STMT-2026-01`,
-      transaction_id: 'TXN-BANK-SIM-88921',
-      utr_number: 'HDFCR520260828009182',
+      receipt_number: `RCP-2026-${String(caseId).padStart(5, '0')}`,
+      statement_ref: `SET-STMT-2026-${String(caseId).padStart(4, '0')}`,
+      transaction_id: txnId,
+      utr_number: txnId,
       payment_date: dateStr,
       payment_mode: 'RTGS / Corporate Net Banking',
       amount: amount,
+      matched_borrower: companyName,
 
       // Lender Corporate Details
       lender: {
@@ -179,50 +224,38 @@ export const DocumentList = () => {
 
       // Borrower Complete KYC Profile
       borrower: {
-        company_name: 'Apex Logistics Pvt Ltd',
+        company_name: companyName,
         cin: 'U60200TN2018PTC123456',
         pan: 'AABCA1234F',
         gstin: '33AABCA1234F1Z8',
         registered_address: 'Plot No. 44, Guindy Industrial Estate, Chennai, TN - 600032',
         authorized_contact: 'Rajesh Kumar (Chief Financial Officer)',
-        email: 'rajesh.k@apexlogistics.in',
+        email: 'finance@company.com',
         phone: '+91 98401 23456',
         debited_bank_account: 'HDFC Bank A/c ************4781'
       },
 
       // Credit Facility Details
       facility: {
-        loan_account: 'LN-2026-001',
-        facility_type: 'Commercial Vehicle & Equipment Term Facility',
-        sanctioned_amount: 2500000,
-        opening_principal: 1250000,
-        principal_deducted: 80000,
-        closing_principal: 1170000,
-        interest_rate_p_a: '12.50% p.a.',
-        next_due_date: '30-Sep-2026',
-        installment_no: 'Installment #3 of 36'
+        loan_account: `LN-2026-${String(caseId).padStart(3, '0')}`,
+        facility_type: 'Commercial Term Credit Facility',
+        sanctioned_amount: Math.max(amount * 2, 2500000),
+        opening_principal: Math.max(amount, 1250000),
+        principal_deducted: principalAmt,
+        closing_principal: Math.max(0, Math.max(amount, 1250000) - principalAmt),
+        interest_rate: '12.50% p.a. (Fixed Reducing)',
+        installment_milestone: `EMI Installment #${Math.min(12, Math.max(1, caseId))} of 36`
       },
 
-      // Statutory Waterfall Breakdown Table
-      allocations: [
-        { item: 'Late Payment Penalties & Delayed Fees', scheduled: 0, allocated: 0, balance: 0, status: 'CLEARED' },
-        { item: 'Overdue Milestone Interest', scheduled: 0, allocated: 0, balance: 0, status: 'CLEARED' },
-        { item: 'Current Scheduled Period Interest (12.5% p.a.)', scheduled: 20000, allocated: 20000, balance: 0, status: 'CLEARED' },
-        { item: 'Current Scheduled Principal Repayment', scheduled: 80000, allocated: 80000, balance: 0, status: 'CLEARED' },
-        { item: 'Surplus / Advance Principal Pre-Closure', scheduled: 0, allocated: 0, balance: 0, status: 'N/A' }
+      waterfall: [
+        { item: '1. Late Payment Penalty & Delayed Interest', scheduled: 0, settled: 0, outstanding: 0, status: 'CLEARED' },
+        { item: '2. Overdue Milestone Interest Charges', scheduled: 0, settled: 0, outstanding: 0, status: 'CLEARED' },
+        { item: '3. Current Scheduled Period Interest (12.5% p.a.)', scheduled: interestAmt, settled: interestAmt, outstanding: 0, status: 'CLEARED' },
+        { item: '4. Current Scheduled Principal Repayment', scheduled: principalAmt, settled: principalAmt, outstanding: 0, status: 'CLEARED' }
       ],
 
-      // Agent 4 Audit & Governance Certificate
-      governance: {
-        reconciled_by: 'Agent 1 (Payment Matching) — 96% Match Confidence',
-        fraud_guardrail: 'Agent 7 (Anomaly Check) — 0 Risk Flags (safe_to_allocate: TRUE)',
-        authorized_signatory: 'Yuvan Bharathi (Super Admin / Chief Financial Officer)',
-        verification_hash: 'SHA256: 8F2A-99B1-401C-EE74-0012',
-        generated_at: now
-      },
-
       status: 'RESOLVED & SETTLED',
-      summary: `Inbound RTGS wire deposit of ₹1,00,000.00 received from Apex Logistics Pvt Ltd has been reconciled and settled across statutory waterfall priorities with zero residual overdue.`
+      summary: `Inbound RTGS wire deposit of ₹${amount.toLocaleString('en-IN')} received from ${companyName} has been reconciled and settled across statutory waterfall priorities with zero residual overdue.`
     };
   };
 
@@ -513,92 +546,231 @@ export const DocumentList = () => {
         </div>
       ) : (
         /* Generated Financial Documents Tab */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '18px' }}>
-          {sampleGeneratedDocs.map((doc) => (
-            <div
-              key={doc.id}
-              style={{
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* Multi-Filter Header Suite */}
+          {(() => {
+            const uniqueCompanies = Array.from(new Set(availableCases.map(c => c.company_name).filter(Boolean)));
+            const filteredCasesList = availableCases.filter(c => {
+              if (docCompanyFilter !== 'ALL' && c.company_name !== docCompanyFilter) return false;
+              if (docSearchQuery.trim()) {
+                const q = docSearchQuery.toLowerCase().trim();
+                return (
+                  String(c.id).includes(q) ||
+                  c.company_name.toLowerCase().includes(q) ||
+                  c.txn_id.toLowerCase().includes(q)
+                );
+              }
+              return true;
+            });
+
+            return (
+              <div style={{
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                border: '1.5px solid #cbd5e1',
                 borderRadius: '16px',
-                padding: '20px',
+                padding: '18px 22px',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                gap: '14px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ padding: '8px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                      {doc.icon}
+                    <div style={{ padding: '8px', borderRadius: '10px', background: '#e0e7ff', color: '#4f46e5' }}>
+                      <Receipt size={22} />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>{doc.id}</div>
-                      <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{doc.title}</h3>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
+                        Enterprise Payment Invoice &amp; Document Generator
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        Filter by Company or search TXN ID / Case # to dynamically generate official receipts, waterfall statements, and ERP XMLs.
+                      </div>
                     </div>
                   </div>
-                  <span style={{ background: doc.badgeColor, color: doc.badgeText, padding: '4px 10px', borderRadius: '8px', fontSize: '0.725rem', fontWeight: '800' }}>
-                    {doc.badge}
-                  </span>
+
+                  <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#4f46e5', background: '#e0e7ff', padding: '4px 12px', borderRadius: '20px' }}>
+                    {filteredCasesList.length} Matching Transactions
+                  </div>
                 </div>
 
-                <div style={{ fontSize: '0.825rem', color: '#475569', lineHeight: '1.5', marginTop: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px' }}>
-                  <div><strong>Borrower:</strong> {doc.borrower}</div>
-                  <div><strong>Ref:</strong> {doc.txn_id}</div>
-                  <div><strong>Date:</strong> {doc.date}</div>
-                  <div style={{ color: '#6366f1', fontWeight: '600', marginTop: '4px' }}>Deterministic 0-Hallucination Template</div>
+                {/* Filter Controls Bar */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  {/* Search Query */}
+                  <div style={{ position: 'relative' }}>
+                    <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      placeholder="Search Case #, TXN ID, UTR..."
+                      value={docSearchQuery}
+                      onChange={(e) => setDocSearchQuery(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '7px 10px 7px 32px',
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        color: '#0f172a',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  {/* Company Filter Dropdown */}
+                  <div>
+                    <select
+                      value={docCompanyFilter}
+                      onChange={(e) => setDocCompanyFilter(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '7px 10px',
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        color: '#0f172a',
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="ALL">🏢 All Companies / Borrowers ({uniqueCompanies.length})</option>
+                      {uniqueCompanies.map(cName => (
+                        <option key={cName} value={cName}>{cName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Target Case Selector */}
+                  <div>
+                    <select
+                      value={selectedCaseId}
+                      onChange={(e) => setSelectedCaseId(Number(e.target.value))}
+                      style={{
+                        width: '100%',
+                        padding: '7px 10px',
+                        background: '#ffffff',
+                        border: '1.5px solid #6366f1',
+                        color: '#0f172a',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
+                      {filteredCasesList.length > 0 ? (
+                        filteredCasesList.map(c => (
+                          <option key={c.id} value={c.id}>
+                            Case #{c.id} — {c.company_name} (₹{c.amount.toLocaleString('en-IN')})
+                          </option>
+                        ))
+                      ) : (
+                        <option value={1}>Case #5090006 — ABC Technologies Pvt Ltd (₹2,50,00,000.00)</option>
+                      )}
+                    </select>
+                  </div>
                 </div>
               </div>
+            );
+          })()}
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                <button
-                  onClick={() => void handlePreviewGeneratedDoc(doc.type, doc.title, doc.case_id)}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '18px' }}>
+            {sampleGeneratedDocs.map((doc) => {
+              const activeCaseObj = availableCases.find(c => c.id === selectedCaseId);
+              const displayBorrower = activeCaseObj?.company_name || doc.borrower;
+              const displayTxn = activeCaseObj?.txn_id || doc.txn_id;
+
+              return (
+                <div
+                  key={doc.id}
                   style={{
-                    flex: 1,
-                    background: '#f8fafc',
-                    border: '1px solid #cbd5e1',
-                    color: '#0f172a',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                    transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                   }}
                 >
-                  <Eye size={14} />
-                  <span>Preview</span>
-                </button>
-                <button
-                  onClick={() => void handleDownloadGeneratedDoc(doc.type, doc.title, doc.case_id)}
-                  style={{
-                    flex: 1,
-                    background: '#4f46e5',
-                    border: 'none',
-                    color: '#ffffff',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <Download size={14} />
-                  <span>Download</span>
-                </button>
-              </div>
-            </div>
-          ))}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ padding: '8px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                          {doc.icon}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>Case #{selectedCaseId}</div>
+                          <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{doc.title}</h3>
+                        </div>
+                      </div>
+                      <span style={{ background: doc.badgeColor, color: doc.badgeText, padding: '4px 10px', borderRadius: '8px', fontSize: '0.725rem', fontWeight: '800' }}>
+                        {doc.badge}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.825rem', color: '#475569', lineHeight: '1.5', marginTop: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px' }}>
+                      <div><strong>Borrower:</strong> {displayBorrower}</div>
+                      <div><strong>Ref:</strong> {displayTxn}</div>
+                      <div><strong>Date:</strong> {doc.date}</div>
+                      <div style={{ color: '#6366f1', fontWeight: '600', marginTop: '4px' }}>Deterministic 0-Hallucination Template</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                    <button
+                      onClick={() => void handlePreviewGeneratedDoc(doc.type, doc.title, selectedCaseId)}
+                      style={{
+                        flex: 1,
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        color: '#334155',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Eye size={14} />
+                      <span>Preview</span>
+                    </button>
+
+                    <button
+                      onClick={() => void handleDownloadGeneratedDoc(doc.type, doc.title, selectedCaseId)}
+                      style={{
+                        flex: 1,
+                        background: '#4f46e5',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Download size={14} />
+                      <span>Download</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -985,119 +1157,137 @@ export const DocumentList = () => {
                   </div>
 
                   {/* Borrower & Facility 2-Column Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', fontSize: '0.8rem' }}>
-                    {/* Borrower KYC */}
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
-                      <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#4f46e5', textTransform: 'uppercase', marginBottom: '8px' }}>
-                        🏢 BORROWER / PAYER (BILLED TO)
-                      </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
-                        Apex Logistics Pvt Ltd
-                      </div>
-                      <div style={{ color: '#475569', lineHeight: '1.5' }}>
-                        <div><strong>Registered Address:</strong> Plot No. 44, Guindy Industrial Estate, Chennai, TN - 600032</div>
-                        <div><strong>CIN:</strong> U60200TN2018PTC123456</div>
-                        <div><strong>PAN:</strong> AABCA1234F • <strong>GSTIN:</strong> 33AABCA1234F1Z8</div>
-                        <div><strong>Authorized CFO:</strong> Rajesh Kumar (rajesh.k@apexlogistics.in)</div>
-                        <div><strong>Debited Bank A/c:</strong> HDFC Bank A/c ************4781</div>
-                      </div>
-                    </div>
+                  {(() => {
+                    const dData = generatedDocModal.data || {};
+                    const borrowerObj = (dData.borrower || {}) as Record<string, string>;
+                    const facilityObj = (dData.facility || {}) as Record<string, string | number>;
+                    const borrowerName = borrowerObj.company_name || String(dData.matched_borrower || dData.payer || 'Borrower Representative');
+                    const totalAmt = Number(dData.amount || dData.total_received || dData.total_inbound || 100000);
+                    const loanAcc = String(facilityObj.loan_account || dData.loan_account || `LN-2026-${String(dData.case_id || 1).padStart(3, '0')}`);
+                    const utrNum = String(dData.utr_number || dData.transaction_id || `TXN-BANK-${dData.case_id || 1}`);
+                    const dateVal = String(dData.payment_date || dData.settlement_date || '28-Aug-2026');
 
-                    {/* Facility Details */}
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
-                      <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#0284c7', textTransform: 'uppercase', marginBottom: '8px' }}>
-                        📑 CREDIT FACILITY &amp; INVOICE DETAILS
-                      </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
-                        Loan A/c: LN-2026-001
-                      </div>
-                      <div style={{ color: '#475569', lineHeight: '1.5' }}>
-                        <div><strong>Facility Type:</strong> Commercial Vehicle &amp; Fleet Term Loan</div>
-                        <div><strong>Sanctioned Facility:</strong> ₹25,00,000.00</div>
-                        <div><strong>Interest Rate:</strong> 12.50% p.a. (Fixed Reducing)</div>
-                        <div><strong>Installment Milestone:</strong> EMI Installment #3 of 36</div>
-                        <div><strong>Inbound Bank UTR:</strong> TXN-BANK-SIM-88921 (RTGS Wire)</div>
-                      </div>
-                    </div>
-                  </div>
+                    const interestAmt = Math.round(totalAmt * 0.2);
+                    const principalAmt = Math.round(totalAmt * 0.8);
 
-                  {/* Statutory Waterfall Allocation Table */}
-                  <div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
-                      Statutory Waterfall Allocation Breakdown
-                    </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #e2e8f0' }}>
-                      <thead>
-                        <tr style={{ background: '#0f172a', color: '#ffffff', textAlign: 'left' }}>
-                          <th style={{ padding: '10px 14px' }}>Statutory Item Description</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Scheduled Due (₹)</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Allocated / Settled (₹)</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Outstanding (₹)</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'center' }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>1. Late Payment Penalty &amp; Delayed Interest</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>2. Overdue Milestone Interest Charges</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>3. Current Scheduled Period Interest (12.5% p.a.)</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹20,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹20,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>4. Current Scheduled Principal Repayment</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹80,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹80,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ background: '#eef2ff', fontWeight: '800', borderTop: '2px solid #4f46e5' }}>
-                          <td style={{ padding: '12px 14px', color: '#1e3a8a' }}>TOTAL INBOUND SETTLEMENT (INR)</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹1,00,000.00</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '0.95rem' }}>₹1,00,000.00</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'center', color: '#059669' }}>PAID</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <div style={{ fontSize: '0.75rem', fontStyle: 'italic', color: '#64748b', marginTop: '6px' }}>
-                      Amount in Words: Indian Rupees One Lakh Only.
-                    </div>
-                  </div>
+                    return (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', fontSize: '0.8rem' }}>
+                          {/* Borrower KYC */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                            <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#4f46e5', textTransform: 'uppercase', marginBottom: '8px' }}>
+                              🏢 BORROWER / PAYER (BILLED TO)
+                            </div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
+                              {borrowerName}
+                            </div>
+                            <div style={{ color: '#475569', lineHeight: '1.5' }}>
+                              <div><strong>Registered Address:</strong> {borrowerObj.registered_address || 'Plot No. 44, Guindy Industrial Estate, Chennai, TN - 600032'}</div>
+                              <div><strong>CIN:</strong> {borrowerObj.cin || 'U60200TN2018PTC123456'}</div>
+                              <div><strong>PAN:</strong> {borrowerObj.pan || 'AABCA1234F'} • <strong>GSTIN:</strong> {borrowerObj.gstin || '33AABCA1234F1Z8'}</div>
+                              <div><strong>Authorized CFO:</strong> {borrowerObj.authorized_contact || 'Rajesh Kumar'} ({borrowerObj.email || 'finance@company.com'})</div>
+                              <div><strong>Debited Bank A/c:</strong> {borrowerObj.debited_bank_account || 'HDFC Bank A/c ************4781'}</div>
+                            </div>
+                          </div>
 
-                  {/* Loan Balance Progression Card */}
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', fontSize: '0.8rem' }}>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Opening Principal</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹12,50,000.00</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Principal Reduced</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>- ₹80,000.00</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Closing Balance</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹11,70,000.00</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Next Due Date</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>30-Sep-2026</div>
-                    </div>
-                  </div>
+                          {/* Facility Details */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                            <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#0284c7', textTransform: 'uppercase', marginBottom: '8px' }}>
+                              📑 CREDIT FACILITY &amp; INVOICE DETAILS
+                            </div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
+                              Loan A/c: {loanAcc}
+                            </div>
+                            <div style={{ color: '#475569', lineHeight: '1.5' }}>
+                              <div><strong>Facility Type:</strong> {String(facilityObj.facility_type || 'Commercial Term Loan')}</div>
+                              <div><strong>Sanctioned Facility:</strong> ₹{Number(facilityObj.sanctioned_amount || Math.max(totalAmt * 2, 2500000)).toLocaleString('en-IN')}</div>
+                              <div><strong>Interest Rate:</strong> {String(facilityObj.interest_rate || '12.50% p.a. (Fixed Reducing)')}</div>
+                              <div><strong>Installment Milestone:</strong> {String(facilityObj.installment_milestone || `EMI Installment #${Math.min(12, Math.max(1, Number(dData.case_id || 1)))} of 36`)}</div>
+                              <div><strong>Inbound Bank UTR:</strong> {utrNum} (RTGS Wire)</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Statutory Waterfall Allocation Table */}
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Statutory Waterfall Allocation Breakdown
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #e2e8f0' }}>
+                            <thead>
+                              <tr style={{ background: '#0f172a', color: '#ffffff', textAlign: 'left' }}>
+                                <th style={{ padding: '10px 14px' }}>Statutory Item Description</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Scheduled Due (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Allocated / Settled (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Outstanding (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'center' }}>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>1. Late Payment Penalty &amp; Delayed Interest</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>2. Overdue Milestone Interest Charges</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>3. Current Scheduled Period Interest (12.5% p.a.)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>4. Current Scheduled Principal Repayment</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ background: '#eef2ff', fontWeight: '800', borderTop: '2px solid #4f46e5' }}>
+                                <td style={{ padding: '12px 14px', color: '#1e3a8a' }}>TOTAL INBOUND SETTLEMENT (INR)</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '0.95rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'center', color: '#059669' }}>PAID</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div style={{ fontSize: '0.75rem', fontStyle: 'italic', color: '#64748b', marginTop: '6px' }}>
+                            Amount Received: ₹{totalAmt.toLocaleString('en-IN')} (Reconciled on {dateVal}).
+                          </div>
+                        </div>
+
+                        {/* Loan Balance Progression Card */}
+                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', fontSize: '0.8rem' }}>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Opening Principal</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.opening_principal || Math.max(totalAmt, 1250000)).toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Principal Reduced</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>- ₹{principalAmt.toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Closing Balance</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.closing_principal || Math.max(0, Math.max(totalAmt, 1250000) - principalAmt)).toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Next Due Date</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>30-Sep-2026</div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   {/* Signatures & Corporate Certification */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '16px', fontSize: '0.75rem', color: '#64748b' }}>

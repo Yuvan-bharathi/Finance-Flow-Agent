@@ -868,12 +868,38 @@ export const ActionCenterDrawer = ({
               </div>
 
               {(normStatus === 'approved' || normStatus === 'resolved') && (
-                <div style={{ background: '#ecfdf5', border: '1.5px solid #a7f3d0', borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <CheckCircle size={20} color="#059669" />
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#065f46' }}>Settlement Finalized &amp; Allocated</div>
-                    <div style={{ fontSize: '0.75rem', color: '#047857' }}>Payment is posted in the ledger. You can re-allocate or reverse below.</div>
+                <div style={{ background: '#ecfdf5', border: '1.5px solid #a7f3d0', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <CheckCircle size={20} color="#059669" />
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#065f46' }}>Settlement Finalized &amp; Allocated</div>
+                      <div style={{ fontSize: '0.75rem', color: '#047857' }}>Payment is posted in the ledger. Invoice &amp; receipt ready for generation.</div>
+                    </div>
                   </div>
+
+                  <button
+                    onClick={() => {
+                      window.location.href = `/documents?caseId=${caseItem.id}&type=payment_receipt`;
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 14px',
+                      fontSize: '0.78rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 6px rgba(79,70,229,0.25)',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <FileSpreadsheet size={14} /> 🧾 Generate &amp; View Payment Receipt / Invoice
+                  </button>
                 </div>
               )}
 
