@@ -32,10 +32,13 @@ export const sendCollectionReminderService = async (companyId, draftPayload, use
     VALUES (?, 'SEND_COLLECTION_REMINDER', 'company', ?, ?, '127.0.0.1');
   `, [userId || null, companyId, JSON.stringify({ ...draftPayload, email_delivery: emailResult })]);
 
+  const isDelivered = emailResult && emailResult.success === true;
   return {
-    success: true,
+    success: isDelivered,
     sent_at: new Date().toISOString(),
-    message: `Collection follow-up reminder dispatched to ${draftPayload.recipient_email}`,
+    message: isDelivered
+      ? `Collection follow-up reminder dispatched to ${draftPayload.recipient_email}`
+      : `Collection reminder logged, but email delivery failed: ${emailResult?.error || 'SMTP Error'}`,
     email_delivery: emailResult
   };
 };

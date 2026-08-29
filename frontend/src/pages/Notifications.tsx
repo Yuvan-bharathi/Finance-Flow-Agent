@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  BellRing, CheckCircle2, XCircle,
+  CheckCircle2, XCircle,
   RefreshCw, Clock, Send, Filter, Zap,
   Check, X, ChevronDown, ChevronUp, AlertCircle, Bot,
   Mail, Copy, CheckSquare, Square, SendHorizontal,
@@ -98,6 +98,7 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
   const [expandedAlertId, setExpandedAlertId] = useState<number | null>(null);
   const [copiedAlertId, setCopiedAlertId] = useState<number | null>(null);
   const [dispatchToast, setDispatchToast] = useState<string | null>(null);
+  const [dispatchErrorToast, setDispatchErrorToast] = useState<string | null>(null);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -177,11 +178,21 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
       return;
     }
     const alertId = typeof alertOrId === 'object' ? alertOrId.id : alertOrId;
+    if (actionLoading[alertId] === 'approving') return;
     const alertObj = typeof alertOrId === 'object' ? alertOrId : alerts.find(a => a.id === alertId);
 
     try {
       setActionLoading(prev => ({ ...prev, [alertId]: 'approving' }));
-      await approveAlert(alertId);
+      const response = await approveAlert(alertId);
+      const resData = response.data as unknown as { success?: boolean; message?: string; data?: { email_delivery?: { success?: boolean; error?: string } } };
+
+      if (resData.success === false || resData.data?.email_delivery?.success === false) {
+        const errorText = resData.message || resData.data?.email_delivery?.error || 'Email dispatch failed. Notice remains pending.';
+        setDispatchErrorToast(`❌ ${errorText}`);
+        setTimeout(() => setDispatchErrorToast(null), 9000);
+        return;
+      }
+
       setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, notification_status: 'approved' } : a));
       setSelectedAlertIds(prev => {
         const next = new Set(prev);
@@ -195,11 +206,17 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
       setTimeout(() => setDispatchToast(null), 7000);
     } catch (err: unknown) {
       console.error('Failed to approve alert:', err);
-      const status = (err as { response?: { status?: number; data?: { message?: string } } })?.response?.status;
+      const status = (err as { response?: { status?: number; data?: { message?: string; data?: { email_delivery?: { error?: string } } } } })?.response?.status;
+      const errData = (err as { response?: { data?: { message?: string; data?: { email_delivery?: { error?: string } } } } })?.response?.data;
+
       if (status === 403 || status === 401) {
         window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
-          detail: { status: status || 403, message: (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Access denied: You do not have permission to approve escalation notices.' },
+          detail: { status: status || 403, message: errData?.message || 'Access denied: You do not have permission to approve escalation notices.' },
         }));
+      } else {
+        const errMsg = errData?.message || errData?.data?.email_delivery?.error || 'Email delivery failed. Notice remains pending.';
+        setDispatchErrorToast(`❌ ${errMsg}`);
+        setTimeout(() => setDispatchErrorToast(null), 9000);
       }
     } finally {
       setActionLoading(prev => ({ ...prev, [alertId]: null }));
@@ -250,16 +267,28 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
     try {
       setBatchLoading(true);
       const res = await batchApproveAlerts(idsToApprove);
-      const rawData = res.data as unknown as { count?: number; data?: { count?: number } };
-      const count = rawData?.count || rawData?.data?.count || idsToApprove.length;
+      const rawData = res.data as unknown as { success?: boolean; message?: string; data?: { count?: number; dispatched?: Array<{ alertId: number }>; failed?: Array<{ alertId: number; error: string }> } };
+      const dispatchedList = rawData?.data?.dispatched || [];
+      const dispatchedIds = dispatchedList.map(d => d.alertId);
 
-      setAlerts(prev => prev.map(a => idsToApprove.includes(a.id) ? { ...a, notification_status: 'approved' } : a));
+      if (dispatchedIds.length > 0) {
+        setAlerts(prev => prev.map(a => dispatchedIds.includes(a.id) ? { ...a, notification_status: 'approved' } : a));
+      }
       setSelectedAlertIds(new Set());
 
-      setDispatchToast(`🚀 Successfully approved & dispatched ${count} notices in batch!`);
-      setTimeout(() => setDispatchToast(null), 8000);
-    } catch (err) {
+      if (rawData.success !== false) {
+        setDispatchToast(`🚀 Successfully approved & dispatched ${dispatchedIds.length} notices in batch!`);
+        setTimeout(() => setDispatchToast(null), 8000);
+      } else {
+        const failCount = rawData?.data?.failed?.length || 0;
+        setDispatchErrorToast(`⚠️ Dispatched ${dispatchedIds.length} notices, but ${failCount} failed due to email delivery errors.`);
+        setTimeout(() => setDispatchErrorToast(null), 9000);
+      }
+    } catch (err: unknown) {
       console.error('Failed to batch approve alerts:', err);
+      const errData = (err as { response?: { data?: { message?: string } } })?.response?.data;
+      setDispatchErrorToast(`❌ Batch approve failed: ${errData?.message || 'Email delivery failure.'}`);
+      setTimeout(() => setDispatchErrorToast(null), 9000);
     } finally {
       setBatchLoading(false);
     }
@@ -344,58 +373,62 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px',
-        background: '#ffffff',
-        padding: '20px 24px',
-        borderRadius: '16px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
-          }}>
-            <BellRing size={22} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                Notification &amp; Escalation Center
-              </h2>
-              {isAuthorized && (
-                <span style={{
-                  background: '#ecfdf5',
-                  color: '#059669',
-                  border: '1px solid #a7f3d0',
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  fontSize: '0.68rem',
-                  fontWeight: '800',
-                  textTransform: 'uppercase',
-                }}>
-                  {userRole.replace(/_/g, ' ')} Authorized
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0' }}>
-              Executive SLA breach escalations (Agent 6) &amp; borrower debt collection notices (Agent 3) with single &amp; batch dispatch.
-            </p>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Category Tabs & Action Controls Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: '#ffffff',
+          padding: '5px 8px',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          flexWrap: 'wrap',
+        }}>
+          <button
+            onClick={() => setCategoryTab('all')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', borderRadius: '8px', border: 'none',
+              fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
+              background: categoryTab === 'all' ? '#0f172a' : 'transparent',
+              color: categoryTab === 'all' ? '#ffffff' : '#64748b',
+            }}
+          >
+            <span>All Dispatches</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryTab('escalation')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', borderRadius: '8px', border: 'none',
+              fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
+              background: categoryTab === 'escalation' ? '#4f46e5' : 'transparent',
+              color: categoryTab === 'escalation' ? '#ffffff' : '#64748b',
+            }}
+          >
+            <AlertOctagon size={15} />
+            <span>Executive Escalations</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(isInternalEscalation).length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryTab('collection')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', borderRadius: '8px', border: 'none',
+              fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
+              background: categoryTab === 'collection' ? '#059669' : 'transparent',
+              color: categoryTab === 'collection' ? '#ffffff' : '#64748b',
+            }}
+          >
+            <Mail size={15} />
+            <span>Borrower Follow-Up Notices</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(a => !isInternalEscalation(a)).length})</span>
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -439,64 +472,9 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
             }}
           >
             <Zap size={15} />
-            {scanning ? 'Scanning SLAs...' : 'Run Escalation Scan (Agent 6)'}
+            {scanning ? 'Scanning SLAs...' : 'Run Escalation Scan'}
           </button>
         </div>
-      </div>
-
-      {/* Category Tabs */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        background: '#ffffff',
-        padding: '8px 12px',
-        borderRadius: '12px',
-        border: '1px solid #e2e8f0',
-      }}>
-        <button
-          onClick={() => setCategoryTab('all')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', borderRadius: '8px', border: 'none',
-            fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
-            background: categoryTab === 'all' ? '#0f172a' : 'transparent',
-            color: categoryTab === 'all' ? '#ffffff' : '#64748b',
-          }}
-        >
-          <span>All Dispatches</span>
-          <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.length})</span>
-        </button>
-
-        <button
-          onClick={() => setCategoryTab('escalation')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', borderRadius: '8px', border: 'none',
-            fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
-            background: categoryTab === 'escalation' ? '#4f46e5' : 'transparent',
-            color: categoryTab === 'escalation' ? '#ffffff' : '#64748b',
-          }}
-        >
-          <AlertOctagon size={15} />
-          <span>Executive Escalations (Agent 6)</span>
-          <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(isInternalEscalation).length})</span>
-        </button>
-
-        <button
-          onClick={() => setCategoryTab('collection')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', borderRadius: '8px', border: 'none',
-            fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
-            background: categoryTab === 'collection' ? '#059669' : 'transparent',
-            color: categoryTab === 'collection' ? '#ffffff' : '#64748b',
-          }}
-        >
-          <Mail size={15} />
-          <span>Borrower Follow-Up Notices (Agent 3)</span>
-          <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(a => !isInternalEscalation(a)).length})</span>
-        </button>
       </div>
 
       {/* Toast */}
@@ -519,6 +497,31 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
             <span>{dispatchToast}</span>
           </div>
           <button onClick={() => setDispatchToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#14532d' }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {dispatchErrorToast && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fef2f2 0%, #ffe4e6 100%)',
+          border: '1.5px solid #fca5a5',
+          borderRadius: '12px',
+          padding: '14px 20px',
+          color: '#991b1b',
+          fontSize: '0.85rem',
+          fontWeight: '700',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 12px rgba(220, 38, 38, 0.15)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertCircle size={18} color="#dc2626" />
+            <span>{dispatchErrorToast}</span>
+          </div>
+          <button onClick={() => setDispatchErrorToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>
             <X size={16} />
           </button>
         </div>
@@ -796,7 +799,7 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
                       gap: '4px',
                     }}>
                       {isInternal ? <AlertOctagon size={11} /> : <Mail size={11} />}
-                      {isInternal ? 'EXECUTIVE ESCALATION (AGENT 6)' : 'BORROWER NOTICE (AGENT 3)'}
+                      {isInternal ? 'EXECUTIVE ESCALATION' : 'BORROWER NOTICE'}
                     </span>
 
                     <span style={{

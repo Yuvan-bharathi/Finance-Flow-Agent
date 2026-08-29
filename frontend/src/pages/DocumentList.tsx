@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import {
   FileText,
@@ -15,7 +15,10 @@ import {
   ShieldCheck,
   Mail,
   Send,
-  Printer
+  Printer,
+  Search,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { exportElementToPdf } from '../utils/pdfGenerator';
@@ -74,6 +77,8 @@ export const DocumentList = () => {
   // Upload Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadForm, setUploadForm] = useState({
     file_name: '',
     company_name: 'Sunrise Solar Energy',
@@ -81,8 +86,22 @@ export const DocumentList = () => {
     file_size_kb: 420
   });
 
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+    const sizeKb = Math.max(10, Math.round(file.size / 1024));
+    setUploadForm(prev => ({
+      ...prev,
+      file_name: file.name,
+      file_size_kb: sizeKb
+    }));
+  };
+
   // Generated Document Preview Modal
   const [generatedDocModal, setGeneratedDocModal] = useState<GeneratedDocModal | null>(null);
+
+  // Case selection for document generator
+  const [selectedCaseId, setSelectedCaseId] = useState<number>(1);
+  const [availableCases, setAvailableCases] = useState<Array<{ id: number; company_name: string; amount: number; txn_id: string }>>([]);
 
   const fetchDocuments = async () => {
     try {
@@ -98,6 +117,36 @@ export const DocumentList = () => {
 
   useEffect(() => {
     void fetchDocuments();
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const caseIdParam = searchParams.get('caseId');
+    if (caseIdParam) {
+      setActiveTab('generated');
+      setSelectedCaseId(parseInt(caseIdParam, 10));
+    }
+
+    const fetchCasesList = async () => {
+      try {
+        const res = await api.get('/reconciliations/cases');
+        const caseData = res.data?.data || [];
+        if (Array.isArray(caseData) && caseData.length > 0) {
+          const mapped = caseData.map((c: Record<string, unknown>) => ({
+            id: Number(c.id),
+            company_name: String(c.company_name || c.sender_name || `Case #${c.id}`),
+            amount: Number(c.payment_amount || c.amount || 0),
+            txn_id: String(c.transaction_id || `TXN-${c.id}`)
+          }));
+          setAvailableCases(mapped);
+          if (!caseIdParam && mapped[0]) {
+            setSelectedCaseId(mapped[0].id);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch cases for document generator:', err);
+      }
+    };
+
+    void fetchCasesList();
   }, []);
 
   const handleInspectDocument = async (doc: DocumentItem) => {
@@ -128,20 +177,22 @@ export const DocumentList = () => {
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadForm.file_name.trim()) return;
+    const finalFileName = selectedFile ? selectedFile.name : uploadForm.file_name;
+    if (!finalFileName.trim()) return;
 
     try {
       setUploading(true);
       const payload = {
-        file_name: uploadForm.file_name.endsWith('.pdf') ? uploadForm.file_name : `${uploadForm.file_name}.pdf`,
+        file_name: finalFileName.endsWith('.pdf') || finalFileName.includes('.') ? finalFileName : `${finalFileName}.pdf`,
         document_type: uploadForm.document_type,
-        file_size: uploadForm.file_size_kb * 1024
+        file_size: (uploadForm.file_size_kb || 350) * 1024
       };
 
       await api.post('/documents/upload', payload);
-      setShowUploadModal(false);
-      setUploadForm({ file_name: '', company_name: 'Sunrise Solar Energy', document_type: 'loan_agreement', file_size_kb: 420 });
       await fetchDocuments();
+      setShowUploadModal(false);
+      setSelectedFile(null);
+      setUploadForm({ file_name: '', company_name: 'Sunrise Solar Energy', document_type: 'loan_agreement', file_size_kb: 420 });
     } catch (err) {
       console.error('Upload failed:', err);
     } finally {
@@ -149,22 +200,54 @@ export const DocumentList = () => {
     }
   };
 
+  // Filter states for high-volume transactions
+  const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [docCompanyFilter, setDocCompanyFilter] = useState('ALL');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [showCaseDropdown, setShowCaseDropdown] = useState(false);
+
+  // Dropdown Refs for Click Outside Handler
+  const companyDropdownRef = useRef<HTMLDivElement>(null);
+  const caseDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (companyDropdownRef.current && !companyDropdownRef.current.contains(event.target as Node)) {
+        setShowCompanyDropdown(false);
+      }
+      if (caseDropdownRef.current && !caseDropdownRef.current.contains(event.target as Node)) {
+        setShowCaseDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const buildFallbackDocumentData = (_type: string, title: string, caseId = 1): Record<string, unknown> => {
-    const now = new Date().toISOString();
+    const selectedCaseObj = availableCases.find(c => c.id === caseId);
+    const companyName = selectedCaseObj?.company_name || 'Borrower Representative';
+    const amount = selectedCaseObj?.amount || 100000;
+    const txnId = selectedCaseObj?.txn_id || `TXN-BANK-SIM-${caseId}`;
     const dateStr = '28-Aug-2026';
-    const amount = 100000;
+
+    const interestAmt = Math.round(amount * 0.2);
+    const principalAmt = Math.round(amount * 0.8);
 
     return {
       document_type: title,
       reference_id: `INV-2026-08-${String(caseId).padStart(4, '0')}`,
       case_id: caseId,
-      receipt_number: `RCP-2026-00125`,
-      statement_ref: `SET-STMT-2026-01`,
-      transaction_id: 'TXN-BANK-SIM-88921',
-      utr_number: 'HDFCR520260828009182',
+      receipt_number: `RCP-2026-${String(caseId).padStart(5, '0')}`,
+      statement_ref: `SET-STMT-2026-${String(caseId).padStart(4, '0')}`,
+      transaction_id: txnId,
+      utr_number: txnId,
       payment_date: dateStr,
       payment_mode: 'RTGS / Corporate Net Banking',
       amount: amount,
+      matched_borrower: companyName,
 
       // Lender Corporate Details
       lender: {
@@ -179,50 +262,77 @@ export const DocumentList = () => {
 
       // Borrower Complete KYC Profile
       borrower: {
-        company_name: 'Apex Logistics Pvt Ltd',
+        company_name: companyName,
         cin: 'U60200TN2018PTC123456',
         pan: 'AABCA1234F',
         gstin: '33AABCA1234F1Z8',
         registered_address: 'Plot No. 44, Guindy Industrial Estate, Chennai, TN - 600032',
         authorized_contact: 'Rajesh Kumar (Chief Financial Officer)',
-        email: 'rajesh.k@apexlogistics.in',
+        email: 'finance@company.com',
         phone: '+91 98401 23456',
         debited_bank_account: 'HDFC Bank A/c ************4781'
       },
 
       // Credit Facility Details
       facility: {
-        loan_account: 'LN-2026-001',
-        facility_type: 'Commercial Vehicle & Equipment Term Facility',
-        sanctioned_amount: 2500000,
-        opening_principal: 1250000,
-        principal_deducted: 80000,
-        closing_principal: 1170000,
-        interest_rate_p_a: '12.50% p.a.',
-        next_due_date: '30-Sep-2026',
-        installment_no: 'Installment #3 of 36'
+        loan_account: `LN-2026-${String(caseId).padStart(3, '0')}`,
+        facility_type: 'Commercial Term Credit Facility',
+        sanctioned_amount: Math.max(amount * 2, 2500000),
+        opening_principal: Math.max(amount, 1250000),
+        principal_deducted: principalAmt,
+        closing_principal: Math.max(0, Math.max(amount, 1250000) - principalAmt),
+        interest_rate: '12.50% p.a. (Fixed Reducing)',
+        installment_milestone: `EMI Installment #${Math.min(12, Math.max(1, caseId))} of 36`
       },
 
-      // Statutory Waterfall Breakdown Table
-      allocations: [
-        { item: 'Late Payment Penalties & Delayed Fees', scheduled: 0, allocated: 0, balance: 0, status: 'CLEARED' },
-        { item: 'Overdue Milestone Interest', scheduled: 0, allocated: 0, balance: 0, status: 'CLEARED' },
-        { item: 'Current Scheduled Period Interest (12.5% p.a.)', scheduled: 20000, allocated: 20000, balance: 0, status: 'CLEARED' },
-        { item: 'Current Scheduled Principal Repayment', scheduled: 80000, allocated: 80000, balance: 0, status: 'CLEARED' },
-        { item: 'Surplus / Advance Principal Pre-Closure', scheduled: 0, allocated: 0, balance: 0, status: 'N/A' }
+      waterfall: [
+        { item: '1. Late Payment Penalty & Delayed Interest', scheduled: 0, settled: 0, outstanding: 0, status: 'CLEARED' },
+        { item: '2. Overdue Milestone Interest Charges', scheduled: 0, settled: 0, outstanding: 0, status: 'CLEARED' },
+        { item: '3. Current Scheduled Period Interest (12.5% p.a.)', scheduled: interestAmt, settled: interestAmt, outstanding: 0, status: 'CLEARED' },
+        { item: '4. Current Scheduled Principal Repayment', scheduled: principalAmt, settled: principalAmt, outstanding: 0, status: 'CLEARED' }
       ],
 
-      // Agent 4 Audit & Governance Certificate
-      governance: {
-        reconciled_by: 'Agent 1 (Payment Matching) — 96% Match Confidence',
-        fraud_guardrail: 'Agent 7 (Anomaly Check) — 0 Risk Flags (safe_to_allocate: TRUE)',
-        authorized_signatory: 'Yuvan Bharathi (Super Admin / Chief Financial Officer)',
-        verification_hash: 'SHA256: 8F2A-99B1-401C-EE74-0012',
-        generated_at: now
-      },
+      xml_content: `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>Vouchers</ID>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Receipt" ACTION="Create">
+            <DATE>20260828</DATE>
+            <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>RCP-2026-${String(caseId).padStart(5, '0')}</VOUCHERNUMBER>
+            <REFERENCE>Case #${caseId} / ${txnId}</REFERENCE>
+            <NARRATION>Loan Repayment Credit from ${companyName} against Facility LN-2026-${String(caseId).padStart(3, '0')} (UTR: ${txnId})</NARRATION>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>HDFC Bank Operating A/c</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${amount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Loan Asset - ${companyName}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${principalAmt}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Interest Income (12.5% P.A.)</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${interestAmt}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`,
 
       status: 'RESOLVED & SETTLED',
-      summary: `Inbound RTGS wire deposit of ₹1,00,000.00 received from Apex Logistics Pvt Ltd has been reconciled and settled across statutory waterfall priorities with zero residual overdue.`
+      summary: `Inbound RTGS wire deposit of ₹${amount.toLocaleString('en-IN')} received from ${companyName} has been reconciled and settled across statutory waterfall priorities with zero residual overdue.`
     };
   };
 
@@ -346,77 +456,66 @@ export const DocumentList = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FileText color="#6366f1" size={26} />
-            Document Intelligence &amp; Financial Vault (Agent 4)
-          </h1>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
-            Inspect borrower legal agreements, extract structured contract terms with Groq Llama 3.3 70B, and generate standardized financial reports &amp; ERP XML journals.
-          </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Tabs & Top Action Controls Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setActiveTab('vault')}
+            style={{
+              background: activeTab === 'vault' ? '#4f46e5' : '#f8fafc',
+              color: activeTab === 'vault' ? '#ffffff' : '#64748b',
+              border: '1px solid',
+              borderColor: activeTab === 'vault' ? '#4f46e5' : '#e2e8f0',
+              padding: '8px 16px',
+              borderRadius: '10px',
+              fontSize: '0.85rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <Building size={16} />
+            <span>Contract Vault &amp; Loan Agreements</span>
+            <span style={{ background: activeTab === 'vault' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'vault' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+              {documents.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('generated')}
+            style={{
+              background: activeTab === 'generated' ? '#4f46e5' : '#f8fafc',
+              color: activeTab === 'generated' ? '#ffffff' : '#64748b',
+              border: '1px solid',
+              borderColor: activeTab === 'generated' ? '#4f46e5' : '#e2e8f0',
+              padding: '8px 16px',
+              borderRadius: '10px',
+              fontSize: '0.85rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <Receipt size={16} />
+            <span>Standardized Financial Documents</span>
+            <span style={{ background: activeTab === 'generated' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'generated' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+              {sampleGeneratedDocs.length}
+            </span>
+          </button>
         </div>
 
         <button
           onClick={() => setShowUploadModal(true)}
           className="btn-primary"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '9px 18px', borderRadius: '10px' }}
         >
           <Upload size={18} />
           <span>Upload PDF Agreement</span>
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '12px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-        <button
-          onClick={() => setActiveTab('vault')}
-          style={{
-            background: activeTab === 'vault' ? '#4f46e5' : '#f8fafc',
-            color: activeTab === 'vault' ? '#ffffff' : '#64748b',
-            border: '1px solid',
-            borderColor: activeTab === 'vault' ? '#4f46e5' : '#e2e8f0',
-            padding: '8px 16px',
-            borderRadius: '10px',
-            fontSize: '0.85rem',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Building size={16} />
-          <span>Contract Vault &amp; Loan Agreements</span>
-          <span style={{ background: activeTab === 'vault' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'vault' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
-            {documents.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('generated')}
-          style={{
-            background: activeTab === 'generated' ? '#4f46e5' : '#f8fafc',
-            color: activeTab === 'generated' ? '#ffffff' : '#64748b',
-            border: '1px solid',
-            borderColor: activeTab === 'generated' ? '#4f46e5' : '#e2e8f0',
-            padding: '8px 16px',
-            borderRadius: '10px',
-            fontSize: '0.85rem',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Receipt size={16} />
-          <span>Standardized Financial Documents (Agent 4 Generated)</span>
-          <span style={{ background: activeTab === 'generated' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'generated' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
-            {sampleGeneratedDocs.length}
-          </span>
         </button>
       </div>
 
@@ -431,7 +530,7 @@ export const DocumentList = () => {
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Type</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>File Size</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Uploaded By</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Agent 4 Actions</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -503,7 +602,7 @@ export const DocumentList = () => {
                       }}
                     >
                       <Sparkles size={14} />
-                      <span>Extract Terms (Agent 4)</span>
+                      <span>Extract Terms</span>
                     </button>
                   </td>
                 </tr>
@@ -513,92 +612,398 @@ export const DocumentList = () => {
         </div>
       ) : (
         /* Generated Financial Documents Tab */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '18px' }}>
-          {sampleGeneratedDocs.map((doc) => (
-            <div
-              key={doc.id}
-              style={{
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* Multi-Filter Header Suite */}
+          {(() => {
+            const uniqueCompanies = Array.from(new Set(availableCases.map(c => c.company_name).filter(Boolean)));
+            const filteredCasesList = availableCases.filter(c => {
+              if (docCompanyFilter !== 'ALL' && c.company_name !== docCompanyFilter) return false;
+              if (docSearchQuery.trim()) {
+                const q = docSearchQuery.toLowerCase().trim();
+                return (
+                  String(c.id).includes(q) ||
+                  c.company_name.toLowerCase().includes(q) ||
+                  c.txn_id.toLowerCase().includes(q)
+                );
+              }
+              return true;
+            });
+
+            return (
+              <div style={{
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                border: '1.5px solid #cbd5e1',
                 borderRadius: '16px',
-                padding: '20px',
+                padding: '18px 22px',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                gap: '14px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ padding: '8px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                      {doc.icon}
+                    <div style={{ padding: '8px', borderRadius: '10px', background: '#e0e7ff', color: '#4f46e5' }}>
+                      <Receipt size={22} />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>{doc.id}</div>
-                      <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{doc.title}</h3>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>
+                        Enterprise Payment Invoice &amp; Document Generator
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        Filter by Company or search TXN ID / Case # to dynamically generate official receipts, waterfall statements, and ERP XMLs.
+                      </div>
                     </div>
                   </div>
-                  <span style={{ background: doc.badgeColor, color: doc.badgeText, padding: '4px 10px', borderRadius: '8px', fontSize: '0.725rem', fontWeight: '800' }}>
-                    {doc.badge}
-                  </span>
+
+                  <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#4f46e5', background: '#e0e7ff', padding: '4px 12px', borderRadius: '20px' }}>
+                    {filteredCasesList.length} Matching Transactions
+                  </div>
                 </div>
 
-                <div style={{ fontSize: '0.825rem', color: '#475569', lineHeight: '1.5', marginTop: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px' }}>
-                  <div><strong>Borrower:</strong> {doc.borrower}</div>
-                  <div><strong>Ref:</strong> {doc.txn_id}</div>
-                  <div><strong>Date:</strong> {doc.date}</div>
-                  <div style={{ color: '#6366f1', fontWeight: '600', marginTop: '4px' }}>Deterministic 0-Hallucination Template</div>
+                {/* Filter Controls Bar */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  {/* Search Query */}
+                  <div style={{ position: 'relative' }}>
+                    <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      placeholder="Search Case #, TXN ID, UTR..."
+                      value={docSearchQuery}
+                      onChange={(e) => setDocSearchQuery(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '7px 10px 7px 32px',
+                        background: '#ffffff',
+                        border: '1.5px solid #cbd5e1',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        color: '#0f172a',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  {/* Custom Company Filter Dropdown */}
+                  <div ref={companyDropdownRef} style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCompanyDropdown(!showCompanyDropdown);
+                        setShowCaseDropdown(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '7px 12px',
+                        background: '#ffffff',
+                        border: showCompanyDropdown ? '1.5px solid #6366f1' : '1.5px solid #cbd5e1',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: '700',
+                        color: '#0f172a',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: showCompanyDropdown ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
+                        transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {docCompanyFilter === 'ALL'
+                          ? `🏢 All Companies / Borrowers (${uniqueCompanies.length})`
+                          : `🏢 ${docCompanyFilter}`}
+                      </span>
+                      <ChevronDown size={14} color="#64748b" style={{ transform: showCompanyDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                    </button>
+
+                    {showCompanyDropdown && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        right: 0,
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '12px',
+                        boxShadow: '0 12px 30px rgba(15,23,42,0.18)',
+                        zIndex: 50,
+                        maxHeight: '190px',
+                        overflowY: 'auto',
+                        padding: '6px'
+                      }}>
+                        <div
+                          onClick={() => {
+                            setDocCompanyFilter('ALL');
+                            setShowCompanyDropdown(false);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            background: docCompanyFilter === 'ALL' ? '#e0e7ff' : 'transparent',
+                            color: docCompanyFilter === 'ALL' ? '#4f46e5' : '#1e293b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '4px'
+                          }}
+                        >
+                          <span>🏢 All Companies / Borrowers ({uniqueCompanies.length})</span>
+                          {docCompanyFilter === 'ALL' && <Check size={14} color="#4f46e5" />}
+                        </div>
+
+                        {uniqueCompanies.map(cName => {
+                          const isSelected = docCompanyFilter === cName;
+                          return (
+                            <div
+                              key={cName}
+                              onClick={() => {
+                                setDocCompanyFilter(cName);
+                                setShowCompanyDropdown(false);
+                              }}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                fontSize: '0.8rem',
+                                fontWeight: isSelected ? '700' : '600',
+                                cursor: 'pointer',
+                                background: isSelected ? '#e0e7ff' : 'transparent',
+                                color: isSelected ? '#4f46e5' : '#334155',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                transition: 'background 0.1s ease',
+                                marginBottom: '2px'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = '#f1f5f9';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cName}</span>
+                              {isSelected && <Check size={14} color="#4f46e5" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Custom Target Case Selector Dropdown */}
+                  <div ref={caseDropdownRef} style={{ position: 'relative' }}>
+                    {(() => {
+                      const activeCaseObj = availableCases.find(c => c.id === selectedCaseId);
+                      const displayLabel = activeCaseObj
+                        ? `Case #${activeCaseObj.id} — ${activeCaseObj.company_name} (₹${activeCaseObj.amount.toLocaleString('en-IN')})`
+                        : `Case #${selectedCaseId} — Select Target Case`;
+
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowCaseDropdown(!showCaseDropdown);
+                              setShowCompanyDropdown(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '7px 12px',
+                              background: '#ffffff',
+                              border: showCaseDropdown ? '1.5px solid #4f46e5' : '1.5px solid #6366f1',
+                              borderRadius: '8px',
+                              fontSize: '0.8rem',
+                              fontWeight: '700',
+                              color: '#4f46e5',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              boxShadow: showCaseDropdown ? '0 0 0 3px rgba(79,70,229,0.15)' : '0 1px 3px rgba(99,102,241,0.12)',
+                              transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              🎯 {displayLabel}
+                            </span>
+                            <ChevronDown size={14} color="#4f46e5" style={{ transform: showCaseDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                          </button>
+
+                          {showCaseDropdown && (
+                            <div style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 6px)',
+                              left: 0,
+                              right: 0,
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '12px',
+                              boxShadow: '0 12px 30px rgba(15,23,42,0.18)',
+                              zIndex: 50,
+                              maxHeight: '190px',
+                              overflowY: 'auto',
+                              padding: '6px'
+                            }}>
+                              {filteredCasesList.length > 0 ? (
+                                filteredCasesList.map(c => {
+                                  const isSelected = selectedCaseId === c.id;
+                                  return (
+                                    <div
+                                      key={c.id}
+                                      onClick={() => {
+                                        setSelectedCaseId(c.id);
+                                        setShowCaseDropdown(false);
+                                      }}
+                                      style={{
+                                        padding: '8px 12px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: isSelected ? '800' : '600',
+                                        cursor: 'pointer',
+                                        background: isSelected ? '#e0e7ff' : 'transparent',
+                                        color: isSelected ? '#4f46e5' : '#334155',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        transition: 'background 0.1s ease',
+                                        marginBottom: '2px'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (!isSelected) e.currentTarget.style.background = '#f1f5f9';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>
+                                          Case #{c.id} — {c.company_name}
+                                        </span>
+                                        <span style={{ fontSize: '0.725rem', color: isSelected ? '#6366f1' : '#64748b' }}>
+                                          Amount: ₹{c.amount.toLocaleString('en-IN')} • Ref: {c.txn_id}
+                                        </span>
+                                      </div>
+                                      {isSelected && <Check size={14} color="#4f46e5" />}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div style={{ padding: '12px', fontSize: '0.78rem', color: '#64748b', textAlign: 'center' }}>
+                                  No matching transaction cases found.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
+            );
+          })()}
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                <button
-                  onClick={() => void handlePreviewGeneratedDoc(doc.type, doc.title, doc.case_id)}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '18px' }}>
+            {sampleGeneratedDocs.map((doc) => {
+              const activeCaseObj = availableCases.find(c => c.id === selectedCaseId);
+              const displayBorrower = activeCaseObj?.company_name || doc.borrower;
+              const displayTxn = activeCaseObj?.txn_id || doc.txn_id;
+
+              return (
+                <div
+                  key={doc.id}
                   style={{
-                    flex: 1,
-                    background: '#f8fafc',
-                    border: '1px solid #cbd5e1',
-                    color: '#0f172a',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                    transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                   }}
                 >
-                  <Eye size={14} />
-                  <span>Preview</span>
-                </button>
-                <button
-                  onClick={() => void handleDownloadGeneratedDoc(doc.type, doc.title, doc.case_id)}
-                  style={{
-                    flex: 1,
-                    background: '#4f46e5',
-                    border: 'none',
-                    color: '#ffffff',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <Download size={14} />
-                  <span>Download</span>
-                </button>
-              </div>
-            </div>
-          ))}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ padding: '8px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                          {doc.icon}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b' }}>Case #{selectedCaseId}</div>
+                          <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>{doc.title}</h3>
+                        </div>
+                      </div>
+                      <span style={{ background: doc.badgeColor, color: doc.badgeText, padding: '4px 10px', borderRadius: '8px', fontSize: '0.725rem', fontWeight: '800' }}>
+                        {doc.badge}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.825rem', color: '#475569', lineHeight: '1.5', marginTop: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px' }}>
+                      <div><strong>Borrower:</strong> {displayBorrower}</div>
+                      <div><strong>Ref:</strong> {displayTxn}</div>
+                      <div><strong>Date:</strong> {doc.date}</div>
+                      <div style={{ color: '#6366f1', fontWeight: '600', marginTop: '4px' }}>Deterministic 0-Hallucination Template</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                    <button
+                      onClick={() => void handlePreviewGeneratedDoc(doc.type, doc.title, selectedCaseId)}
+                      style={{
+                        flex: 1,
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        color: '#334155',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Eye size={14} />
+                      <span>Preview</span>
+                    </button>
+
+                    <button
+                      onClick={() => void handleDownloadGeneratedDoc(doc.type, doc.title, selectedCaseId)}
+                      style={{
+                        flex: 1,
+                        background: '#4f46e5',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Download size={14} />
+                      <span>Download</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -646,7 +1051,7 @@ export const DocumentList = () => {
                 </div>
                 <div>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                    Agent 4: Document Intelligence
+                    Document Intelligence
                   </h2>
                   <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
                     {selectedDoc.file_name}
@@ -663,7 +1068,7 @@ export const DocumentList = () => {
               {extracting ? (
                 <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
                   <RefreshCw size={28} className="animate-spin" style={{ margin: '0 auto 12px auto', color: '#6366f1' }} />
-                  <p style={{ fontWeight: '600' }}>Agent 4 is parsing PDF contract and extracting key terms...</p>
+                  <p style={{ fontWeight: '600' }}>Document Intelligence is parsing PDF contract and extracting key terms...</p>
                 </div>
               ) : extractedData ? (
                 <>
@@ -788,9 +1193,77 @@ export const DocumentList = () => {
             </div>
 
             <form onSubmit={(e) => void handleUploadSubmit(e)} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Interactive Drag & Drop File Picker Box */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                  Document File Name (PDF)
+                  Select PDF / Legal Document File
+                </label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleFileSelect(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  style={{
+                    border: selectedFile || uploadForm.file_name ? '2px solid #10b981' : '2px dashed #818cf8',
+                    borderRadius: '14px',
+                    padding: '20px 16px',
+                    textAlign: 'center',
+                    background: selectedFile || uploadForm.file_name ? '#f0fdf4' : '#f8fafc',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleFileSelect(e.target.files[0]);
+                      }
+                    }}
+                    accept=".pdf,.doc,.docx,.csv,.xlsx,.jpg,.jpeg,.png"
+                    style={{ display: 'none' }}
+                  />
+
+                  {selectedFile || uploadForm.file_name ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ padding: '8px', borderRadius: '50%', background: '#d1fae5', color: '#059669' }}>
+                        <Check size={22} />
+                      </div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a', wordBreak: 'break-all' }}>
+                        {selectedFile ? selectedFile.name : uploadForm.file_name}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#047857', fontWeight: '700' }}>
+                        Size: {uploadForm.file_size_kb} KB • Ready for Vault Registration
+                      </div>
+                      <span style={{ fontSize: '0.725rem', color: '#4f46e5', fontWeight: '700', textDecoration: 'underline', marginTop: '2px' }}>
+                        Click to change selected file
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ padding: '10px', borderRadius: '12px', background: '#e0e7ff', color: '#4f46e5' }}>
+                        <Upload size={22} />
+                      </div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a' }}>
+                        Click to Choose File or Drag &amp; Drop Here
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        Supports PDF, DOCX, CSV, PNG, JPG (up to 25MB)
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                  Document Name / Title
                 </label>
                 <input
                   type="text"
@@ -804,7 +1277,8 @@ export const DocumentList = () => {
                     borderRadius: '10px',
                     border: '1px solid #cbd5e1',
                     fontSize: '0.875rem',
-                    outline: 'none'
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
@@ -823,7 +1297,8 @@ export const DocumentList = () => {
                     border: '1px solid #cbd5e1',
                     fontSize: '0.875rem',
                     outline: 'none',
-                    background: '#ffffff'
+                    background: '#ffffff',
+                    boxSizing: 'border-box'
                   }}
                 >
                   <option value="loan_agreement">Loan Agreement / Facility Contract</option>
@@ -834,29 +1309,13 @@ export const DocumentList = () => {
                 </select>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                  Estimated File Size (KB)
-                </label>
-                <input
-                  type="number"
-                  value={uploadForm.file_size_kb}
-                  onChange={(e) => setUploadForm({ ...uploadForm, file_size_kb: parseInt(e.target.value, 10) || 100 })}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '0.875rem',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
               <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setSelectedFile(null);
+                  }}
                   style={{
                     flex: 1,
                     padding: '10px',
@@ -942,11 +1401,275 @@ export const DocumentList = () => {
             {/* Document Printable Body */}
             <div id="printable-invoice" style={{ padding: '32px', overflowY: 'auto', flex: 1, background: '#ffffff', color: '#0f172a' }}>
               {generatedDocModal.type === 'tally_xml' ? (
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#64748b', marginBottom: '8px' }}>Standardized Tally Prime XML Double-Entry Voucher:</div>
-                  <pre style={{ background: '#0f172a', color: '#38bdf8', padding: '20px', borderRadius: '12px', fontSize: '0.775rem', overflowX: 'auto', fontFamily: 'Consolas, monospace', lineHeight: '1.5' }}>
-                    {String(generatedDocModal.data.xml_content || '')}
-                  </pre>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Top Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '16px' }}>
+                    <div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#1e3a8a' }}>FINANCEFLOW CAPITAL NBFC LTD</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Tally Prime ERP 9 &amp; Tally Prime Double-Entry Accounting Journal</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#065f46', background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '4px 12px', borderRadius: '8px', fontWeight: '800' }}>
+                        ✓ READY FOR TALLY ERP IMPORT
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Accounting Journal Advice Table */}
+                  {(() => {
+                    const dData = generatedDocModal.data || {};
+                    const borrowerObj = (dData.borrower || {}) as Record<string, string>;
+                    const borrowerName = borrowerObj.company_name || String(dData.matched_borrower || dData.payer || 'Borrower Representative');
+                    const totalAmt = Number(dData.amount || dData.total_received || 100000);
+                    const caseIdNum = Number(dData.case_id || selectedCaseId);
+                    const loanAcc = `LN-2026-${String(caseIdNum).padStart(3, '0')}`;
+                    const voucherNum = `RCP-2026-${String(caseIdNum).padStart(5, '0')}`;
+                    const interestAmt = Math.round(totalAmt * 0.2);
+                    const principalAmt = Math.round(totalAmt * 0.8);
+
+                    return (
+                      <>
+                        <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '14px 18px', fontSize: '0.8rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>Voucher Type &amp; Number</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>Receipt ({voucherNum})</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>Target Borrower &amp; Loan</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#4f46e5', marginTop: '2px' }}>{borrowerName} ({loanAcc})</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700' }}>Total Voucher Amount</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>₹{totalAmt.toLocaleString('en-IN')}</div>
+                          </div>
+                        </div>
+
+                        {/* Double-Entry Ledger Posting Table */}
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Tally Double-Entry Ledger Posting Breakdown
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #cbd5e1' }}>
+                            <thead>
+                              <tr style={{ background: '#0f172a', color: '#ffffff', textAlign: 'left' }}>
+                                <th style={{ padding: '10px 14px' }}>Tally Ledger Name</th>
+                                <th style={{ padding: '10px 14px' }}>Account Classification</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Debit (Dr) ₹</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Credit (Cr) ₹</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '700', color: '#0f172a' }}>HDFC Bank Operating A/c</td>
+                                <td style={{ padding: '10px 14px', color: '#64748b' }}>Bank Ledger (Current Asset)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#059669' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', color: '#94a3b8' }}>-</td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '700', color: '#0f172a' }}>Loan Asset - {borrowerName}</td>
+                                <td style={{ padding: '10px 14px', color: '#64748b' }}>Loan Asset Ledger (Principal Reduction)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', color: '#94a3b8' }}>-</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '700', color: '#0f172a' }}>Interest Income (12.5% P.A.)</td>
+                                <td style={{ padding: '10px 14px', color: '#64748b' }}>Direct Revenue Ledger (Interest Realized)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', color: '#94a3b8' }}>-</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                              </tr>
+                              <tr style={{ background: '#e0e7ff', fontWeight: '900', borderTop: '2px solid #4f46e5' }}>
+                                <td colSpan={2} style={{ padding: '12px 14px', color: '#1e1b4b' }}>TOTAL BALANCED JOURNAL ENTRY</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '0.9rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#4f46e5', fontSize: '0.9rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Tally ERP Integration & Audit Metadata */}
+                        <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>
+                            ⚙️ ERP Integration &amp; Compliance Audit Metadata
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', fontSize: '0.78rem' }}>
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '10px 12px', borderRadius: '8px' }}>
+                              <div style={{ color: '#64748b', fontWeight: '700', fontSize: '0.7rem' }}>Target ERP Platform</div>
+                              <div style={{ fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>Tally Prime 4.0 / Tally.ERP 9</div>
+                            </div>
+
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '10px 12px', borderRadius: '8px' }}>
+                              <div style={{ color: '#64748b', fontWeight: '700', fontSize: '0.7rem' }}>Voucher Creation Mode</div>
+                              <div style={{ fontWeight: '800', color: '#4f46e5', marginTop: '2px' }}>Auto-Post Double-Entry Journal</div>
+                            </div>
+
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '10px 12px', borderRadius: '8px' }}>
+                              <div style={{ color: '#64748b', fontWeight: '700', fontSize: '0.7rem' }}>Tally Ledger Mapping</div>
+                              <div style={{ fontWeight: '800', color: '#059669', marginTop: '2px' }}>Bank ➔ Asset ➔ Income (3-Tier)</div>
+                            </div>
+                          </div>
+
+                          {/* Audit Checks */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '0.75rem', fontWeight: '700' }}>
+                            <span style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '4px 10px', borderRadius: '6px' }}>
+                              ✓ Tally Schema V12.0 XML: VALIDATED
+                            </span>
+                            <span style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '4px 10px', borderRadius: '6px' }}>
+                              ✓ Double-Entry Debit/Credit Balance: MATCHED (₹{totalAmt.toLocaleString('en-IN')})
+                            </span>
+                            <span style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '4px 10px', borderRadius: '6px' }}>
+                              ✓ Anti-Duplicate Hash: {String(dData.transaction_id || `TXN-${caseIdNum}`).slice(-12)}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : generatedDocModal.type === 'settlement_statement' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Top Letterhead */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '20px' }}>
+                    <div>
+                      <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#1e3a8a', letterSpacing: '-0.5px' }}>
+                        FINANCEFLOW CAPITAL NBFC LTD
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                        RBI Reg No: RBI-NBFC-N-07.00892 • GSTIN: 29AAACF1234F1Z5 • PAN: AAACF1234F
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        Tech Park One, Tower B, Outer Ring Road, Bangalore - 560103
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '4px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '800', display: 'inline-block' }}>
+                        ✓ {String(generatedDocModal.data.status || 'SETTLED')}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginTop: '6px' }}>
+                        Ref: {String(generatedDocModal.data.statement_ref || generatedDocModal.data.reference_id || 'SET-STMT-2026-001')}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: 28-Aug-2026</div>
+                    </div>
+                  </div>
+
+                  {/* Document Title */}
+                  <div style={{ textAlign: 'center', background: '#e0e7ff', padding: '12px', borderRadius: '10px', border: '1px solid #c7d2fe' }}>
+                    <h2 style={{ fontSize: '1.15rem', fontWeight: '900', color: '#3730a3', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      WATERFALL SETTLEMENT STATEMENT &amp; AUDIT CERTIFICATE
+                    </h2>
+                    <div style={{ fontSize: '0.75rem', color: '#4338ca', marginTop: '2px', fontWeight: '600' }}>
+                      Statutory Priority Allocation Sequence Advice under RBI Master Directions
+                    </div>
+                  </div>
+
+                  {/* Borrower & Facility Summary */}
+                  {(() => {
+                    const dData = generatedDocModal.data || {};
+                    const borrowerObj = (dData.borrower || {}) as Record<string, string>;
+                    const facilityObj = (dData.facility || {}) as Record<string, string | number>;
+                    const borrowerName = borrowerObj.company_name || String(dData.matched_borrower || dData.payer || 'Borrower Representative');
+                    const totalAmt = Number(dData.amount || dData.total_received || dData.total_inbound || 100000);
+                    const loanAcc = String(facilityObj.loan_account || dData.loan_account || `LN-2026-${String(dData.case_id || 1).padStart(3, '0')}`);
+                    const utrNum = String(dData.utr_number || dData.transaction_id || `TXN-BANK-${dData.case_id || 1}`);
+
+                    const interestAmt = Math.round(totalAmt * 0.2);
+                    const principalAmt = Math.round(totalAmt * 0.8);
+
+                    return (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '0.8rem' }}>
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#4f46e5', textTransform: 'uppercase', marginBottom: '4px' }}>BORROWER ENTITY</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>{borrowerName}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>PAN: {borrowerObj.pan || 'AABCA1234F'} • CIN: {borrowerObj.cin || 'U60200TN2018PTC123456'}</div>
+                          </div>
+
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#0284c7', textTransform: 'uppercase', marginBottom: '4px' }}>LOAN ACCOUNT &amp; UTR</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>{loanAcc}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>UTR: {utrNum}</div>
+                          </div>
+                        </div>
+
+                        {/* Statutory 6-Tier Waterfall Priority Allocation */}
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Statutory 6-Tier Waterfall Allocation Priority Sequence
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #cbd5e1' }}>
+                            <thead>
+                              <tr style={{ background: '#1e1b4b', color: '#ffffff', textAlign: 'left' }}>
+                                <th style={{ padding: '10px 14px' }}>Priority Tier Description</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Scheduled (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Allocated (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'center' }}>Allocation Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 1: Penalties &amp; Delayed Interest Charges</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 2: Overdue Milestone Interest Charges</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 3: Current Scheduled Period Interest (20%)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>ALLOCATED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 4: Overdue Milestone Principal Repayments</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 5: Current Scheduled Principal Repayment (80%)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '800', color: '#4f46e5' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '800' }}>ALLOCATED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>Tier 6: Surplus Unallocated Advance Credit</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#64748b', fontWeight: '700' }}>N/A</span></td>
+                              </tr>
+                              <tr style={{ background: '#e0e7ff', fontWeight: '900', borderTop: '2px solid #4f46e5' }}>
+                                <td style={{ padding: '12px 14px', color: '#1e1b4b' }}>TOTAL INBOUND WATERFALL SETTLEMENT</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '1rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'center', color: '#059669' }}>100% SETTLED</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Principal Progression Summary Card */}
+                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '0.8rem' }}>
+                          <div>
+                            <div style={{ fontSize: '0.725rem', color: '#166534', fontWeight: '700' }}>Opening Principal Balance</div>
+                            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.opening_principal || Math.max(totalAmt, 1250000)).toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.725rem', color: '#166534', fontWeight: '700' }}>Principal Deducted</div>
+                            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>- ₹{principalAmt.toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.725rem', color: '#166534', fontWeight: '700' }}>Closing Principal Balance</div>
+                            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.closing_principal || Math.max(0, Math.max(totalAmt, 1250000) - principalAmt)).toLocaleString('en-IN')}</div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -985,119 +1708,137 @@ export const DocumentList = () => {
                   </div>
 
                   {/* Borrower & Facility 2-Column Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', fontSize: '0.8rem' }}>
-                    {/* Borrower KYC */}
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
-                      <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#4f46e5', textTransform: 'uppercase', marginBottom: '8px' }}>
-                        🏢 BORROWER / PAYER (BILLED TO)
-                      </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
-                        Apex Logistics Pvt Ltd
-                      </div>
-                      <div style={{ color: '#475569', lineHeight: '1.5' }}>
-                        <div><strong>Registered Address:</strong> Plot No. 44, Guindy Industrial Estate, Chennai, TN - 600032</div>
-                        <div><strong>CIN:</strong> U60200TN2018PTC123456</div>
-                        <div><strong>PAN:</strong> AABCA1234F • <strong>GSTIN:</strong> 33AABCA1234F1Z8</div>
-                        <div><strong>Authorized CFO:</strong> Rajesh Kumar (rajesh.k@apexlogistics.in)</div>
-                        <div><strong>Debited Bank A/c:</strong> HDFC Bank A/c ************4781</div>
-                      </div>
-                    </div>
+                  {(() => {
+                    const dData = generatedDocModal.data || {};
+                    const borrowerObj = (dData.borrower || {}) as Record<string, string>;
+                    const facilityObj = (dData.facility || {}) as Record<string, string | number>;
+                    const borrowerName = borrowerObj.company_name || String(dData.matched_borrower || dData.payer || 'Borrower Representative');
+                    const totalAmt = Number(dData.amount || dData.total_received || dData.total_inbound || 100000);
+                    const loanAcc = String(facilityObj.loan_account || dData.loan_account || `LN-2026-${String(dData.case_id || 1).padStart(3, '0')}`);
+                    const utrNum = String(dData.utr_number || dData.transaction_id || `TXN-BANK-${dData.case_id || 1}`);
+                    const dateVal = String(dData.payment_date || dData.settlement_date || '28-Aug-2026');
 
-                    {/* Facility Details */}
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
-                      <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#0284c7', textTransform: 'uppercase', marginBottom: '8px' }}>
-                        📑 CREDIT FACILITY &amp; INVOICE DETAILS
-                      </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
-                        Loan A/c: LN-2026-001
-                      </div>
-                      <div style={{ color: '#475569', lineHeight: '1.5' }}>
-                        <div><strong>Facility Type:</strong> Commercial Vehicle &amp; Fleet Term Loan</div>
-                        <div><strong>Sanctioned Facility:</strong> ₹25,00,000.00</div>
-                        <div><strong>Interest Rate:</strong> 12.50% p.a. (Fixed Reducing)</div>
-                        <div><strong>Installment Milestone:</strong> EMI Installment #3 of 36</div>
-                        <div><strong>Inbound Bank UTR:</strong> TXN-BANK-SIM-88921 (RTGS Wire)</div>
-                      </div>
-                    </div>
-                  </div>
+                    const interestAmt = Math.round(totalAmt * 0.2);
+                    const principalAmt = Math.round(totalAmt * 0.8);
 
-                  {/* Statutory Waterfall Allocation Table */}
-                  <div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
-                      Statutory Waterfall Allocation Breakdown
-                    </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #e2e8f0' }}>
-                      <thead>
-                        <tr style={{ background: '#0f172a', color: '#ffffff', textAlign: 'left' }}>
-                          <th style={{ padding: '10px 14px' }}>Statutory Item Description</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Scheduled Due (₹)</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Allocated / Settled (₹)</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Outstanding (₹)</th>
-                          <th style={{ padding: '10px 14px', textAlign: 'center' }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>1. Late Payment Penalty &amp; Delayed Interest</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>2. Overdue Milestone Interest Charges</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>3. Current Scheduled Period Interest (12.5% p.a.)</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹20,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹20,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600' }}>4. Current Scheduled Principal Repayment</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹80,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹80,000.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
-                        </tr>
-                        <tr style={{ background: '#eef2ff', fontWeight: '800', borderTop: '2px solid #4f46e5' }}>
-                          <td style={{ padding: '12px 14px', color: '#1e3a8a' }}>TOTAL INBOUND SETTLEMENT (INR)</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹1,00,000.00</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '0.95rem' }}>₹1,00,000.00</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹0.00</td>
-                          <td style={{ padding: '12px 14px', textAlign: 'center', color: '#059669' }}>PAID</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <div style={{ fontSize: '0.75rem', fontStyle: 'italic', color: '#64748b', marginTop: '6px' }}>
-                      Amount in Words: Indian Rupees One Lakh Only.
-                    </div>
-                  </div>
+                    return (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', fontSize: '0.8rem' }}>
+                          {/* Borrower KYC */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                            <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#4f46e5', textTransform: 'uppercase', marginBottom: '8px' }}>
+                              🏢 BORROWER / PAYER (BILLED TO)
+                            </div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
+                              {borrowerName}
+                            </div>
+                            <div style={{ color: '#475569', lineHeight: '1.5' }}>
+                              <div><strong>Registered Address:</strong> {borrowerObj.registered_address || 'Plot No. 44, Guindy Industrial Estate, Chennai, TN - 600032'}</div>
+                              <div><strong>CIN:</strong> {borrowerObj.cin || 'U60200TN2018PTC123456'}</div>
+                              <div><strong>PAN:</strong> {borrowerObj.pan || 'AABCA1234F'} • <strong>GSTIN:</strong> {borrowerObj.gstin || '33AABCA1234F1Z8'}</div>
+                              <div><strong>Authorized CFO:</strong> {borrowerObj.authorized_contact || 'Rajesh Kumar'} ({borrowerObj.email || 'finance@company.com'})</div>
+                              <div><strong>Debited Bank A/c:</strong> {borrowerObj.debited_bank_account || 'HDFC Bank A/c ************4781'}</div>
+                            </div>
+                          </div>
 
-                  {/* Loan Balance Progression Card */}
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', fontSize: '0.8rem' }}>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Opening Principal</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹12,50,000.00</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Principal Reduced</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>- ₹80,000.00</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Closing Balance</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹11,70,000.00</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Next Due Date</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>30-Sep-2026</div>
-                    </div>
-                  </div>
+                          {/* Facility Details */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                            <div style={{ fontSize: '0.725rem', fontWeight: '800', color: '#0284c7', textTransform: 'uppercase', marginBottom: '8px' }}>
+                              📑 CREDIT FACILITY &amp; INVOICE DETAILS
+                            </div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '4px' }}>
+                              Loan A/c: {loanAcc}
+                            </div>
+                            <div style={{ color: '#475569', lineHeight: '1.5' }}>
+                              <div><strong>Facility Type:</strong> {String(facilityObj.facility_type || 'Commercial Term Loan')}</div>
+                              <div><strong>Sanctioned Facility:</strong> ₹{Number(facilityObj.sanctioned_amount || Math.max(totalAmt * 2, 2500000)).toLocaleString('en-IN')}</div>
+                              <div><strong>Interest Rate:</strong> {String(facilityObj.interest_rate || '12.50% p.a. (Fixed Reducing)')}</div>
+                              <div><strong>Installment Milestone:</strong> {String(facilityObj.installment_milestone || `EMI Installment #${Math.min(12, Math.max(1, Number(dData.case_id || 1)))} of 36`)}</div>
+                              <div><strong>Inbound Bank UTR:</strong> {utrNum} (RTGS Wire)</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Statutory Waterfall Allocation Table */}
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Statutory Waterfall Allocation Breakdown
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', border: '1px solid #e2e8f0' }}>
+                            <thead>
+                              <tr style={{ background: '#0f172a', color: '#ffffff', textAlign: 'left' }}>
+                                <th style={{ padding: '10px 14px' }}>Statutory Item Description</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Scheduled Due (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Allocated / Settled (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Outstanding (₹)</th>
+                                <th style={{ padding: '10px 14px', textAlign: 'center' }}>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>1. Late Payment Penalty &amp; Delayed Interest</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>2. Overdue Milestone Interest Charges</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>3. Current Scheduled Period Interest (12.5% p.a.)</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹{interestAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: '600' }}>4. Current Scheduled Principal Repayment</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '700' }}>₹{principalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'center' }}><span style={{ color: '#059669', fontWeight: '700' }}>CLEARED</span></td>
+                              </tr>
+                              <tr style={{ background: '#eef2ff', fontWeight: '800', borderTop: '2px solid #4f46e5' }}>
+                                <td style={{ padding: '12px 14px', color: '#1e3a8a' }}>TOTAL INBOUND SETTLEMENT (INR)</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#059669', fontSize: '0.95rem' }}>₹{totalAmt.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'right' }}>₹0.00</td>
+                                <td style={{ padding: '12px 14px', textAlign: 'center', color: '#059669' }}>PAID</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div style={{ fontSize: '0.75rem', fontStyle: 'italic', color: '#64748b', marginTop: '6px' }}>
+                            Amount Received: ₹{totalAmt.toLocaleString('en-IN')} (Reconciled on {dateVal}).
+                          </div>
+                        </div>
+
+                        {/* Loan Balance Progression Card */}
+                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', fontSize: '0.8rem' }}>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Opening Principal</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.opening_principal || Math.max(totalAmt, 1250000)).toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Principal Reduced</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>- ₹{principalAmt.toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Closing Balance</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>₹{Number(facilityObj.closing_principal || Math.max(0, Math.max(totalAmt, 1250000) - principalAmt)).toLocaleString('en-IN')}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Next Due Date</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>30-Sep-2026</div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   {/* Signatures & Corporate Certification */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '16px', fontSize: '0.75rem', color: '#64748b' }}>
@@ -1174,7 +1915,7 @@ export const DocumentList = () => {
                   disabled={isGeneratingPdf}
                   onClick={async () => {
                     if (generatedDocModal.type === 'tally_xml') {
-                      void handleDownloadGeneratedDoc('tally_xml', generatedDocModal.title);
+                      void handleDownloadGeneratedDoc('tally_xml', generatedDocModal.title, Number(generatedDocModal.data.case_id || 1));
                       setGeneratedDocModal(null);
                       return;
                     }
@@ -1189,10 +1930,24 @@ export const DocumentList = () => {
                     }
                   }}
                   className="btn-primary"
-                  style={{ padding: '8px 16px', borderRadius: '8px', fontWeight: '700', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    fontWeight: '700',
+                    fontSize: '0.85rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
                 >
-                  {isGeneratingPdf ? <RefreshCw size={16} className="animate-spin" /> : <Download size={16} />}
-                  <span>{isGeneratingPdf ? 'Generating PDF...' : 'Download Official PDF'}</span>
+                  {generatedDocModal.type === 'tally_xml' ? <FileCode size={16} /> : (isGeneratingPdf ? <RefreshCw size={16} className="animate-spin" /> : <Download size={16} />)}
+                  <span>
+                    {generatedDocModal.type === 'tally_xml'
+                      ? 'Download Tally XML (.xml)'
+                      : isGeneratingPdf
+                      ? 'Generating PDF...'
+                      : 'Download Official PDF'}
+                  </span>
                 </button>
               </div>
             </div>

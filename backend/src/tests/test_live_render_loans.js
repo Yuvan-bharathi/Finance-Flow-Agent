@@ -1,7 +1,7 @@
 const testLiveRender = async () => {
   try {
     console.log('1. Logging into Render backend with admin@financeflow.com...');
-    const loginRes = await fetch('https://finance-flow-agent-1.onrender.com/api/auth/login', {
+    const loginRes = await fetch('https://finance-flow-agent.onrender.com/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -20,7 +20,7 @@ const testLiveRender = async () => {
     }
 
     console.log('2. Requesting GET /api/loans/1 from Render...');
-    const loanRes = await fetch('https://finance-flow-agent-1.onrender.com/api/loans/1', {
+    const loanRes = await fetch('https://finance-flow-agent.onrender.com/api/loans/1', {
       headers: { Authorization: `Bearer ${token}` }
     });
 

@@ -1,6 +1,6 @@
 import { runNotificationAgent } from '../agents/notificationAgent.js';
 import pool from '../config/db.js';
-import { sendEscalationNoticeEmail } from '../utils/emailService.js';
+import { sendEscalationNoticeEmail, testSmtpConnection, testResendConnection, testBrevoConnection } from '../utils/emailService.js';
 import { cacheService } from '../services/cache.service.js';
 
 /**
@@ -167,18 +167,13 @@ export const approveAlert = async (req, res) => {
       WHERE na.id = ?
     `, [alertId]);
 
-    await pool.execute(`
-      UPDATE notification_alerts
-      SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
-      WHERE id = ?
-    `, [approvedBy, alertId]);
-
     const alert = alertRows[0] || {};
+    const fromSender = process.env.SMTP_FROM || process.env.SMTP_USER || 'nyuvanbharathi@gmail.com';
 
-    // Trigger Nodemailer / Email Service dispatch
+    // 1. Trigger Nodemailer / Email Service dispatch FIRST (before updating DB)
     const emailResult = await sendEscalationNoticeEmail({
       recipientEmail: alert.contact_email || 'finance@abctech.com',
-      fromEmail: 'yuvanbharathin@gmail.com',
+      fromEmail: fromSender,
       companyName: alert.company_name || 'ABC Technologies Pvt Ltd',
       subject: alert.subject || alert.title || `Official Financial Escalation Notice — ${alert.company_name || 'Facility Debt'}`,
       body: alert.message || alert.ai_reasoning || 'Please review your delinquent loan account balance immediately.',
@@ -186,27 +181,56 @@ export const approveAlert = async (req, res) => {
       alertId: alert.id
     });
 
-    // Record action in audit_logs
-    await pool.query(`
-      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
-      VALUES (?, 'APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
-    `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
+    const isDelivered = emailResult && emailResult.success === true;
 
-    // Invalidate notification cache tag
-    cacheService.invalidateByTag('notifications');
+    if (isDelivered) {
+      // 2. ONLY update notification_status = 'approved' in database if email dispatch succeeded
+      await pool.execute(`
+        UPDATE notification_alerts
+        SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
+        WHERE id = ?
+      `, [approvedBy, alertId]);
 
-    return res.status(200).json({
-      success: true,
-      message: `Escalation notice approved & email successfully triggered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`,
-      data: {
-        alertId,
-        recipient: alert.recommended_recipient,
-        recipientEmail: alert.contact_email,
-        companyName: alert.company_name,
-        dispatchedAt: new Date().toISOString(),
-        email_delivery: emailResult
-      }
-    });
+      // Record action in audit_logs
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+        VALUES (?, 'APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
+      `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
+
+      // Invalidate notification cache tag
+      cacheService.invalidateByTag('notifications');
+
+      return res.status(200).json({
+        success: true,
+        message: `Escalation notice approved & email successfully delivered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`,
+        data: {
+          alertId,
+          recipient: alert.recommended_recipient,
+          recipientEmail: alert.contact_email,
+          companyName: alert.company_name,
+          dispatchedAt: new Date().toISOString(),
+          email_delivery: emailResult
+        }
+      });
+    } else {
+      // Email delivery failed - DO NOT mark notification_status as approved in DB! Keep it pending.
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+        VALUES (?, 'APPROVE_ESCALATION_ALERT_FAILED', 'notification_alert', ?, ?, '127.0.0.1');
+      `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
+
+      return res.status(422).json({
+        success: false,
+        message: `Notice approval aborted: Email delivery failed due to "${emailResult?.error || 'SMTP Error'}". Alert remains pending.`,
+        data: {
+          alertId,
+          recipient: alert.recommended_recipient,
+          recipientEmail: alert.contact_email,
+          companyName: alert.company_name,
+          email_delivery: emailResult
+        }
+      });
+    }
 
   } catch (err) {
     console.error('[Notification Controller approveAlert Error]', err);
@@ -279,15 +303,10 @@ export const batchApproveAlerts = async (req, res) => {
       WHERE na.id IN (?)
     `, [targetIds]);
 
-    // Update status in bulk
-    await pool.query(`
-      UPDATE notification_alerts
-      SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
-      WHERE id IN (?)
-    `, [approvedBy, targetIds]);
-
-    // Send emails and record audit logs
+    // Send emails and update DB ONLY for successful dispatches
     const dispatched = [];
+    const failed = [];
+
     for (const alert of alertRows) {
       const emailResult = await sendEscalationNoticeEmail({
         recipientEmail: alert.contact_email || alert.recommended_recipient || 'contact@borrower.com',
@@ -298,28 +317,56 @@ export const batchApproveAlerts = async (req, res) => {
         alertId: alert.id
       });
 
-      await pool.query(`
-        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
-        VALUES (?, 'BATCH_APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
-      `, [approvedBy, alert.id, JSON.stringify({ alertId: alert.id, email_delivery: emailResult })]);
+      if (emailResult && emailResult.success === true) {
+        // Update status in DB ONLY when email succeeds
+        await pool.query(`
+          UPDATE notification_alerts
+          SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
+          WHERE id = ?
+        `, [approvedBy, alert.id]);
 
-      dispatched.push({
-        alertId: alert.id,
-        companyName: alert.company_name,
-        recipient: alert.contact_name,
-        recipientEmail: alert.contact_email
-      });
+        await pool.query(`
+          INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+          VALUES (?, 'BATCH_APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
+        `, [approvedBy, alert.id, JSON.stringify({ alertId: alert.id, email_delivery: emailResult })]);
+
+        dispatched.push({
+          alertId: alert.id,
+          companyName: alert.company_name,
+          recipient: alert.contact_name,
+          recipientEmail: alert.contact_email
+        });
+      } else {
+        await pool.query(`
+          INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+          VALUES (?, 'BATCH_APPROVE_ESCALATION_ALERT_FAILED', 'notification_alert', ?, ?, '127.0.0.1');
+        `, [approvedBy, alert.id, JSON.stringify({ alertId: alert.id, email_delivery: emailResult })]);
+
+        failed.push({
+          alertId: alert.id,
+          companyName: alert.company_name,
+          recipientEmail: alert.contact_email,
+          error: emailResult?.error || 'Email delivery failed'
+        });
+      }
     }
 
-    // Invalidate notification cache tag
-    cacheService.invalidateByTag('notifications');
+    if (dispatched.length > 0) {
+      // Invalidate notification cache tag
+      cacheService.invalidateByTag('notifications');
+    }
 
-    return res.status(200).json({
-      success: true,
-      message: `Batch dispatched ${dispatched.length} follow-up notices successfully!`,
+    const allSucceeded = failed.length === 0 && dispatched.length > 0;
+
+    return res.status(allSucceeded ? 200 : 422).json({
+      success: allSucceeded,
+      message: allSucceeded
+        ? `Batch dispatched ${dispatched.length} follow-up notices successfully!`
+        : `Dispatched ${dispatched.length} notices, but ${failed.length} failed due to email delivery errors.`,
       data: {
         count: dispatched.length,
-        dispatched
+        dispatched,
+        failed
       }
     });
 
@@ -368,5 +415,74 @@ export const batchDismissAlerts = async (req, res) => {
   } catch (err) {
     console.error('[Notification Controller batchDismissAlerts Error]', err);
     return res.status(500).json({ success: false, message: 'Failed to batch dismiss alerts.' });
+  }
+};
+
+/**
+ * triggerSmtpTest
+ * Production diagnostic ping to test real SMTP delivery from Render
+ */
+export const triggerSmtpTest = async (req, res) => {
+  try {
+    const targetEmail = req.body?.email || req.query?.email || 'mani30saravanan@gmail.com';
+    const result = await testSmtpConnection(targetEmail);
+    return res.status(200).json({
+      success: result.success,
+      message: result.success ? `SMTP Test email delivered to ${targetEmail}` : 'SMTP Test delivery failed',
+      data: {
+        smtp_user: process.env.SMTP_USER,
+        smtp_host: process.env.SMTP_HOST,
+        smtp_port: process.env.SMTP_PORT,
+        result
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * triggerResendTest
+ * Resend-only production diagnostic endpoint: calls sendWithHttpsApiFallback directly
+ * without falling back to SMTP.
+ */
+export const triggerResendTest = async (req, res) => {
+  try {
+    const targetEmail = req.body?.email || req.query?.email || 'yuvanbharathinaveen@gmail.com';
+    const result = await testResendConnection(targetEmail);
+    return res.status(result?.success ? 200 : 422).json({
+      success: result?.success || false,
+      message: result?.success ? `Resend API test email delivered to ${targetEmail}` : 'Resend API test delivery failed',
+      data: {
+        resend_api_key_configured: Boolean(process.env.RESEND_API_KEY),
+        resend_from_email: process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>',
+        result
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * triggerBrevoTest
+ * Brevo-only production diagnostic endpoint: calls sendWithHttpsApiFallback directly
+ * without falling back to SMTP.
+ */
+export const triggerBrevoTest = async (req, res) => {
+  try {
+    const targetEmail = req.body?.email || req.query?.email || 'yuvanbharathinaveen@gmail.com';
+    const result = await testBrevoConnection(targetEmail);
+    return res.status(result?.success ? 200 : 422).json({
+      success: result?.success || false,
+      message: result?.success ? `Brevo API test email delivered to ${targetEmail}` : 'Brevo API test delivery failed',
+      data: {
+        brevo_key_configured: Boolean(process.env.BREVO_API_KEY || (process.env.SMTP_PASS || '').startsWith('xsmtpsib-')),
+        sender_email: process.env.SMTP_USER || 'nyuvanbharathi@gmail.com',
+        result
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 };

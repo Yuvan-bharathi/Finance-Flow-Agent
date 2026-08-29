@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import {
-  History,
   X,
   Eye,
   Search,
@@ -364,19 +363,8 @@ export const AuditLogs = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <History color="#d97706" size={26} />
-            Immutable Compliance Audit Trail
-          </h1>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
-            End-to-end regulatory logs tagged with distributed <strong style={{ color: '#4f46e5' }}>X-Correlation-ID</strong>, recording state mutations and BEFORE/AFTER JSON diffs.
-          </p>
-        </div>
-
-        {/* Search & Filter Controls */}
+      {/* Search & Filter Controls Bar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
         <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
             <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />

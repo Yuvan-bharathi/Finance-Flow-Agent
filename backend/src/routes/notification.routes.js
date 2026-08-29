@@ -5,7 +5,10 @@ import {
   approveAlert,
   dismissAlert,
   batchApproveAlerts,
-  batchDismissAlerts
+  batchDismissAlerts,
+  triggerSmtpTest,
+  triggerResendTest,
+  triggerBrevoTest
 } from '../controllers/notification.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/rbac.middleware.js';
@@ -19,6 +22,11 @@ import { cacheMiddleware } from '../middleware/cache.middleware.js';
 const router = Router();
 
 router.use(authenticate);
+
+// Production SMTP, Resend & Brevo Diagnostic Pings (All authenticated users can test)
+router.all('/test-smtp', triggerSmtpTest);
+router.all('/test-resend', triggerResendTest);
+router.all('/test-brevo', triggerBrevoTest);
 
 // Trigger Agent 6 — Manual escalation scan (Restricted to owner, super_admin, admin, manager)
 router.post('/escalate', authorize(['owner', 'super_admin', 'admin', 'manager']), triggerEscalationScan);

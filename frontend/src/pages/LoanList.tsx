@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../services/api';
 import {
-  FileSpreadsheet, Plus, Calendar, DollarSign, Bot,
+  Plus, Calendar, DollarSign, Bot,
   RefreshCw, TrendingUp, ShieldCheck, CheckCircle2,
   Search, Mail, X, ShieldAlert, Landmark,
 } from 'lucide-react';
@@ -187,7 +187,7 @@ export const LoanList = ({ onAskAI }: LoanListProps) => {
       await api.post(`/collections/generate/${loan.company_id}`);
       setToastMessage({
         type: 'success',
-        text: `⚡ Agent 3 drafted collection notice for ${loan.company_name || 'Borrower'} (₹${overdueAmt.toLocaleString('en-IN')} overdue). Available in Notifications.`,
+        text: `⚡ Collection Strategy drafted collection notice for ${loan.company_name || 'Borrower'} (₹${overdueAmt.toLocaleString('en-IN')} overdue). Available in Notifications.`,
       });
       setTimeout(() => setToastMessage(null), 7000);
     } catch (err: unknown) {
@@ -310,19 +310,8 @@ export const LoanList = ({ onAskAI }: LoanListProps) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-            <FileSpreadsheet color="#059669" size={26} />
-            Loan Facilities &amp; Repayment Breakdown
-          </h1>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>
-            Portfolio credit exposures, automated amortized schedules, and repayment health monitoring.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Action Controls Bar */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={() => void fetchLoans()}
             title="Refresh Portfolio"
@@ -375,7 +364,6 @@ export const LoanList = ({ onAskAI }: LoanListProps) => {
             <span>{canCreateLoan ? 'Create Loan Facility' : 'Create Facility (Locked)'}</span>
           </button>
         </div>
-      </div>
 
       {/* Toast */}
       {toastMessage && (
@@ -769,7 +757,7 @@ export const LoanList = ({ onAskAI }: LoanListProps) => {
                           <button
                             onClick={() => void handleTriggerCollection(l)}
                             disabled={Boolean(actionLoading[l.id])}
-                            title={overdueAmt <= 0 ? 'No overdue balance (Account is healthy)' : 'Draft collection reminder email (Agent 3)'}
+                            title={overdueAmt <= 0 ? 'No overdue balance (Account is healthy)' : 'Draft collection reminder email'}
                             style={{
                               background: overdueAmt > 0 ? '#fff1f2' : '#f8fafc',
                               color: overdueAmt > 0 ? '#e11d48' : '#94a3b8',
