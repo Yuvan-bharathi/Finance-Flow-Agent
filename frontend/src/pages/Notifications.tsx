@@ -98,6 +98,7 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
   const [expandedAlertId, setExpandedAlertId] = useState<number | null>(null);
   const [copiedAlertId, setCopiedAlertId] = useState<number | null>(null);
   const [dispatchToast, setDispatchToast] = useState<string | null>(null);
+  const [dispatchErrorToast, setDispatchErrorToast] = useState<string | null>(null);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -181,7 +182,16 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
 
     try {
       setActionLoading(prev => ({ ...prev, [alertId]: 'approving' }));
-      await approveAlert(alertId);
+      const response = await approveAlert(alertId);
+      const resData = response.data as unknown as { success?: boolean; message?: string; data?: { email_delivery?: { success?: boolean; error?: string } } };
+
+      if (resData.success === false || resData.data?.email_delivery?.success === false) {
+        const errorText = resData.message || resData.data?.email_delivery?.error || 'Email dispatch failed. Notice remains pending.';
+        setDispatchErrorToast(`❌ ${errorText}`);
+        setTimeout(() => setDispatchErrorToast(null), 9000);
+        return;
+      }
+
       setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, notification_status: 'approved' } : a));
       setSelectedAlertIds(prev => {
         const next = new Set(prev);
@@ -195,11 +205,17 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
       setTimeout(() => setDispatchToast(null), 7000);
     } catch (err: unknown) {
       console.error('Failed to approve alert:', err);
-      const status = (err as { response?: { status?: number; data?: { message?: string } } })?.response?.status;
+      const status = (err as { response?: { status?: number; data?: { message?: string; data?: { email_delivery?: { error?: string } } } } })?.response?.status;
+      const errData = (err as { response?: { data?: { message?: string; data?: { email_delivery?: { error?: string } } } } })?.response?.data;
+
       if (status === 403 || status === 401) {
         window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
-          detail: { status: status || 403, message: (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Access denied: You do not have permission to approve escalation notices.' },
+          detail: { status: status || 403, message: errData?.message || 'Access denied: You do not have permission to approve escalation notices.' },
         }));
+      } else {
+        const errMsg = errData?.message || errData?.data?.email_delivery?.error || 'Email delivery failed. Notice remains pending.';
+        setDispatchErrorToast(`❌ ${errMsg}`);
+        setTimeout(() => setDispatchErrorToast(null), 9000);
       }
     } finally {
       setActionLoading(prev => ({ ...prev, [alertId]: null }));
@@ -250,16 +266,28 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
     try {
       setBatchLoading(true);
       const res = await batchApproveAlerts(idsToApprove);
-      const rawData = res.data as unknown as { count?: number; data?: { count?: number } };
-      const count = rawData?.count || rawData?.data?.count || idsToApprove.length;
+      const rawData = res.data as unknown as { success?: boolean; message?: string; data?: { count?: number; dispatched?: Array<{ alertId: number }>; failed?: Array<{ alertId: number; error: string }> } };
+      const dispatchedList = rawData?.data?.dispatched || [];
+      const dispatchedIds = dispatchedList.map(d => d.alertId);
 
-      setAlerts(prev => prev.map(a => idsToApprove.includes(a.id) ? { ...a, notification_status: 'approved' } : a));
+      if (dispatchedIds.length > 0) {
+        setAlerts(prev => prev.map(a => dispatchedIds.includes(a.id) ? { ...a, notification_status: 'approved' } : a));
+      }
       setSelectedAlertIds(new Set());
 
-      setDispatchToast(`🚀 Successfully approved & dispatched ${count} notices in batch!`);
-      setTimeout(() => setDispatchToast(null), 8000);
-    } catch (err) {
+      if (rawData.success !== false) {
+        setDispatchToast(`🚀 Successfully approved & dispatched ${dispatchedIds.length} notices in batch!`);
+        setTimeout(() => setDispatchToast(null), 8000);
+      } else {
+        const failCount = rawData?.data?.failed?.length || 0;
+        setDispatchErrorToast(`⚠️ Dispatched ${dispatchedIds.length} notices, but ${failCount} failed due to email delivery errors.`);
+        setTimeout(() => setDispatchErrorToast(null), 9000);
+      }
+    } catch (err: unknown) {
       console.error('Failed to batch approve alerts:', err);
+      const errData = (err as { response?: { data?: { message?: string } } })?.response?.data;
+      setDispatchErrorToast(`❌ Batch approve failed: ${errData?.message || 'Email delivery failure.'}`);
+      setTimeout(() => setDispatchErrorToast(null), 9000);
     } finally {
       setBatchLoading(false);
     }
@@ -519,6 +547,31 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
             <span>{dispatchToast}</span>
           </div>
           <button onClick={() => setDispatchToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#14532d' }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {dispatchErrorToast && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fef2f2 0%, #ffe4e6 100%)',
+          border: '1.5px solid #fca5a5',
+          borderRadius: '12px',
+          padding: '14px 20px',
+          color: '#991b1b',
+          fontSize: '0.85rem',
+          fontWeight: '700',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 12px rgba(220, 38, 38, 0.15)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertCircle size={18} color="#dc2626" />
+            <span>{dispatchErrorToast}</span>
+          </div>
+          <button onClick={() => setDispatchErrorToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>
             <X size={16} />
           </button>
         </div>

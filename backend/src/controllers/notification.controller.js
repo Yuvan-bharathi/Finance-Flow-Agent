@@ -167,16 +167,10 @@ export const approveAlert = async (req, res) => {
       WHERE na.id = ?
     `, [alertId]);
 
-    await pool.execute(`
-      UPDATE notification_alerts
-      SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
-      WHERE id = ?
-    `, [approvedBy, alertId]);
-
     const alert = alertRows[0] || {};
     const fromSender = process.env.SMTP_FROM || process.env.SMTP_USER || 'yuvanbharathin@gmail.com';
 
-    // Trigger Nodemailer / Email Service dispatch
+    // 1. Trigger Nodemailer / Email Service dispatch FIRST (before updating DB)
     const emailResult = await sendEscalationNoticeEmail({
       recipientEmail: alert.contact_email || 'finance@abctech.com',
       fromEmail: fromSender,
@@ -187,32 +181,56 @@ export const approveAlert = async (req, res) => {
       alertId: alert.id
     });
 
-    // Record action in audit_logs
-    await pool.query(`
-      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
-      VALUES (?, 'APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
-    `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
-
-    // Invalidate notification cache tag
-    cacheService.invalidateByTag('notifications');
-
     const isDelivered = emailResult && emailResult.success === true;
-    const statusMessage = isDelivered
-      ? `Escalation notice approved & email successfully delivered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`
-      : `Notice approved in ledger, but email delivery failed: ${emailResult?.error || 'SMTP Connection Error'}`;
 
-    return res.status(isDelivered ? 200 : 422).json({
-      success: isDelivered,
-      message: statusMessage,
-      data: {
-        alertId,
-        recipient: alert.recommended_recipient,
-        recipientEmail: alert.contact_email,
-        companyName: alert.company_name,
-        dispatchedAt: new Date().toISOString(),
-        email_delivery: emailResult
-      }
-    });
+    if (isDelivered) {
+      // 2. ONLY update notification_status = 'approved' in database if email dispatch succeeded
+      await pool.execute(`
+        UPDATE notification_alerts
+        SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
+        WHERE id = ?
+      `, [approvedBy, alertId]);
+
+      // Record action in audit_logs
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+        VALUES (?, 'APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
+      `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
+
+      // Invalidate notification cache tag
+      cacheService.invalidateByTag('notifications');
+
+      return res.status(200).json({
+        success: true,
+        message: `Escalation notice approved & email successfully delivered to ${alert.recommended_recipient || 'Borrower'} (${alert.contact_email || 'contact'}).`,
+        data: {
+          alertId,
+          recipient: alert.recommended_recipient,
+          recipientEmail: alert.contact_email,
+          companyName: alert.company_name,
+          dispatchedAt: new Date().toISOString(),
+          email_delivery: emailResult
+        }
+      });
+    } else {
+      // Email delivery failed - DO NOT mark notification_status as approved in DB! Keep it pending.
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+        VALUES (?, 'APPROVE_ESCALATION_ALERT_FAILED', 'notification_alert', ?, ?, '127.0.0.1');
+      `, [approvedBy, alertId, JSON.stringify({ alertId, email_delivery: emailResult })]);
+
+      return res.status(422).json({
+        success: false,
+        message: `Notice approval aborted: Email delivery failed due to "${emailResult?.error || 'SMTP Error'}". Alert remains pending.`,
+        data: {
+          alertId,
+          recipient: alert.recommended_recipient,
+          recipientEmail: alert.contact_email,
+          companyName: alert.company_name,
+          email_delivery: emailResult
+        }
+      });
+    }
 
   } catch (err) {
     console.error('[Notification Controller approveAlert Error]', err);
@@ -285,15 +303,10 @@ export const batchApproveAlerts = async (req, res) => {
       WHERE na.id IN (?)
     `, [targetIds]);
 
-    // Update status in bulk
-    await pool.query(`
-      UPDATE notification_alerts
-      SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
-      WHERE id IN (?)
-    `, [approvedBy, targetIds]);
-
-    // Send emails and record audit logs
+    // Send emails and update DB ONLY for successful dispatches
     const dispatched = [];
+    const failed = [];
+
     for (const alert of alertRows) {
       const emailResult = await sendEscalationNoticeEmail({
         recipientEmail: alert.contact_email || alert.recommended_recipient || 'contact@borrower.com',
@@ -304,28 +317,56 @@ export const batchApproveAlerts = async (req, res) => {
         alertId: alert.id
       });
 
-      await pool.query(`
-        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
-        VALUES (?, 'BATCH_APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
-      `, [approvedBy, alert.id, JSON.stringify({ alertId: alert.id, email_delivery: emailResult })]);
+      if (emailResult && emailResult.success === true) {
+        // Update status in DB ONLY when email succeeds
+        await pool.query(`
+          UPDATE notification_alerts
+          SET notification_status = 'approved', approved_by = ?, approved_at = NOW()
+          WHERE id = ?
+        `, [approvedBy, alert.id]);
 
-      dispatched.push({
-        alertId: alert.id,
-        companyName: alert.company_name,
-        recipient: alert.contact_name,
-        recipientEmail: alert.contact_email
-      });
+        await pool.query(`
+          INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+          VALUES (?, 'BATCH_APPROVE_ESCALATION_ALERT', 'notification_alert', ?, ?, '127.0.0.1');
+        `, [approvedBy, alert.id, JSON.stringify({ alertId: alert.id, email_delivery: emailResult })]);
+
+        dispatched.push({
+          alertId: alert.id,
+          companyName: alert.company_name,
+          recipient: alert.contact_name,
+          recipientEmail: alert.contact_email
+        });
+      } else {
+        await pool.query(`
+          INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+          VALUES (?, 'BATCH_APPROVE_ESCALATION_ALERT_FAILED', 'notification_alert', ?, ?, '127.0.0.1');
+        `, [approvedBy, alert.id, JSON.stringify({ alertId: alert.id, email_delivery: emailResult })]);
+
+        failed.push({
+          alertId: alert.id,
+          companyName: alert.company_name,
+          recipientEmail: alert.contact_email,
+          error: emailResult?.error || 'Email delivery failed'
+        });
+      }
     }
 
-    // Invalidate notification cache tag
-    cacheService.invalidateByTag('notifications');
+    if (dispatched.length > 0) {
+      // Invalidate notification cache tag
+      cacheService.invalidateByTag('notifications');
+    }
 
-    return res.status(200).json({
-      success: true,
-      message: `Batch dispatched ${dispatched.length} follow-up notices successfully!`,
+    const allSucceeded = failed.length === 0 && dispatched.length > 0;
+
+    return res.status(allSucceeded ? 200 : 422).json({
+      success: allSucceeded,
+      message: allSucceeded
+        ? `Batch dispatched ${dispatched.length} follow-up notices successfully!`
+        : `Dispatched ${dispatched.length} notices, but ${failed.length} failed due to email delivery errors.`,
       data: {
         count: dispatched.length,
-        dispatched
+        dispatched,
+        failed
       }
     });
 
