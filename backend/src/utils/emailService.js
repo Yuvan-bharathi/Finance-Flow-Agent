@@ -50,8 +50,16 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
   // 1. Resend HTTPS API (Port 443)
   if (resendKey) {
     try {
-      console.log(`[EmailService HTTPS] 🚀 Attempting Resend API dispatch to ${to}...`);
-      const defaultResendFrom = process.env.RESEND_FROM_EMAIL || from || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>';
+      // Resend rejects public @gmail.com senders with 403. Use RESEND_FROM_EMAIL if set, otherwise fallback to onboarding@resend.dev
+      let defaultResendFrom = process.env.RESEND_FROM_EMAIL;
+      if (!defaultResendFrom) {
+        const candidate = from || process.env.SMTP_FROM || '';
+        if (candidate && !candidate.includes('@gmail.com')) {
+          defaultResendFrom = candidate;
+        } else {
+          defaultResendFrom = 'FinanceFlow AI <onboarding@resend.dev>';
+        }
+      }
 
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
