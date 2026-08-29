@@ -50,25 +50,47 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
   if (resendKey) {
     try {
       console.log(`[EmailService HTTPS] 🚀 Attempting Resend API dispatch to ${to}...`);
-      const res = await fetch('https://api.resend.com/emails', {
+      const defaultResendFrom = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>';
+
+      let res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${resendKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>',
+          from: defaultResendFrom,
           to: [to],
           subject,
           html
         })
       });
-      const data = await res.json();
+      let data = await res.json();
+
+      // If custom domain unverified on Resend free tier, automatically fallback to onboarding@resend.dev
+      if (!res.ok && (data?.message?.includes('domain') || data?.statusCode === 403 || data?.name === 'validation_error')) {
+        console.warn('[EmailService HTTPS] ⚠️ Custom Resend domain unverified, retrying with onboarding@resend.dev...');
+        res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'FinanceFlow AI <onboarding@resend.dev>',
+            to: [to],
+            subject,
+            html
+          })
+        });
+        data = await res.json();
+      }
+
       if (res.ok && data.id) {
-        console.log(`[EmailService HTTPS] ✅ Delivered via Resend API (Message ID: ${data.id})`);
+        console.log(`[EmailService HTTPS] ✅ Delivered via Resend API Port 443 (Message ID: ${data.id})`);
         return { success: true, messageId: data.id, mode: 'resend_https_api' };
       } else {
-        console.warn('[EmailService HTTPS] Resend API response error:', data);
+        console.warn('[EmailService HTTPS] Resend API error response:', data);
       }
     } catch (err) {
       console.warn('[EmailService HTTPS] Resend fetch exception:', err.message);
