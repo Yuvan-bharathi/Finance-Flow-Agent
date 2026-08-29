@@ -632,12 +632,13 @@ export const DocumentList = () => {
                         width: '100%',
                         padding: '7px 10px 7px 32px',
                         background: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        border: '1.5px solid #cbd5e1',
                         borderRadius: '8px',
                         fontSize: '0.8rem',
                         fontWeight: '600',
                         color: '#0f172a',
-                        outline: 'none'
+                        outline: 'none',
+                        boxSizing: 'border-box'
                       }}
                     />
                   </div>
@@ -654,7 +655,7 @@ export const DocumentList = () => {
                         width: '100%',
                         padding: '7px 12px',
                         background: '#ffffff',
-                        border: showCompanyDropdown ? '1.5px solid #6366f1' : '1px solid #cbd5e1',
+                        border: showCompanyDropdown ? '1.5px solid #6366f1' : '1.5px solid #cbd5e1',
                         borderRadius: '8px',
                         fontSize: '0.8rem',
                         fontWeight: '700',
@@ -664,7 +665,8 @@ export const DocumentList = () => {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         boxShadow: showCompanyDropdown ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
-                        transition: 'all 0.15s ease'
+                        transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+                        boxSizing: 'border-box'
                       }}
                     >
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -772,7 +774,7 @@ export const DocumentList = () => {
                               width: '100%',
                               padding: '7px 12px',
                               background: '#ffffff',
-                              border: showCaseDropdown ? '2px solid #4f46e5' : '1.5px solid #6366f1',
+                              border: showCaseDropdown ? '1.5px solid #4f46e5' : '1.5px solid #6366f1',
                               borderRadius: '8px',
                               fontSize: '0.8rem',
                               fontWeight: '700',
@@ -781,8 +783,9 @@ export const DocumentList = () => {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between',
-                              boxShadow: '0 1px 3px rgba(99,102,241,0.12)',
-                              transition: 'all 0.15s ease'
+                              boxShadow: showCaseDropdown ? '0 0 0 3px rgba(79,70,229,0.15)' : '0 1px 3px rgba(99,102,241,0.12)',
+                              transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+                              boxSizing: 'border-box'
                             }}
                           >
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
