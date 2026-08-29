@@ -18,6 +18,7 @@ import { clientCache } from '../services/cacheService';
 import { useAuth } from '../context/AuthContext';
 import { AgentRunHistoryDrawer } from '../components/AgentRunHistoryDrawer';
 import { PipelineVisualizer } from '../components/PipelineVisualizer';
+import { AgentPipelineVisualization } from '../components/AgentPipelineVisualization';
 import { connectSocket } from '../services/socketService';
 import {
   Bot,
@@ -633,91 +634,6 @@ export const AgentControlCenter = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Compact Operational Summary Strip */}
-      <div className="telemetry-banner" style={{
-        background: '#ffffff',
-        padding: '14px 24px',
-        borderRadius: '16px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px',
-      }}>
-        {/* Left Operational Summary Pills */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            padding: '8px 14px',
-            borderRadius: '12px',
-            fontSize: '0.825rem',
-            fontWeight: '700',
-            color: '#0f172a',
-          }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#16a34a' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a', display: 'inline-block', boxShadow: '0 0 0 2px rgba(22,163,74,0.25)' }} />
-              {(agents.filter(a => a.status === 'HEALTHY' || a.is_active !== false).length || 7)} Active Agents
-            </span>
-            <span style={{ color: '#cbd5e1' }}>|</span>
-            <span style={{ color: '#4f46e5' }}>3 Pipelines</span>
-            <span style={{ color: '#cbd5e1' }}>|</span>
-            <span style={{ color: '#475569' }}>{queueMetrics?.queuedJobsCount || 0} Queue</span>
-            <span style={{ color: '#cbd5e1' }}>|</span>
-            <span style={{ color: '#16a34a', fontWeight: '800' }}>LIVE</span>
-          </div>
-        </div>
-
-        {/* Right Telemetry Stats */}
-        <div className="telemetry-stats-group" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
-              Total Tokens Consumed
-            </div>
-            <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#4f46e5' }}>
-              {(overview.total_tokens_consumed || 325451).toLocaleString()} <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#64748b' }}>tokens</span>
-            </div>
-          </div>
-
-          <div style={{ height: '28px', width: '1px', background: '#e2e8f0' }} />
-
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
-              Worker Queue
-            </div>
-            <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#059669' }}>
-              {queueMetrics?.activeJobsCount || 0} <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#64748b' }}>active / {queueMetrics?.queuedJobsCount || 0} queued</span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => void fetchControlCenterData()}
-            disabled={loading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              border: '1px solid #cbd5e1',
-              background: '#ffffff',
-              color: '#475569',
-              fontSize: '0.82rem',
-              fontWeight: '700',
-              cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        </div>
-      </div>
-
       {/* Batch Toast */}
       {batchToast && (
         <div style={{
@@ -773,14 +689,14 @@ export const AgentControlCenter = () => {
         </div>
       )}
 
-      {/* Live Pipeline Visualizer */}
-      {activePipeline && (
-        <PipelineVisualizer
-          pipeline={activePipeline}
-          onClose={() => setActivePipeline(null)}
-          onRefresh={() => void fetchControlCenterData()}
-        />
-      )}
+      {/* Autonomous AI Agentic Pipeline Visualization */}
+      <AgentPipelineVisualization
+        agents={agents as unknown as Array<Record<string, unknown>>}
+        overview={overview as unknown as Record<string, unknown>}
+        queueMetrics={queueMetrics as unknown as Record<string, unknown>}
+        onRefresh={() => void fetchControlCenterData()}
+        loading={loading}
+      />
 
       {/* Multi-Agent Orchestration Pipelines */}
       <div style={{
