@@ -456,77 +456,66 @@ export const DocumentList = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FileText color="#6366f1" size={26} />
-            Document Intelligence &amp; Financial Vault (Agent 4)
-          </h1>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
-            Inspect borrower legal agreements, extract structured contract terms with Groq Llama 3.3 70B, and generate standardized financial reports &amp; ERP XML journals.
-          </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Tabs & Top Action Controls Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setActiveTab('vault')}
+            style={{
+              background: activeTab === 'vault' ? '#4f46e5' : '#f8fafc',
+              color: activeTab === 'vault' ? '#ffffff' : '#64748b',
+              border: '1px solid',
+              borderColor: activeTab === 'vault' ? '#4f46e5' : '#e2e8f0',
+              padding: '8px 16px',
+              borderRadius: '10px',
+              fontSize: '0.85rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <Building size={16} />
+            <span>Contract Vault &amp; Loan Agreements</span>
+            <span style={{ background: activeTab === 'vault' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'vault' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+              {documents.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('generated')}
+            style={{
+              background: activeTab === 'generated' ? '#4f46e5' : '#f8fafc',
+              color: activeTab === 'generated' ? '#ffffff' : '#64748b',
+              border: '1px solid',
+              borderColor: activeTab === 'generated' ? '#4f46e5' : '#e2e8f0',
+              padding: '8px 16px',
+              borderRadius: '10px',
+              fontSize: '0.85rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <Receipt size={16} />
+            <span>Standardized Financial Documents</span>
+            <span style={{ background: activeTab === 'generated' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'generated' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+              {sampleGeneratedDocs.length}
+            </span>
+          </button>
         </div>
 
         <button
           onClick={() => setShowUploadModal(true)}
           className="btn-primary"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '9px 18px', borderRadius: '10px' }}
         >
           <Upload size={18} />
           <span>Upload PDF Agreement</span>
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '12px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-        <button
-          onClick={() => setActiveTab('vault')}
-          style={{
-            background: activeTab === 'vault' ? '#4f46e5' : '#f8fafc',
-            color: activeTab === 'vault' ? '#ffffff' : '#64748b',
-            border: '1px solid',
-            borderColor: activeTab === 'vault' ? '#4f46e5' : '#e2e8f0',
-            padding: '8px 16px',
-            borderRadius: '10px',
-            fontSize: '0.85rem',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Building size={16} />
-          <span>Contract Vault &amp; Loan Agreements</span>
-          <span style={{ background: activeTab === 'vault' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'vault' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
-            {documents.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('generated')}
-          style={{
-            background: activeTab === 'generated' ? '#4f46e5' : '#f8fafc',
-            color: activeTab === 'generated' ? '#ffffff' : '#64748b',
-            border: '1px solid',
-            borderColor: activeTab === 'generated' ? '#4f46e5' : '#e2e8f0',
-            padding: '8px 16px',
-            borderRadius: '10px',
-            fontSize: '0.85rem',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Receipt size={16} />
-          <span>Standardized Financial Documents (Agent 4 Generated)</span>
-          <span style={{ background: activeTab === 'generated' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeTab === 'generated' ? '#ffffff' : '#334155', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
-            {sampleGeneratedDocs.length}
-          </span>
         </button>
       </div>
 
@@ -541,7 +530,7 @@ export const DocumentList = () => {
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Type</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>File Size</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Uploaded By</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Agent 4 Actions</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -613,7 +602,7 @@ export const DocumentList = () => {
                       }}
                     >
                       <Sparkles size={14} />
-                      <span>Extract Terms (Agent 4)</span>
+                      <span>Extract Terms</span>
                     </button>
                   </td>
                 </tr>
@@ -1062,7 +1051,7 @@ export const DocumentList = () => {
                 </div>
                 <div>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                    Agent 4: Document Intelligence
+                    Document Intelligence
                   </h2>
                   <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
                     {selectedDoc.file_name}
@@ -1079,7 +1068,7 @@ export const DocumentList = () => {
               {extracting ? (
                 <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
                   <RefreshCw size={28} className="animate-spin" style={{ margin: '0 auto 12px auto', color: '#6366f1' }} />
-                  <p style={{ fontWeight: '600' }}>Agent 4 is parsing PDF contract and extracting key terms...</p>
+                  <p style={{ fontWeight: '600' }}>Document Intelligence is parsing PDF contract and extracting key terms...</p>
                 </div>
               ) : extractedData ? (
                 <>

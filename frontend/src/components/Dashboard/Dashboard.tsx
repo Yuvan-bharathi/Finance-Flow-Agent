@@ -190,7 +190,7 @@ export const Dashboard = ({
         flexDirection: 'column',
         minWidth: 0,
       }}>
-        <Header />
+        <Header activeTab={activeTab} />
 
         <main style={{ flex: 1, padding: '24px 32px 48px', overflowY: 'auto' }}>
           {errorMsg && (

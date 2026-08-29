@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { fetchSettings, saveSettings } from '../services/settingsService';
 import {
-  Settings as SettingsIcon,
   Bot,
   Shield,
   Bell,
@@ -294,40 +293,39 @@ export const Settings = () => {
   const isUserAdmin = isSuperAdminOrOwner || userRole === 'admin';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header Banner */}
-      <div style={{
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '16px',
-        padding: '24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '46px',
-            height: '46px',
-            borderRadius: '14px',
-            background: 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
-          }}>
-            <SettingsIcon size={26} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.1 }}>
-              System &amp; Enterprise Settings
-            </h1>
-            <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '3px' }}>
-              Configure AI agent governance, user permissions, matching rules, notifications, and infrastructure health.
-            </p>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Tabs & Action Controls Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {[
+            { id: 'ai' as const, label: '🤖 AI & Agent Control' },
+            { id: 'rules' as const, label: '🛡️ Risk & Matching Rules' },
+            { id: 'notifications' as const, label: '🔔 Notifications & Alerts' },
+            { id: 'profile' as const, label: '👤 Profile & Team Users' },
+            { id: 'preferences' as const, label: '🎨 Preferences' },
+            { id: 'audit' as const, label: '📋 Audit & System Health' },
+          ].map(tab => {
+            const isActive = activeSection === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSection(tab.id)}
+                style={{
+                  background: isActive ? '#4f46e5' : '#ffffff',
+                  color: isActive ? '#ffffff' : '#475569',
+                  border: isActive ? '1px solid #4f46e5' : '1px solid #cbd5e1',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -336,43 +334,10 @@ export const Settings = () => {
               <CheckCircle2 size={16} /> Settings Saved
             </span>
           )}
-          <button onClick={() => void handleSaveSettings()} className="btn-primary" style={{ padding: '10px 20px', borderRadius: '10px' }}>
+          <button onClick={() => void handleSaveSettings()} className="btn-primary" style={{ padding: '9px 18px', borderRadius: '10px' }}>
             Save Changes
           </button>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', flexWrap: 'wrap' }}>
-        {[
-          { id: 'ai' as const, label: '🤖 AI & Agent Control' },
-          { id: 'rules' as const, label: '🛡️ Risk & Matching Rules' },
-          { id: 'notifications' as const, label: '🔔 Notifications & Alerts' },
-          { id: 'profile' as const, label: '👤 Profile & Team Users' },
-          { id: 'preferences' as const, label: '🎨 Preferences' },
-          { id: 'audit' as const, label: '📋 Audit & System Health' },
-        ].map(tab => {
-          const isActive = activeSection === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSection(tab.id)}
-              style={{
-                background: isActive ? '#4f46e5' : '#ffffff',
-                color: isActive ? '#ffffff' : '#475569',
-                border: isActive ? '1px solid #4f46e5' : '1px solid #cbd5e1',
-                padding: '8px 16px',
-                borderRadius: '10px',
-                fontSize: '0.85rem',
-                fontWeight: '700',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
       </div>
 
       {/* SECTION 1: AI & AGENT CONTROL */}

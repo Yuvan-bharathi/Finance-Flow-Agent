@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  BellRing, CheckCircle2, XCircle,
+  CheckCircle2, XCircle,
   RefreshCw, Clock, Send, Filter, Zap,
   Check, X, ChevronDown, ChevronUp, AlertCircle, Bot,
   Mail, Copy, CheckSquare, Square, SendHorizontal,
@@ -373,58 +373,62 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px',
-        background: '#ffffff',
-        padding: '20px 24px',
-        borderRadius: '16px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
-          }}>
-            <BellRing size={22} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                Notification &amp; Escalation Center
-              </h2>
-              {isAuthorized && (
-                <span style={{
-                  background: '#ecfdf5',
-                  color: '#059669',
-                  border: '1px solid #a7f3d0',
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  fontSize: '0.68rem',
-                  fontWeight: '800',
-                  textTransform: 'uppercase',
-                }}>
-                  {userRole.replace(/_/g, ' ')} Authorized
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0' }}>
-              Executive SLA breach escalations (Agent 6) &amp; borrower debt collection notices (Agent 3) with single &amp; batch dispatch.
-            </p>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Category Tabs & Action Controls Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: '#ffffff',
+          padding: '5px 8px',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          flexWrap: 'wrap',
+        }}>
+          <button
+            onClick={() => setCategoryTab('all')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', borderRadius: '8px', border: 'none',
+              fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
+              background: categoryTab === 'all' ? '#0f172a' : 'transparent',
+              color: categoryTab === 'all' ? '#ffffff' : '#64748b',
+            }}
+          >
+            <span>All Dispatches</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryTab('escalation')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', borderRadius: '8px', border: 'none',
+              fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
+              background: categoryTab === 'escalation' ? '#4f46e5' : 'transparent',
+              color: categoryTab === 'escalation' ? '#ffffff' : '#64748b',
+            }}
+          >
+            <AlertOctagon size={15} />
+            <span>Executive Escalations</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(isInternalEscalation).length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryTab('collection')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', borderRadius: '8px', border: 'none',
+              fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
+              background: categoryTab === 'collection' ? '#059669' : 'transparent',
+              color: categoryTab === 'collection' ? '#ffffff' : '#64748b',
+            }}
+          >
+            <Mail size={15} />
+            <span>Borrower Follow-Up Notices</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(a => !isInternalEscalation(a)).length})</span>
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -468,64 +472,9 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
             }}
           >
             <Zap size={15} />
-            {scanning ? 'Scanning SLAs...' : 'Run Escalation Scan (Agent 6)'}
+            {scanning ? 'Scanning SLAs...' : 'Run Escalation Scan'}
           </button>
         </div>
-      </div>
-
-      {/* Category Tabs */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        background: '#ffffff',
-        padding: '8px 12px',
-        borderRadius: '12px',
-        border: '1px solid #e2e8f0',
-      }}>
-        <button
-          onClick={() => setCategoryTab('all')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', borderRadius: '8px', border: 'none',
-            fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
-            background: categoryTab === 'all' ? '#0f172a' : 'transparent',
-            color: categoryTab === 'all' ? '#ffffff' : '#64748b',
-          }}
-        >
-          <span>All Dispatches</span>
-          <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.length})</span>
-        </button>
-
-        <button
-          onClick={() => setCategoryTab('escalation')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', borderRadius: '8px', border: 'none',
-            fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
-            background: categoryTab === 'escalation' ? '#4f46e5' : 'transparent',
-            color: categoryTab === 'escalation' ? '#ffffff' : '#64748b',
-          }}
-        >
-          <AlertOctagon size={15} />
-          <span>Executive Escalations (Agent 6)</span>
-          <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(isInternalEscalation).length})</span>
-        </button>
-
-        <button
-          onClick={() => setCategoryTab('collection')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', borderRadius: '8px', border: 'none',
-            fontSize: '0.825rem', fontWeight: '700', cursor: 'pointer',
-            background: categoryTab === 'collection' ? '#059669' : 'transparent',
-            color: categoryTab === 'collection' ? '#ffffff' : '#64748b',
-          }}
-        >
-          <Mail size={15} />
-          <span>Borrower Follow-Up Notices (Agent 3)</span>
-          <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({alerts.filter(a => !isInternalEscalation(a)).length})</span>
-        </button>
       </div>
 
       {/* Toast */}
@@ -850,7 +799,7 @@ export const Notifications = ({ onAskAI }: NotificationsProps) => {
                       gap: '4px',
                     }}>
                       {isInternal ? <AlertOctagon size={11} /> : <Mail size={11} />}
-                      {isInternal ? 'EXECUTIVE ESCALATION (AGENT 6)' : 'BORROWER NOTICE (AGENT 3)'}
+                      {isInternal ? 'EXECUTIVE ESCALATION' : 'BORROWER NOTICE'}
                     </span>
 
                     <span style={{

@@ -5,9 +5,65 @@ import { useDateFilter } from '../../context/DateFilterContext';
 import type { DatePreset } from '../../types/common';
 
 interface HeaderProps {
+  activeTab?: string;
   searchQuery?: string;
   setSearchQuery?: (q: string) => void;
 }
+
+export interface PageHeaderInfo {
+  title: string;
+  subtitle: string;
+  isDashboard?: boolean;
+}
+
+export const PAGE_HEADER_CONFIG: Record<string, PageHeaderInfo> = {
+  reconciliations: {
+    title: '',
+    subtitle: "Here's what's happening with your reconciliations today.",
+    isDashboard: true,
+  },
+  dashboard: {
+    title: '',
+    subtitle: "Here's what's happening with your reconciliations today.",
+    isDashboard: true,
+  },
+  payments: {
+    title: 'Payment Manual Ingestion Engine',
+    subtitle: 'Simulate bank deposits and trigger AI investigation.',
+  },
+  agents: {
+    title: 'AI Agent Control & Orchestrator',
+    subtitle: 'Monitor autonomous agent operations, real-time pipeline execution, and model performance metrics.',
+  },
+  notifications: {
+    title: 'Notifications',
+    subtitle: 'Real-time alerts, escalation notices, and automated system activity logs.',
+  },
+  reports: {
+    title: 'Reports & Analytics',
+    subtitle: 'Monitor reconciliation, collection, portfolio, and AI performance.',
+  },
+  companies: {
+    title: 'Borrowing Companies',
+    subtitle: 'Manage borrower profiles, loan facilities, and repayment status.',
+  },
+  loans: {
+    title: 'Loans & Schedules',
+    subtitle: 'Track active loan facilities, repayment schedules, interest rates, and waterfall allocation rules.',
+  },
+  'audit-logs': {
+    title: 'Audit Compliance',
+    subtitle: 'Immutable audit trail of all AI decisions, manual approvals, and system transactions.',
+  },
+  documents: {
+    title: 'Documents',
+    subtitle: 'Manage loan agreements, payment proofs, invoices, and ERP documents.',
+  },
+  settings: {
+    title: 'Settings',
+    subtitle: 'Manage system configurations, integration keys, notification thresholds, and security preferences.',
+  },
+};
 
 const ROLE_LABELS: Record<string, string> = {
   owner:              'Owner',
@@ -27,7 +83,7 @@ const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
   { id: 'ytd',        label: 'Year-to-Date' },
 ];
 
-export const Header = ({ searchQuery = '', setSearchQuery }: HeaderProps) => {
+export const Header = ({ activeTab, searchQuery = '', setSearchQuery }: HeaderProps) => {
   const { user, logout } = useAuth();
   const { startDate, endDate, activePreset, formattedDisplay, setPreset, setCustomRange } = useDateFilter();
 
@@ -42,6 +98,10 @@ export const Header = ({ searchQuery = '', setSearchQuery }: HeaderProps) => {
   const userRole = (user as unknown as Record<string, string>)?.role_name ?? user?.role ?? 'accountant';
   const formattedRole = ROLE_LABELS[userRole.toLowerCase()] ?? userRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const initials = userName ? userName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U';
+
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname.replace(/^\//, '').trim().toLowerCase() : '';
+  const resolvedTab = activeTab || currentPath || 'reconciliations';
+  const pageHeader = PAGE_HEADER_CONFIG[resolvedTab] || PAGE_HEADER_CONFIG['reconciliations'];
 
   useEffect(() => {
     const handle = (e: MouseEvent) => {
@@ -63,14 +123,27 @@ export const Header = ({ searchQuery = '', setSearchQuery }: HeaderProps) => {
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       position: 'sticky', top: 0, zIndex: 30, boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
     }}>
-      {/* Left Greeting */}
+      {/* Left Heading / Title */}
       <div>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2 }}>
-          Welcome back, {userName}! 👋
-        </h1>
-        <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
-          Here's what's happening with your reconciliations today.
-        </p>
+        {pageHeader.isDashboard ? (
+          <>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
+              Welcome back, {userName}! 👋
+            </h1>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px', margin: 0 }}>
+              {pageHeader.subtitle}
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
+              {pageHeader.title}
+            </h1>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px', margin: 0 }}>
+              {pageHeader.subtitle}
+            </p>
+          </>
+        )}
       </div>
 
       {/* Right Controls */}

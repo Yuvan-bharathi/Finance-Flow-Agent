@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  BarChart3, TrendingUp, DollarSign,
+  TrendingUp, DollarSign,
   ArrowUpRight, ArrowDownRight, RefreshCw, Calendar,
   Zap, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
@@ -101,27 +101,7 @@ export const ReportsAnalytics = () => {
   const maxBarHeight = 160;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-            <BarChart3 color="#4f46e5" size={28} />
-            Reports &amp; Portfolio Financial Analytics
-          </h1>
-          <p style={{ fontSize: '0.83rem', color: '#64748b' }}>
-            Real-time collection efficiency, overdue aging buckets (30/60/90+ days), and AI agent performance.
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {loading && <RefreshCw size={15} color="#4f46e5" className="animate-spin" />}
-          <span style={{ fontSize: '0.72rem', color: '#94a3b8', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 10px' }}>
-            <Calendar size={12} style={{ display: 'inline', marginRight: '4px' }} />
-            May 20 – Jun 2025
-          </span>
-        </div>
-      </div>
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         {kpis.map((kpi, i) => {
@@ -165,26 +145,36 @@ export const ReportsAnalytics = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: '6px', borderBottom: '2px solid #f1f5f9', paddingBottom: '0' }}>
-        {tabs.map(tab => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                background: 'transparent', border: 'none',
-                borderBottom: isActive ? '2px solid #4f46e5' : '2px solid transparent',
-                marginBottom: '-2px',
-                padding: '10px 18px', fontSize: '0.85rem', fontWeight: isActive ? '700' : '500',
-                color: isActive ? '#4f46e5' : '#64748b', cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #f1f5f9', paddingBottom: '0' }}>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {tabs.map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  background: 'transparent', border: 'none',
+                  borderBottom: isActive ? '2px solid #4f46e5' : '2px solid transparent',
+                  marginBottom: '-2px',
+                  padding: '10px 18px', fontSize: '0.85rem', fontWeight: isActive ? '700' : '500',
+                  color: isActive ? '#4f46e5' : '#64748b', cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '6px' }}>
+          {loading && <RefreshCw size={14} color="#4f46e5" className="animate-spin" />}
+          <span style={{ fontSize: '0.72rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 10px', fontWeight: '600' }}>
+            <Calendar size={12} style={{ display: 'inline', marginRight: '4px' }} />
+            May 20 – Jun 2025
+          </span>
+        </div>
       </div>
 
       {/* TAB: OVERVIEW */}
@@ -515,12 +505,12 @@ export const ReportsAnalytics = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
-                { name: 'Agent 1 — Payment Reconciliation', runs: 9, success: 89, tokens: '87,114' },
-                { name: 'Agent 2 — Repayment Risk Assessment', runs: 0, success: 100, tokens: '0' },
-                { name: 'Agent 3 — Automated Collection Follow-Up', runs: 1, success: 100, tokens: '2,381' },
-                { name: 'Agent 4 — Document Intelligence', runs: 2, success: 100, tokens: '4,360' },
-                { name: 'Agent 5 — Portfolio Analytics', runs: 0, success: 100, tokens: '0' },
-                { name: 'Agent 6 — Notification & Escalation', runs: 1, success: 100, tokens: '4,777' },
+                { name: 'Payment Reconciliation', runs: 9, success: 89, tokens: '87,114' },
+                { name: 'Repayment Risk Assessment', runs: 0, success: 100, tokens: '0' },
+                { name: 'Automated Collection Follow-Up', runs: 1, success: 100, tokens: '2,381' },
+                { name: 'Document Intelligence', runs: 2, success: 100, tokens: '4,360' },
+                { name: 'Portfolio Analytics', runs: 0, success: 100, tokens: '0' },
+                { name: 'Notification & Escalation', runs: 1, success: 100, tokens: '4,777' },
               ].map((a, i) => (
                 <div
                   key={i} style={{

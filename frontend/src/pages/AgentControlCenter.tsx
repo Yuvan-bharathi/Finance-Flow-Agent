@@ -632,56 +632,65 @@ export const AgentControlCenter = () => {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header Banner */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Compact Operational Summary Strip */}
       <div className="telemetry-banner" style={{
         background: '#ffffff',
-        padding: '20px 24px',
+        padding: '14px 24px',
         borderRadius: '16px',
         border: '1px solid #e2e8f0',
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {/* Left Operational Summary Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
-            color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)',
+            gap: '10px',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            padding: '8px 14px',
+            borderRadius: '12px',
+            fontSize: '0.825rem',
+            fontWeight: '700',
+            color: '#0f172a',
           }}>
-            <Bot size={24} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-              AI Agent Control &amp; Orchestrator
-            </h1>
-            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0' }}>
-              Multi-agent workflow orchestration, target transaction selection, batch execution &amp; real-time telemetry.
-            </p>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#16a34a' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a', display: 'inline-block', boxShadow: '0 0 0 2px rgba(22,163,74,0.25)' }} />
+              {(agents.filter(a => a.status === 'HEALTHY' || a.is_active !== false).length || 7)} Active Agents
+            </span>
+            <span style={{ color: '#cbd5e1' }}>|</span>
+            <span style={{ color: '#4f46e5' }}>3 Pipelines</span>
+            <span style={{ color: '#cbd5e1' }}>|</span>
+            <span style={{ color: '#475569' }}>{queueMetrics?.queuedJobsCount || 0} Queue</span>
+            <span style={{ color: '#cbd5e1' }}>|</span>
+            <span style={{ color: '#16a34a', fontWeight: '800' }}>LIVE</span>
           </div>
         </div>
 
-        <div className="telemetry-stats-group">
+        {/* Right Telemetry Stats */}
+        <div className="telemetry-stats-group" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
               Total Tokens Consumed
             </div>
-            <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#4f46e5' }}>
+            <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#4f46e5' }}>
               {(overview.total_tokens_consumed || 325451).toLocaleString()} <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#64748b' }}>tokens</span>
             </div>
           </div>
 
-          <div style={{ height: '32px', width: '1px', background: '#e2e8f0' }} />
+          <div style={{ height: '28px', width: '1px', background: '#e2e8f0' }} />
 
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
               Worker Queue
             </div>
-            <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#059669' }}>
+            <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#059669' }}>
               {queueMetrics?.activeJobsCount || 0} <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#64748b' }}>active / {queueMetrics?.queuedJobsCount || 0} queued</span>
             </div>
           </div>
@@ -851,7 +860,7 @@ export const AgentControlCenter = () => {
                 <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a' }}>Payment Reconciliation &amp; Risk Pipeline</span>
               </div>
               <p style={{ fontSize: '0.775rem', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
-                <strong>Agent 1</strong> (Reconcile) ➔ <strong>Agent 7</strong> (Anomaly Detection) ➔ <strong>Agent 2</strong> (Risk Scoring) ➔ <strong>Agent 3</strong> (Collection Notice).
+                <strong>Payment Matching</strong> ➔ <strong>Anomaly Detection</strong> ➔ <strong>Risk Assessment</strong> ➔ <strong>Collection Strategy</strong>.
               </p>
             </div>
 
@@ -880,17 +889,16 @@ export const AgentControlCenter = () => {
 
               <button
                 onClick={() => void handleExecuteBatch('RECONCILIATION_AND_RISK')}
-                disabled={batchRunning}
-                title="Run pipeline for all pending cases in batch"
+                disabled={triggeringPipeline || batchRunning || pendingTargets.length === 0}
                 style={{
-                  background: '#f8fafc',
+                  background: '#ffffff',
                   color: '#4f46e5',
-                  border: '1.5px solid #c7d2fe',
-                  padding: '9px 10px',
+                  border: '1px solid #c7d2fe',
+                  padding: '9px 12px',
                   borderRadius: '10px',
                   fontSize: '0.78rem',
                   fontWeight: '700',
-                  cursor: batchRunning ? 'not-allowed' : 'pointer',
+                  cursor: (triggeringPipeline || batchRunning || pendingTargets.length === 0) ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -898,7 +906,7 @@ export const AgentControlCenter = () => {
                 }}
               >
                 <Zap size={13} />
-                <span>Batch Run</span>
+                <span>Run Batch ({pendingTargets.length})</span>
               </button>
             </div>
           </div>
@@ -921,7 +929,7 @@ export const AgentControlCenter = () => {
                 <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#0f172a' }}>Portfolio &amp; Escalation Pipeline</span>
               </div>
               <p style={{ fontSize: '0.775rem', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
-                <strong>Agent 5</strong> (Portfolio Snapshot &amp; KPIs) ➔ <strong>Agent 6</strong> (Escalation &amp; SLA Scanner).
+                <strong>Portfolio Snapshot</strong> ➔ <strong>Notification &amp; Escalation Scanner</strong>.
               </p>
             </div>
 
@@ -1805,7 +1813,7 @@ export const AgentControlCenter = () => {
               <ScanSearch size={22} color="#ffffff" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#ffffff' }}>Agent 7 — Anomaly Flags</h3>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#ffffff' }}>Anomaly Flags</h3>
               <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(255,255,255,0.85)' }}>
                 {anomalyFlags.filter(f => f.status === 'pending').length} pending review
               </p>

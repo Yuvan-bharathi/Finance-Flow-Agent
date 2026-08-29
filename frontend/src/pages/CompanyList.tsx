@@ -297,7 +297,7 @@ export const CompanyList = ({ onAskAI }: CompanyListProps) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div style={{
@@ -323,19 +323,9 @@ export const CompanyList = ({ onAskAI }: CompanyListProps) => {
         </div>
       )}
 
-      {/* Header Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Building2 size={24} color="#4f46e5" />
-            <span>Borrowing Companies Master Data</span>
-          </h1>
-          <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '4px 0 0 0' }}>
-            Corporate borrower profiles, real-time EMI tracking, credit risk health (Agent 2), and automated collections (Agent 3).
-          </p>
-        </div>
-
-        {canCreateCompany && (
+      {/* Action Controls Bar */}
+      {canCreateCompany && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0' }}>
           <button
             onClick={() => setShowAddModal(true)}
             className="btn-primary"
@@ -344,8 +334,8 @@ export const CompanyList = ({ onAskAI }: CompanyListProps) => {
             <Plus size={16} />
             <span>Add Borrower Company</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Main Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -455,7 +445,7 @@ export const CompanyList = ({ onAskAI }: CompanyListProps) => {
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
                           <button
                             onClick={() => setRiskCompany(c)}
-                            title="Audit credit risk profile (Agent 2)"
+                            title="Audit credit risk profile"
                             style={{
                               background: '#e0e7ff',
                               border: '1px solid #c7d2fe',
@@ -476,7 +466,7 @@ export const CompanyList = ({ onAskAI }: CompanyListProps) => {
 
                           <button
                             onClick={() => setCollectionCompany(c)}
-                            title="Draft collection email (Agent 3)"
+                            title="Draft collection email"
                             style={{
                               background: '#fef2f2',
                               border: '1px solid #fecaca',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import {
-  CreditCard, Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play,
+  Plus, CheckCircle, AlertCircle, Eye, Zap, Search, Play,
   RefreshCw, AlertTriangle, ShieldCheck, Bot, ScanSearch, ShieldAlert, X,
   MessageSquare, ChevronLeft, ChevronRight, Filter, Calendar,
 } from 'lucide-react';
@@ -228,7 +228,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
       setErrorMsg('');
       setSuccessMsg('');
       await analyzeCase(caseId);
-      setSuccessMsg(`⚡ Agent 1 Payment Reconciliation completed for Case #${caseId}!`);
+      setSuccessMsg(`⚡ Payment Reconciliation completed for Case #${caseId}!`);
       await fetchPaymentsAndCases();
     } catch (err: unknown) {
       console.error(err);
@@ -375,15 +375,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <CreditCard color="#0284c7" size={26} />
-          Payment Manual Ingestion Engine (Section 17)
-        </h1>
-        <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px' }}>
-          Simulate bank statement feeds or ingest raw deposit transactions. Trigger single-case AI investigation or batch analyze selected cases.
-        </p>
-      </div>
+
 
       {/* Ingestion Form Card */}
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
@@ -685,7 +677,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Deposit Amount</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Received Date &amp; Time</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Case Status</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Agent 7 Anomaly</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Anomaly Detection</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -800,7 +792,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                                 gap: '4px',
                                 transition: 'all 0.15s ease',
                               }}
-                              title="Click to view Agent 7 Anomaly breakdown"
+                              title="Click to view Anomaly breakdown"
                             >
                               {cfg.icon}
                               <span>{cfg.label}</span>
@@ -1049,8 +1041,8 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
                   {confirmType === 'selected'
-                    ? `Execute Agent 1 investigation on ${selectedCaseIds.length} selected cases?`
-                    : `Execute Agent 1 investigation on all ${newCases.length} pending NEW cases?`}
+                    ? `Execute Payment Reconciliation investigation on ${selectedCaseIds.length} selected cases?`
+                    : `Execute Payment Reconciliation investigation on all ${newCases.length} pending NEW cases?`}
                 </p>
               </div>
             </div>
@@ -1128,7 +1120,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: '#0f172a' }}>
-                    Agent 7 Anomaly Assessment
+                    Anomaly Assessment
                   </h3>
                   <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: '800', color: '#0f172a' }}>Case #{selectedAnomalyPayment.case_id || selectedAnomalyPayment.id}</span>
