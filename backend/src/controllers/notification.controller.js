@@ -1,6 +1,6 @@
 import { runNotificationAgent } from '../agents/notificationAgent.js';
 import pool from '../config/db.js';
-import { sendEscalationNoticeEmail, testSmtpConnection, testResendConnection } from '../utils/emailService.js';
+import { sendEscalationNoticeEmail, testSmtpConnection, testResendConnection, testBrevoConnection } from '../utils/emailService.js';
 import { cacheService } from '../services/cache.service.js';
 
 /**
@@ -456,6 +456,29 @@ export const triggerResendTest = async (req, res) => {
       data: {
         resend_api_key_configured: Boolean(process.env.RESEND_API_KEY),
         resend_from_email: process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>',
+        result
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * triggerBrevoTest
+ * Brevo-only production diagnostic endpoint: calls sendWithHttpsApiFallback directly
+ * without falling back to SMTP.
+ */
+export const triggerBrevoTest = async (req, res) => {
+  try {
+    const targetEmail = req.body?.email || req.query?.email || 'yuvanbharathinaveen@gmail.com';
+    const result = await testBrevoConnection(targetEmail);
+    return res.status(result?.success ? 200 : 422).json({
+      success: result?.success || false,
+      message: result?.success ? `Brevo API test email delivered to ${targetEmail}` : 'Brevo API test delivery failed',
+      data: {
+        brevo_key_configured: Boolean(process.env.BREVO_API_KEY || (process.env.SMTP_PASS || '').startsWith('xsmtpsib-')),
+        sender_email: process.env.SMTP_USER || 'yuvanbharathin@gmail.com',
         result
       }
     });

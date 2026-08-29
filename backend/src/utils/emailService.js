@@ -44,13 +44,57 @@ const resolveIPv4Address = (hostname) => {
  */
 const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
   const smtpPass = (process.env.SMTP_PASS || config.smtp.pass || '').trim();
+  const brevoKey = (process.env.BREVO_API_KEY || config.smtp.brevoApiKey || (smtpPass.startsWith('xsmtpsib-') || smtpPass.startsWith('xkeysib-') ? smtpPass : '')).trim();
   const resendKey = (process.env.RESEND_API_KEY || config.smtp.resendApiKey || (smtpPass.startsWith('re_') ? smtpPass : '')).trim();
-  const brevoKey = (process.env.BREVO_API_KEY || config.smtp.brevoApiKey || (smtpPass.startsWith('xkeysib-') ? smtpPass : '')).trim();
 
-  // 1. Resend HTTPS API (Port 443)
+  // 1. Brevo HTTPS API (Port 443 — Primary Provider)
+  if (brevoKey) {
+    try {
+      console.log(`[EmailService HTTPS] 🚀 Attempting Brevo API dispatch to ${to}...`);
+      const rawUser = (process.env.SMTP_USER || 'yuvanbharathin@gmail.com').trim();
+      const senderEmail = rawUser.includes('@') ? rawUser : 'yuvanbharathin@gmail.com';
+
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { email: senderEmail, name: 'FinanceFlow AI Operations' },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html
+        })
+      });
+      const data = await res.json();
+      console.log(`[EmailService HTTPS] Brevo API Response Status: ${res.status}`, data);
+
+      if (res.ok && (data.messageId || data.id)) {
+        console.log(`[EmailService HTTPS] ✅ Delivered via Brevo API Port 443 (Message ID: ${data.messageId || data.id})`);
+        return { success: true, messageId: data.messageId || data.id, mode: 'brevo_https_api', status: res.status };
+      } else {
+        const errorMsg = data?.message || data?.code || `HTTP ${res.status}`;
+        console.warn(`[EmailService HTTPS] ⚠️ Brevo API Error (${res.status}):`, errorMsg);
+        return {
+          success: false,
+          status: res.status,
+          error: `Brevo API Error (${res.status}): ${errorMsg}`,
+          mode: 'brevo_https_api_failed',
+          details: data
+        };
+      }
+    } catch (err) {
+      console.warn('[EmailService HTTPS] Brevo fetch exception:', err.message);
+      return { success: false, error: `Brevo Fetch Exception: ${err.message}`, mode: 'brevo_https_api_error' };
+    }
+  }
+
+  // 2. Resend HTTPS API (Port 443 — Secondary Provider)
   if (resendKey) {
     try {
-      // Resend rejects public @gmail.com senders with 403. Use RESEND_FROM_EMAIL if set, otherwise fallback to onboarding@resend.dev
+      console.log(`[EmailService HTTPS] 🚀 Attempting Resend API dispatch to ${to}...`);
       let defaultResendFrom = process.env.RESEND_FROM_EMAIL;
       if (!defaultResendFrom) {
         const candidate = from || process.env.SMTP_FROM || '';
@@ -94,44 +138,6 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
     } catch (err) {
       console.warn('[EmailService HTTPS] Resend fetch exception:', err.message);
       return { success: false, error: `Resend Fetch Exception: ${err.message}`, mode: 'resend_https_api_error' };
-    }
-  }
-
-  // 2. Brevo HTTPS API (Port 443)
-  if (brevoKey) {
-    try {
-      console.log(`[EmailService HTTPS] 🚀 Attempting Brevo API dispatch to ${to}...`);
-      const senderEmail = (process.env.SMTP_USER || 'yuvanbharathin@gmail.com').trim();
-      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'api-key': brevoKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          sender: { email: senderEmail, name: 'FinanceFlow AI Operations' },
-          to: [{ email: to }],
-          subject,
-          htmlContent: html
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.messageId) {
-        console.log(`[EmailService HTTPS] ✅ Delivered via Brevo API (Message ID: ${data.messageId})`);
-        return { success: true, messageId: data.messageId, mode: 'brevo_https_api', status: res.status };
-      } else {
-        console.warn('[EmailService HTTPS] Brevo API response error:', data);
-        return {
-          success: false,
-          status: res.status,
-          error: `Brevo API Error (${res.status}): ${data?.message || 'Unknown Brevo Error'}`,
-          mode: 'brevo_https_api_failed',
-          details: data
-        };
-      }
-    } catch (err) {
-      console.warn('[EmailService HTTPS] Brevo fetch exception:', err.message);
-      return { success: false, error: `Brevo Fetch Exception: ${err.message}`, mode: 'brevo_https_api_error' };
     }
   }
 
@@ -412,6 +418,40 @@ export const testResendConnection = async (targetEmail = 'yuvanbharathinaveen@gm
         <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
         <p><strong>Recipient:</strong> ${targetEmail}</p>
         <p><strong>Sender:</strong> ${senderFrom}</p>
+      </div>
+    `
+  });
+};
+
+/**
+ * Brevo-Only Production Diagnostic Endpoint:
+ * Direct Brevo HTTPS API test without falling back to SMTP.
+ * Call GET /api/notifications/test-brevo to verify direct Brevo HTTPS API delivery.
+ */
+export const testBrevoConnection = async (targetEmail = 'yuvanbharathinaveen@gmail.com') => {
+  const smtpPass = (process.env.SMTP_PASS || config.smtp.pass || '').trim();
+  const brevoKey = (process.env.BREVO_API_KEY || config.smtp.brevoApiKey || (smtpPass.startsWith('xsmtpsib-') || smtpPass.startsWith('xkeysib-') ? smtpPass : '')).trim();
+
+  if (!brevoKey) {
+    return {
+      success: false,
+      mode: 'brevo_https_api',
+      error: 'BREVO_API_KEY or SMTP_PASS (xsmtpsib-...) is not configured in Render environment variables.'
+    };
+  }
+
+  const senderEmail = (process.env.SMTP_USER || 'yuvanbharathin@gmail.com').trim();
+  return await sendWithHttpsApiFallback({
+    from: `FinanceFlow AI Operations <${senderEmail}>`,
+    to: targetEmail,
+    subject: '🧪 FinanceFlow AI — Brevo Direct HTTPS Diagnostic Ping',
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #3b82f6; border-radius: 12px; max-width: 500px;">
+        <h2 style="color: #3b82f6;">Brevo HTTPS API Production Diagnostic</h2>
+        <p>This ping confirms direct Brevo REST API email delivery over Port 443.</p>
+        <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+        <p><strong>Recipient:</strong> ${targetEmail}</p>
+        <p><strong>Sender:</strong> ${senderEmail}</p>
       </div>
     `
   });
