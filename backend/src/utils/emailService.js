@@ -166,7 +166,11 @@ const sendWithTransporterFallback = async (mailOptions) => {
   const user = (process.env.SMTP_USER || config.smtp.user || '').trim();
   const pass = (process.env.SMTP_PASS || config.smtp.pass || '').replace(/\s+/g, '');
   const rawHost = (process.env.SMTP_HOST || config.smtp.host || 'smtp.gmail.com').trim();
-  const configuredPort = parseInt(process.env.SMTP_PORT || config.smtp.port || '587', 10);
+  let configuredPort = parseInt(process.env.SMTP_PORT || config.smtp.port || '587', 10);
+  if (configuredPort === 443) {
+    // Port 443 is for HTTPS REST APIs. For raw Nodemailer TCP sockets, map to SSL (465)
+    configuredPort = 465;
+  }
   const fallbackPort = configuredPort === 587 ? 465 : 587;
 
   if (!user || !pass) {
