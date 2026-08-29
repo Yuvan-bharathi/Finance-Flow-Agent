@@ -51,9 +51,9 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
   if (resendKey) {
     try {
       console.log(`[EmailService HTTPS] 🚀 Attempting Resend API dispatch to ${to}...`);
-      const defaultResendFrom = from || process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || `"FinanceFlow AI Operations" <yuvanbharathin@gmail.com>`;
+      const defaultResendFrom = process.env.RESEND_FROM_EMAIL || from || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>';
 
-      let res = await fetch('https://api.resend.com/emails', {
+      const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${resendKey}`,
@@ -66,35 +66,26 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
           html
         })
       });
-      let data = await res.json();
-
-      // If custom domain unverified on Resend free tier, retry with yuvanbharathin@gmail.com format
-      if (!res.ok && (data?.message?.includes('domain') || data?.statusCode === 403 || data?.name === 'validation_error')) {
-        console.warn(`[EmailService HTTPS] ⚠️ Custom domain retry with yuvanbharathin@gmail.com...`);
-        res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: `"FinanceFlow AI Operations" <yuvanbharathin@gmail.com>`,
-            to: [to],
-            subject,
-            html
-          })
-        });
-        data = await res.json();
-      }
+      const data = await res.json();
+      console.log(`[EmailService HTTPS] Resend API Response Status: ${res.status}`, data);
 
       if (res.ok && data.id) {
         console.log(`[EmailService HTTPS] ✅ Delivered via Resend API Port 443 (Message ID: ${data.id})`);
-        return { success: true, messageId: data.id, mode: 'resend_https_api' };
+        return { success: true, messageId: data.id, mode: 'resend_https_api', status: res.status };
       } else {
-        console.warn('[EmailService HTTPS] Resend API error response:', data);
+        const errorMsg = data?.message || data?.error || `HTTP ${res.status}`;
+        console.warn(`[EmailService HTTPS] ⚠️ Resend API Error (${res.status}):`, errorMsg);
+        return {
+          success: false,
+          status: res.status,
+          error: `Resend API Error (${res.status}): ${errorMsg}`,
+          mode: 'resend_https_api_failed',
+          details: data
+        };
       }
     } catch (err) {
       console.warn('[EmailService HTTPS] Resend fetch exception:', err.message);
+      return { success: false, error: `Resend Fetch Exception: ${err.message}`, mode: 'resend_https_api_error' };
     }
   }
 
@@ -119,12 +110,20 @@ const sendWithHttpsApiFallback = async ({ from, to, subject, html }) => {
       const data = await res.json();
       if (res.ok && data.messageId) {
         console.log(`[EmailService HTTPS] ✅ Delivered via Brevo API (Message ID: ${data.messageId})`);
-        return { success: true, messageId: data.messageId, mode: 'brevo_https_api' };
+        return { success: true, messageId: data.messageId, mode: 'brevo_https_api', status: res.status };
       } else {
         console.warn('[EmailService HTTPS] Brevo API response error:', data);
+        return {
+          success: false,
+          status: res.status,
+          error: `Brevo API Error (${res.status}): ${data?.message || 'Unknown Brevo Error'}`,
+          mode: 'brevo_https_api_failed',
+          details: data
+        };
       }
     } catch (err) {
       console.warn('[EmailService HTTPS] Brevo fetch exception:', err.message);
+      return { success: false, error: `Brevo Fetch Exception: ${err.message}`, mode: 'brevo_https_api_error' };
     }
   }
 
@@ -145,7 +144,7 @@ const createTransporterForPort = (ipv4Host, rawHost, port, user, pass) => {
     auth: { user, pass },
     tls: {
       servername: rawHost,   // Use smtp.gmail.com as SNI for cert validation
-      rejectUnauthorized: false
+      rejectUnauthorized: true // Production SSL Certificate Validation
     },
     connectionTimeout: 6000, // 6s fast fail on blocked cloud ports
     greetingTimeout: 6000,
@@ -371,6 +370,40 @@ export const testSmtpConnection = async (targetEmail = 'mani30saravanan@gmail.co
         <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
         <p><strong>To:</strong> ${targetEmail}</p>
         <p><strong>Sender:</strong> ${user}</p>
+      </div>
+    `
+  });
+};
+
+/**
+ * Resend-Only Production Diagnostic Endpoint:
+ * Direct Resend HTTPS API test without falling back to SMTP.
+ * Call GET /api/notifications/test-resend to verify direct Resend HTTPS API delivery.
+ */
+export const testResendConnection = async (targetEmail = 'yuvanbharathinaveen@gmail.com') => {
+  const smtpPass = (process.env.SMTP_PASS || config.smtp.pass || '').trim();
+  const resendKey = (process.env.RESEND_API_KEY || config.smtp.resendApiKey || (smtpPass.startsWith('re_') ? smtpPass : '')).trim();
+
+  if (!resendKey) {
+    return {
+      success: false,
+      mode: 'resend_https_api',
+      error: 'RESEND_API_KEY is not configured in Render environment variables.'
+    };
+  }
+
+  const senderFrom = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>';
+  return await sendWithHttpsApiFallback({
+    from: senderFrom,
+    to: targetEmail,
+    subject: '🧪 FinanceFlow AI — Resend Direct HTTPS Diagnostic Ping',
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #10b981; border-radius: 12px; max-width: 500px;">
+        <h2 style="color: #10b981;">Resend HTTPS API Production Diagnostic</h2>
+        <p>This ping confirms direct Resend REST API email delivery over Port 443.</p>
+        <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+        <p><strong>Recipient:</strong> ${targetEmail}</p>
+        <p><strong>Sender:</strong> ${senderFrom}</p>
       </div>
     `
   });

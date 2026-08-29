@@ -1,6 +1,6 @@
 import { runNotificationAgent } from '../agents/notificationAgent.js';
 import pool from '../config/db.js';
-import { sendEscalationNoticeEmail, testSmtpConnection } from '../utils/emailService.js';
+import { sendEscalationNoticeEmail, testSmtpConnection, testResendConnection } from '../utils/emailService.js';
 import { cacheService } from '../services/cache.service.js';
 
 /**
@@ -433,6 +433,29 @@ export const triggerSmtpTest = async (req, res) => {
         smtp_user: process.env.SMTP_USER,
         smtp_host: process.env.SMTP_HOST,
         smtp_port: process.env.SMTP_PORT,
+        result
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * triggerResendTest
+ * Resend-only production diagnostic endpoint: calls sendWithHttpsApiFallback directly
+ * without falling back to SMTP.
+ */
+export const triggerResendTest = async (req, res) => {
+  try {
+    const targetEmail = req.body?.email || req.query?.email || 'yuvanbharathinaveen@gmail.com';
+    const result = await testResendConnection(targetEmail);
+    return res.status(result?.success ? 200 : 422).json({
+      success: result?.success || false,
+      message: result?.success ? `Resend API test email delivered to ${targetEmail}` : 'Resend API test delivery failed',
+      data: {
+        resend_api_key_configured: Boolean(process.env.RESEND_API_KEY),
+        resend_from_email: process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || 'FinanceFlow AI <onboarding@resend.dev>',
         result
       }
     });
