@@ -1,7 +1,7 @@
 import https from 'https';
 
 const checkRender = () => {
-  https.get('https://finance-flow-agent-1.onrender.com/api/loans/1', (res) => {
+  https.get('https://finance-flow-agent.onrender.com/api/loans/1', (res) => {
     let data = '';
     res.on('data', chunk => data += chunk);
     res.on('end', () => {
