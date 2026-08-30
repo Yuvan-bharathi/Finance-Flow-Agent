@@ -1,8 +1,8 @@
-import { useState, useEffect, type ComponentType } from 'react';
+import React, { useState, useEffect, type ComponentType } from 'react';
 import {
-  LayoutDashboard, CreditCard, Building2, FileSpreadsheet, History,
-  BarChart3, FileText, Bell, Settings,
-  PanelLeftClose, PanelLeftOpen, ChevronRight, Bot, LogOut
+  GitMerge, CreditCard, Building2, FileSpreadsheet, ShieldCheck,
+  BarChart3, Files, Bell, Settings,
+  PanelLeftClose, PanelLeftOpen, Bot, LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getAlerts } from '../../services/notificationService';
@@ -12,6 +12,7 @@ interface NavItem {
   label: string;
   icon: ComponentType<{ size?: number; color?: string }>;
   showCountOnHover?: boolean;
+  isAgentControl?: boolean;
 }
 
 interface SidebarProps {
@@ -20,24 +21,23 @@ interface SidebarProps {
   pendingCount?: number;
   collapsed?: boolean;
   setCollapsed?: (v: boolean) => void;
-  onOpenAiAssistant?: () => void;
 }
 
 const navItems: NavItem[] = [
-  { id: 'reconciliations', label: 'Reconciliation Hub',  icon: LayoutDashboard },
+  { id: 'reconciliations', label: 'Reconciliation Hub',  icon: GitMerge },
   { id: 'payments',       label: 'Payment Ingestion',    icon: CreditCard },
   { id: 'companies',      label: 'Borrowing Companies',  icon: Building2 },
   { id: 'loans',          label: 'Loans & Schedules',    icon: FileSpreadsheet },
-  { id: 'audit-logs',     label: 'Audit Compliance',     icon: History },
+  { id: 'audit-logs',     label: 'Audit Compliance',     icon: ShieldCheck },
   { id: 'reports',        label: 'Reports & Analytics',  icon: BarChart3 },
-  { id: 'documents',      label: 'Documents',            icon: FileText },
-  { id: 'agents',         label: 'AI Agent Control',     icon: Bot },
+  { id: 'documents',      label: 'Documents',            icon: Files },
+  { id: 'agents',         label: 'AI Agent Control',     icon: Bot, isAgentControl: true },
   { id: 'notifications',  label: 'Notifications',        icon: Bell, showCountOnHover: true },
   { id: 'settings',       label: 'Settings',             icon: Settings },
 ];
 
 /**
- * Collapsible Enterprise Sidebar Component with AI Assistant & Account Controls
+ * Collapsible Enterprise Sidebar Component with 3D Soft-Glass Icons & Account Controls
  */
 export const Sidebar = ({
   activeTab = 'reconciliations',
@@ -45,13 +45,12 @@ export const Sidebar = ({
   pendingCount: _pendingCount = 0,
   collapsed = false,
   setCollapsed,
-  onOpenAiAssistant,
 }: SidebarProps) => {
   const { user, logout } = useAuth();
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [logoHovered, setLogoHovered] = useState(false);
-  const [aiHovered, setAiHovered] = useState(false);
   const [notificationCount, setNotificationCount] = useState(8);
+  const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
     getAlerts({ status: 'pending' })
@@ -59,11 +58,15 @@ export const Sidebar = ({
         const alerts = res?.data?.data;
         const count = Array.isArray(alerts) ? alerts.length : 0;
         if (typeof count === 'number') {
+          if (count > notificationCount) {
+            setHasNewNotifications(true);
+            setTimeout(() => setHasNewNotifications(false), 2000);
+          }
           setNotificationCount(count);
         }
       })
       .catch(() => {});
-  }, []);
+  }, [notificationCount]);
 
   const userName = (user?.name?.trim()) ? user.name : (user?.email ?? 'User');
   const userInitials = userName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
@@ -77,24 +80,67 @@ export const Sidebar = ({
   };
 
   return (
-    <aside style={{
-      width: collapsed ? '72px' : '280px', minWidth: collapsed ? '72px' : '280px',
-      background: '#ffffff', borderRight: '1px solid #e2e8f0',
-      padding: collapsed ? '20px 12px' : '24px 20px',
-      display: 'flex', flexDirection: 'column', height: '100vh',
-      position: 'sticky', top: 0, zIndex: 40,
-      transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      overflow: 'visible', boxShadow: '2px 0 12px rgba(0, 0, 0, 0.03)',
-    }}>
+    <aside
+      onWheel={(e) => e.stopPropagation()}
+      style={{
+        width: collapsed ? '72px' : '280px', minWidth: collapsed ? '72px' : '280px',
+        background: '#ffffff', borderRight: '1px solid #e2e8f0',
+        padding: collapsed ? '20px 12px' : '24px 18px',
+        display: 'flex', flexDirection: 'column', height: '100vh',
+        position: 'sticky', top: 0, zIndex: 40,
+        overscrollBehavior: 'contain',
+        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        overflow: 'visible', boxShadow: '2px 0 12px rgba(0, 0, 0, 0.03)',
+      }}
+    >
+      {/* Embedded 3D Keyframe Animations & Reduced Motion Handler */}
+      <style>{`
+        @keyframes sidebarAgentPulse {
+          0%, 100% {
+            box-shadow: 0 3px 8px rgba(124, 58, 237, 0.2), inset 0 1px 1px rgba(255,255,255,0.9);
+          }
+          50% {
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.38), 0 0 12px rgba(168, 85, 247, 0.3), inset 0 1px 1px rgba(255,255,255,0.9);
+          }
+        }
+        @keyframes notifBadgePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.3); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sidebar-3d-icon-box {
+            animation: none !important;
+            transform: none !important;
+          }
+          .sidebar-item-label {
+            transform: none !important;
+          }
+        }
+      `}</style>
+
       {/* Brand Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', marginBottom: '28px', minHeight: '44px', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', marginBottom: '24px', minHeight: '44px', position: 'relative' }}>
         <div
           style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: collapsed ? 'pointer' : 'default', position: 'relative' }}
           onMouseEnter={() => collapsed && setLogoHovered(true)}
           onMouseLeave={() => setLogoHovered(false)}
           onClick={() => collapsed && setCollapsed?.(false)}
         >
-          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)', flexShrink: 0, transition: 'all 0.2s ease', position: 'relative', overflow: 'hidden' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            border: '1px solid #e2e8f0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 3px 10px rgba(0, 0, 0, 0.06), inset 0 1px 1px rgba(255,255,255,0.9)',
+            flexShrink: 0,
+            transition: 'all 0.2s ease',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
             {collapsed && logoHovered ? (
               <PanelLeftOpen size={22} color="#4f46e5" />
             ) : (
@@ -132,11 +178,50 @@ export const Sidebar = ({
       </div>
 
       {/* Navigation */}
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto', overflowX: 'clip' }}>
+      <nav style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1, overflowY: 'auto', overflowX: 'clip', paddingRight: '2px', overscrollBehavior: 'contain' }}>
         {navItems.map(item => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           const isHovered = hoveredTab === item.id;
+          const isAgent = Boolean(item.isAgentControl);
+          const isNotif = item.id === 'notifications';
+
+          // Dynamic 3D Icon Box Styles
+          let iconBg = 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)';
+          let iconBorder = '1px solid #e2e8f0';
+          let iconShadow = '0 2px 5px rgba(0, 0, 0, 0.04), inset 0 1px 1px rgba(255,255,255,0.9)';
+          let iconColor = isHovered ? '#4f46e5' : '#64748b';
+          let animationStyle = 'none';
+
+          if (isAgent) {
+            if (isActive) {
+              iconBg = 'linear-gradient(135deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.15) 100%)';
+              iconBorder = '1px solid rgba(255, 255, 255, 0.5)';
+              iconShadow = '0 4px 12px rgba(124, 58, 237, 0.4), inset 0 1px 1px rgba(255,255,255,0.7)';
+              iconColor = '#ffffff';
+            } else if (isHovered) {
+              iconBg = 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)';
+              iconBorder = '1px solid #c084fc';
+              iconShadow = '0 6px 16px rgba(147, 51, 234, 0.32), inset 0 1px 1px #ffffff';
+              iconColor = '#6d28d9';
+            } else {
+              iconBg = 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)';
+              iconBorder = '1px solid #ddd6fe';
+              iconShadow = '0 3px 8px rgba(124, 58, 237, 0.2), inset 0 1px 1px rgba(255,255,255,0.9)';
+              iconColor = '#7c3aed';
+              animationStyle = 'sidebarAgentPulse 3s ease-in-out infinite';
+            }
+          } else if (isActive) {
+            iconBg = 'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 100%)';
+            iconBorder = '1px solid rgba(255, 255, 255, 0.45)';
+            iconShadow = '0 4px 10px rgba(0, 0, 0, 0.18), inset 0 1px 1px rgba(255,255,255,0.6)';
+            iconColor = '#ffffff';
+          } else if (isHovered) {
+            iconBg = 'linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%)';
+            iconBorder = '1px solid #c7d2fe';
+            iconShadow = '0 5px 12px rgba(99, 102, 241, 0.22), inset 0 1px 1px #ffffff';
+            iconColor = '#4f46e5';
+          }
 
           return (
             <div key={item.id} style={{ position: 'relative' }}
@@ -146,19 +231,81 @@ export const Sidebar = ({
                 onClick={() => setActiveTab?.(item.id)}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between',
-                  width: '100%', padding: collapsed ? '11px' : '10px 14px', borderRadius: '10px', border: 'none',
+                  width: '100%', padding: collapsed ? '10px 8px' : '9px 12px', borderRadius: '12px', border: 'none',
                   background: isActive ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : (isHovered ? '#f1f5f9' : 'transparent'),
                   color: isActive ? '#ffffff' : (isHovered ? '#0f172a' : '#475569'),
-                  fontWeight: isActive ? '700' : '500', fontSize: '0.875rem', cursor: 'pointer',
-                  transition: 'all 0.18s ease', boxShadow: isActive ? '0 4px 12px rgba(99, 102, 241, 0.32)' : 'none', textAlign: 'left',
+                  fontWeight: isActive ? '700' : '500', fontSize: '0.865rem', cursor: 'pointer',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: isActive ? '0 6px 16px rgba(99, 102, 241, 0.35)' : (isHovered ? '0 2px 8px rgba(0,0,0,0.03)' : 'none'),
+                  textAlign: 'left',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
-                  <Icon size={20} color={isActive ? '#ffffff' : (isHovered ? '#6366f1' : '#64748b')} />
-                  {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>}
+                  {/* Soft 3D Glass Icon Container */}
+                  <div
+                    className="sidebar-3d-icon-box"
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      position: 'relative',
+                      background: iconBg,
+                      border: iconBorder,
+                      boxShadow: iconShadow,
+                      animation: animationStyle,
+                      transform: isHovered ? 'translateY(-2.5px) scale(1.05)' : (isActive ? 'translateY(-1px)' : 'translateY(0) scale(1)'),
+                      transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease',
+                    }}
+                  >
+                    <Icon size={18} color={iconColor} />
+
+                    {/* Unread Notification Badge Dot */}
+                    {isNotif && notificationCount > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-3px',
+                        right: '-3px',
+                        width: '9px',
+                        height: '9px',
+                        borderRadius: '50%',
+                        background: '#ef4444',
+                        border: '1.5px solid #ffffff',
+                        boxShadow: '0 2px 4px rgba(239, 68, 68, 0.4)',
+                        animation: hasNewNotifications ? 'notifBadgePulse 0.4s ease 3' : 'none',
+                      }} />
+                    )}
+                  </div>
+
+                  {/* Label */}
+                  {!collapsed && (
+                    <span
+                      className="sidebar-item-label"
+                      style={{
+                        whiteSpace: 'nowrap',
+                        transform: isHovered && !isActive ? 'translateX(2px)' : 'translateX(0)',
+                        transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease',
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  )}
                 </div>
+
                 {!collapsed && item.showCountOnHover && isHovered && notificationCount > 0 && (
-                  <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.68rem', fontWeight: '800', background: isActive ? 'rgba(255,255,255,0.25)' : '#fee2e2', color: isActive ? '#ffffff' : '#dc2626', animation: 'fadeIn 0.15s ease forwards' }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    fontSize: '0.68rem',
+                    fontWeight: '800',
+                    background: isActive ? 'rgba(255,255,255,0.25)' : '#fee2e2',
+                    color: isActive ? '#ffffff' : '#dc2626',
+                    boxShadow: isActive ? 'none' : '0 1px 4px rgba(220,38,38,0.15)',
+                    animation: 'fadeIn 0.15s ease forwards'
+                  }}>
                     {notificationCount}
                   </span>
                 )}
@@ -183,29 +330,23 @@ export const Sidebar = ({
       <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
         {!collapsed ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* AI Assistant Card */}
-            <div
-              onClick={() => onOpenAiAssistant?.()}
-              style={{ background: 'linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%)', border: '1px solid #d8b4fe', borderRadius: '14px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'all 0.2s ease' }}
-              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(124, 58, 237, 0.22)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)' }}>
-                  <Bot size={20} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.83rem', fontWeight: '700', color: '#4c1d95' }}>AI Assistant</div>
-                  <div style={{ fontSize: '0.68rem', color: '#6b21a8' }}>Ask FinanceFlow AI</div>
-                </div>
-              </div>
-              <ChevronRight size={16} color="#7c3aed" />
-            </div>
-
             {/* User Profile Row */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#4f46e5', color: '#ffffff', fontWeight: '800', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#4f46e5',
+                  color: '#ffffff',
+                  fontWeight: '800',
+                  fontSize: '0.82rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
+                }}>
                   {userInitials}
                 </div>
                 <div style={{ overflow: 'hidden' }}>
@@ -225,20 +366,6 @@ export const Sidebar = ({
         ) : (
           /* Collapsed Footer */
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '4px 0' }}>
-            <div style={{ position: 'relative' }}
-              onMouseEnter={() => setAiHovered(true)}
-              onMouseLeave={() => setAiHovered(false)}>
-              <button
-                onClick={() => onOpenAiAssistant?.()}
-                style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)', color: '#ffffff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(124, 58, 237, 0.35)', transition: 'all 0.2s ease' }}
-              >
-                <Bot size={20} />
-              </button>
-              {aiHovered && (
-                <div style={{ ...tooltipStyle }}>AI Assistant (Coming Soon)</div>
-              )}
-            </div>
-
             <button onClick={logout} title={`Sign Out (${userName})`} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#4f46e5', color: '#ffffff', fontWeight: '800', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)' }}>
                 {userInitials}

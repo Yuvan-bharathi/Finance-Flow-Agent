@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ShieldCheck,
   Search,
@@ -51,6 +51,10 @@ export const AgentPipelineVisualization: React.FC<AgentPipelineVisualizationProp
   loading,
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const nodeRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [dynamicPath, setDynamicPath] = useState<string>('');
+  const [nodePositions, setNodePositions] = useState<{ x: number; y: number; isCube?: boolean; glow: string; border: string }[]>([]);
 
   const stages: StageConfig[] = [
     {
@@ -238,6 +242,55 @@ export const AgentPipelineVisualization: React.FC<AgentPipelineVisualizationProp
 
   const overallSuccessRate = String(overview?.ai_accuracy_rate || '95%');
 
+  const calculatePath = useCallback(() => {
+    if (!canvasRef.current) return;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const points: string[] = [];
+    const positions: { x: number; y: number; isCube?: boolean; glow: string; border: string }[] = [];
+
+    stages.forEach((stg, i) => {
+      const nodeEl = nodeRefs.current[i];
+      if (nodeEl) {
+        const nodeRect = nodeEl.getBoundingClientRect();
+        const x = Math.round(nodeRect.left - canvasRect.left + nodeRect.width / 2);
+        const y = stg.isCube ? 115 : 145;
+        if (i === 0) {
+          points.push(`M ${x} ${y}`);
+        } else {
+          points.push(`L ${x} ${y}`);
+        }
+        positions.push({ x, y, isCube: stg.isCube, glow: stg.orbGlow, border: stg.orbBorder });
+      }
+    });
+
+    if (points.length === stages.length) {
+      setDynamicPath(points.join(' '));
+      setNodePositions(positions);
+    }
+  }, [stages]);
+
+  useEffect(() => {
+    calculatePath();
+    const t1 = setTimeout(calculatePath, 50);
+    const t2 = setTimeout(calculatePath, 350);
+
+    let observer: ResizeObserver | null = null;
+    if (canvasRef.current) {
+      observer = new ResizeObserver(() => {
+        calculatePath();
+      });
+      observer.observe(canvasRef.current);
+    }
+
+    window.addEventListener('resize', calculatePath);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (observer) observer.disconnect();
+      window.removeEventListener('resize', calculatePath);
+    };
+  }, [calculatePath]);
+
   return (
     <div style={{
       background: '#ffffff',
@@ -248,19 +301,28 @@ export const AgentPipelineVisualization: React.FC<AgentPipelineVisualizationProp
       position: 'relative',
       overflow: 'visible',
     }}>
-      {/* Dynamic Keyframes Animation Styles */}
+      {/* Dynamic Realistic 3D Keyframes Animation Styles */}
       <style>{`
-        @keyframes pulseGlow {
-          0%, 100% { opacity: 0.5; transform: scale(1); }
-          50% { opacity: 0.85; transform: scale(1.08); }
+        @keyframes orbLevitate {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-5px); }
         }
-        @keyframes dashMove {
-          0% { stroke-dashoffset: 40; }
+        @keyframes smoothFlow {
+          0% { stroke-dashoffset: 28; }
           100% { stroke-dashoffset: 0; }
         }
-        @keyframes floatCube {
-          0%, 100% { transform: translateY(0px) rotateX(20deg) rotateY(-20deg); }
-          50% { transform: translateY(-6px) rotateX(20deg) rotateY(-20deg); }
+        @keyframes floatCube3D {
+          0%, 100% { transform: translateY(0px) rotateX(18deg) rotateY(-18deg); }
+          50% { transform: translateY(-7px) rotateX(18deg) rotateY(-18deg); }
+        }
+        @keyframes energyRingPulse {
+          0%, 100% { transform: scale(1); opacity: 0.6; }
+          50% { transform: scale(1.3); opacity: 0.95; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .orb-floating, .cube-floating, .pipe-flow-animated {
+            animation: none !important;
+          }
         }
       `}</style>
 
@@ -403,7 +465,7 @@ export const AgentPipelineVisualization: React.FC<AgentPipelineVisualizationProp
         }}>
           
           {/* 3D Isometric Nodes Canvas Wrapper */}
-          <div style={{
+          <div ref={canvasRef} style={{
             position: 'relative',
             width: '100%',
             minWidth: '860px',
@@ -414,55 +476,121 @@ export const AgentPipelineVisualization: React.FC<AgentPipelineVisualizationProp
             padding: '0 20px',
           }}>
 
-            {/* Continuous 3D Isometric Glowing Pipeline Tube Path (SVG Background) */}
+            {/* Continuous 3D Isometric Glowing Pipeline Tube Path (SVG) */}
             <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none', zIndex: 1 }}>
               <defs>
+                {/* 3D Multi-Chromatic Luminescent Pipe Gradient */}
                 <linearGradient id="pipe3D" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#c084fc" stopOpacity="0.8" />
-                  <stop offset="20%" stopColor="#60a5fa" stopOpacity="0.85" />
-                  <stop offset="40%" stopColor="#818cf8" stopOpacity="0.9" />
-                  <stop offset="60%" stopColor="#34d399" stopOpacity="0.85" />
-                  <stop offset="80%" stopColor="#38bdf8" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="#4ade80" stopOpacity="0.85" />
+                  <stop offset="0%" stopColor="#c084fc" stopOpacity="0.95" />
+                  <stop offset="11%" stopColor="#60a5fa" stopOpacity="0.95" />
+                  <stop offset="22%" stopColor="#c084fc" stopOpacity="0.95" />
+                  <stop offset="33%" stopColor="#818cf8" stopOpacity="1" />
+                  <stop offset="44%" stopColor="#34d399" stopOpacity="0.95" />
+                  <stop offset="55%" stopColor="#fb923c" stopOpacity="0.95" />
+                  <stop offset="66%" stopColor="#38bdf8" stopOpacity="0.95" />
+                  <stop offset="77%" stopColor="#60a5fa" stopOpacity="0.95" />
+                  <stop offset="88%" stopColor="#c084fc" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#4ade80" stopOpacity="0.95" />
                 </linearGradient>
-                <filter id="pipeGlow">
-                  <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+
+                {/* Heavy Bloom Light Filter */}
+                <filter id="pipeGlowHeavy" x="-15%" y="-30%" width="130%" height="200%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur1" />
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur2" />
                   <feMerge>
-                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="blur1" />
+                    <feMergeNode in="blur2" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+
+                {/* Crisp Glowing White Bar Filter */}
+                <filter id="smallBarGlow" x="-20%" y="-40%" width="140%" height="220%">
+                  <feGaussianBlur stdDeviation="1.5" result="barBlur" />
+                  <feMerge>
+                    <feMergeNode in="barBlur" />
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
               </defs>
 
-              {/* Back 3D Pipe Ribbon Track */}
+              {/* LAYER 1: VOLUMETRIC ATMOSPHERIC COLORED BLOOM */}
               <path
-                d="M 50 145 L 140 145 L 225 145 L 315 115 L 400 145 L 485 145 L 570 145 L 655 145 L 740 145 L 825 145"
+                d={dynamicPath || "M 40 145 L 120 145 L 200 145 L 280 115 L 360 145 L 440 145 L 520 145 L 600 145 L 680 145 L 760 145"}
                 fill="none"
                 stroke="url(#pipe3D)"
-                strokeWidth="14"
+                strokeWidth="22"
                 strokeLinecap="round"
-                filter="url(#pipeGlow)"
+                strokeLinejoin="round"
+                filter="url(#pipeGlowHeavy)"
+                opacity="0.3"
+              />
+
+              {/* LAYER 2: OUTER 3D TRANSLUCENT GLASS CONDUIT BODY */}
+              <path
+                d={dynamicPath || "M 40 145 L 120 145 L 200 145 L 280 115 L 360 145 L 440 145 L 520 145 L 600 145 L 680 145 L 760 145"}
+                fill="none"
+                stroke="url(#pipe3D)"
+                strokeWidth="15"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity="0.88"
+              />
+
+              {/* LAYER 3: 3D CYLINDRICAL UNDERBELLY SHADOW */}
+              <path
+                d={dynamicPath || "M 40 145 L 120 145 L 200 145 L 280 115 L 360 145 L 440 145 L 520 145 L 600 145 L 680 145 L 760 145"}
+                fill="none"
+                stroke="rgba(15, 23, 42, 0.22)"
+                strokeWidth="12"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                transform="translate(0, 1.2)"
                 opacity="0.35"
               />
 
-              {/* Inner Glowing Core Track */}
+              {/* LAYER 4: INNER LUMINOUS NEON ENERGY CORE */}
               <path
-                d="M 50 145 L 140 145 L 225 145 L 315 115 L 400 145 L 485 145 L 570 145 L 655 145 L 740 145 L 825 145"
+                d={dynamicPath || "M 40 145 L 120 145 L 200 145 L 280 115 L 360 145 L 440 145 L 520 145 L 600 145 L 680 145 L 760 145"}
                 fill="none"
                 stroke="url(#pipe3D)"
                 strokeWidth="6"
                 strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity="0.95"
               />
 
-              {/* Animated Directional Sparks / Flow Particles */}
+
+
+              {/* LAYER 6: SINGLE CLEAN FLOW OF ELEGANT WHITE SMALL BARS */}
               <path
-                d="M 50 145 L 140 145 L 225 145 L 315 115 L 400 145 L 485 145 L 570 145 L 655 145 L 740 145 L 825 145"
+                d={dynamicPath || "M 40 145 L 120 145 L 200 145 L 280 115 L 360 145 L 440 145 L 520 145 L 600 145 L 680 145 L 760 145"}
                 fill="none"
                 stroke="#ffffff"
                 strokeWidth="3"
-                strokeDasharray="8 16"
-                style={{ animation: 'dashMove 1.2s linear infinite' }}
+                strokeDasharray="8 20"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                filter="url(#smallBarGlow)"
+                style={{ animation: 'smoothFlow 1.2s linear infinite' }}
               />
+
+              {/* LAYER 7: 3D CYLINDRICAL JOINT RINGS AT EACH PEDESTAL (EXCLUDING CUBE) */}
+              {nodePositions.map((pos, idx) => (
+                !pos.isCube ? (
+                  <ellipse
+                    key={`pipe-ring-${idx}`}
+                    cx={pos.x}
+                    cy={pos.y}
+                    rx="3.5"
+                    ry="8.5"
+                    fill="rgba(255, 255, 255, 0.7)"
+                    stroke={pos.border}
+                    strokeWidth="1.5"
+                    opacity="0.85"
+                  />
+                ) : null
+              ))}
             </svg>
 
             {/* 10 Isometric Pedestals & Floating Orbs */}
@@ -474,18 +602,19 @@ export const AgentPipelineVisualization: React.FC<AgentPipelineVisualizationProp
               return (
                 <div
                   key={stg.id}
+                  ref={(el) => { nodeRefs.current[i] = el; }}
                   onMouseEnter={() => setHoveredIndex(i)}
                   onMouseLeave={() => setHoveredIndex(null)}
                   onClick={() => onSelectAgent && onSelectAgent(stg.id)}
                   style={{
                     position: 'relative',
-                    zIndex: isHovered ? 20 : 5,
+                    zIndex: isHovered ? 25 : 5,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     cursor: 'pointer',
                     width: '80px',
-                    transform: isHovered ? 'translateY(-6px)' : 'translateY(0)',
+                    transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
                     transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
                     marginTop: isCube ? '-28px' : '0px',
                   }}
@@ -510,126 +639,180 @@ export const AgentPipelineVisualization: React.FC<AgentPipelineVisualizationProp
 
                   {/* 3D Special Render: PLAYBOOK ENGINE GLASS CUBE vs REGULAR 3D ORB */}
                   {isCube ? (
-                    <div style={{
-                      position: 'relative',
-                      width: '64px',
-                      height: '64px',
-                      margin: '0 auto',
-                      perspective: '400px',
-                    }}>
-                      {/* 3D Translucent Glass Cube */}
-                      <div style={{
-                        width: '56px',
-                        height: '56px',
+                    <div
+                      className="cube-floating"
+                      style={{
+                        position: 'relative',
+                        width: '68px',
+                        height: '68px',
                         margin: '0 auto',
-                        background: 'linear-gradient(135deg, rgba(165, 180, 252, 0.75) 0%, rgba(79, 70, 229, 0.85) 100%)',
-                        border: '1.5px solid rgba(255, 255, 255, 0.8)',
-                        borderRadius: '14px',
-                        boxShadow: `0 12px 28px rgba(79, 70, 229, 0.5), inset 0 0 15px rgba(255,255,255,0.6)`,
-                        backdropFilter: 'blur(8px)',
+                        perspective: '450px',
+                        animation: 'floatCube3D 3.2s ease-in-out infinite',
+                      }}
+                    >
+                      {/* 3D Translucent Beveled Glass Cube */}
+                      <div style={{
+                        width: '58px',
+                        height: '58px',
+                        margin: '0 auto',
+                        background: 'linear-gradient(135deg, rgba(165, 180, 252, 0.82) 0%, rgba(79, 70, 229, 0.94) 100%)',
+                        border: '2px solid rgba(255, 255, 255, 0.9)',
+                        borderRadius: '16px',
+                        boxShadow: `0 16px 36px rgba(79, 70, 229, 0.55), inset 0 1px 4px rgba(255,255,255,0.95), inset 0 -3px 8px rgba(49, 46, 129, 0.5)`,
+                        backdropFilter: 'blur(10px)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        animation: 'floatCube 3s ease-in-out infinite',
                         position: 'relative',
                         zIndex: 10,
                       }}>
-                        <BookOpen size={24} color="#ffffff" />
-                        
-                        {/* Inner 3D Glass Layer lines */}
+                        {/* Top Glass Chamfer Highlight */}
                         <div style={{
                           position: 'absolute',
-                          inset: '4px',
-                          border: '1px solid rgba(255,255,255,0.4)',
-                          borderRadius: '10px',
+                          top: '3px',
+                          left: '6px',
+                          right: '6px',
+                          height: '6px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 100%)',
+                        }} />
+
+                        <BookOpen size={26} color="#ffffff" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }} />
+                        
+                        {/* Inner 3D Glass Layer Bevel */}
+                        <div style={{
+                          position: 'absolute',
+                          inset: '5px',
+                          border: '1px solid rgba(255,255,255,0.45)',
+                          borderRadius: '11px',
                           pointerEvents: 'none',
                         }} />
                       </div>
 
-                      {/* Vertical Beam connecting cube down to track */}
+                      {/* Vertical Quantum Beam connecting cube down to track */}
                       <div style={{
                         position: 'absolute',
-                        top: '56px',
+                        top: '58px',
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        width: '2px',
-                        height: '48px',
-                        background: 'linear-gradient(180deg, #818cf8 0%, rgba(129, 140, 248, 0) 100%)',
-                        boxShadow: '0 0 8px #818cf8',
+                        width: '3px',
+                        height: '52px',
+                        background: 'linear-gradient(180deg, #818cf8 0%, rgba(129, 140, 248, 0.15) 100%)',
+                        boxShadow: '0 0 10px #818cf8',
                       }} />
                     </div>
                   ) : (
-                    /* Regular 3D Glassmorphism Spherical Orb */
-                    <div style={{
-                      position: 'relative',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
+                    /* Regular 3D Glassmorphism Spherical Orb with Floating Bobbing Motion */
+                    <div
+                      className="orb-floating"
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        animation: 'orbLevitate 3.6s ease-in-out infinite',
+                        animationDelay: `${(i % 5) * 0.35}s`,
+                      }}
+                    >
+                      {/* 3D Glass Marble Body */}
                       <div style={{
-                        width: '46px',
-                        height: '46px',
+                        width: '50px',
+                        height: '50px',
                         borderRadius: '50%',
                         background: stg.orbBg,
-                        border: `2px solid ${stg.orbBorder}`,
+                        border: `2px solid rgba(255, 255, 255, 0.85)`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         boxShadow: isHovered
-                          ? `0 10px 25px ${stg.orbGlow}, 0 0 20px ${stg.orbBorder}`
-                          : `0 6px 16px ${stg.orbGlow}`,
+                          ? `0 14px 30px ${stg.orbGlow}, 0 0 20px ${stg.orbBorder}, inset 0 -4px 8px rgba(0,0,0,0.14), inset 0 2px 6px rgba(255,255,255,0.95)`
+                          : `0 8px 22px ${stg.orbGlow}, inset 0 -3px 7px rgba(0,0,0,0.1), inset 0 2px 6px rgba(255,255,255,0.9), 0 2px 6px rgba(0,0,0,0.06)`,
                         position: 'relative',
                         zIndex: 4,
-                        transition: 'all 0.2s ease',
+                        transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transform: isHovered ? 'scale(1.08)' : 'scale(1)',
                       }}>
-                        <IconComp size={20} color={stg.iconColor} />
+                        {/* Specular 3D Reflection Crescent on Top-Left of Sphere */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '5px',
+                          left: '8px',
+                          width: '18px',
+                          height: '9px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 100%)',
+                          transform: 'rotate(-30deg)',
+                          pointerEvents: 'none',
+                        }} />
+
+                        <IconComp size={22} color={stg.iconColor} style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.15))' }} />
                       </div>
                     </div>
                   )}
 
-                  {/* 3D Hexagonal Glass Pedestal Base Platform */}
+                  {/* 3D Stepped Glass Pedestal Platform */}
                   <div style={{
                     position: 'relative',
-                    width: '62px',
-                    height: '24px',
+                    width: '66px',
+                    height: '26px',
                     marginTop: isCube ? '32px' : '-8px',
                     zIndex: 3,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
                   }}>
-                    {/* Top Oval Glass Plate */}
+                    {/* Tier 1: Top Glossy Oval Glass Plate */}
                     <div style={{
-                      width: '62px',
-                      height: '20px',
+                      width: '66px',
+                      height: '22px',
                       borderRadius: '50%',
-                      background: `linear-gradient(180deg, ${stg.pedestalTop} 0%, rgba(255,255,255,0.7) 100%)`,
-                      border: `1.5px solid ${stg.orbBorder}`,
-                      boxShadow: `0 6px 14px ${stg.pedestalGlow}`,
-                      transform: 'perspective(150px) rotateX(50deg)',
-                    }} />
+                      background: `linear-gradient(180deg, rgba(255,255,255,0.95) 0%, ${stg.pedestalTop} 100%)`,
+                      border: `1.5px solid rgba(255, 255, 255, 0.9)`,
+                      boxShadow: `0 4px 14px ${stg.pedestalGlow}, inset 0 1px 2px #ffffff`,
+                      transform: 'perspective(160px) rotateX(48deg)',
+                      position: 'relative',
+                      zIndex: 2,
+                    }}>
+                      {/* Inner colored reflection ring */}
+                      <div style={{
+                        position: 'absolute',
+                        inset: '2px',
+                        borderRadius: '50%',
+                        border: `1px solid ${stg.orbBorder}`,
+                        opacity: 0.5,
+                      }} />
+                    </div>
 
-                    {/* Pedestal Bottom Base Cylinder Stem */}
+                    {/* Tier 2: Middle Translucent Glass Refraction Collar */}
                     <div style={{
                       position: 'absolute',
-                      bottom: '-6px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      width: '24px',
-                      height: '14px',
-                      borderRadius: '0 0 10px 10px',
-                      background: `linear-gradient(180deg, ${stg.pedestalStem} 0%, rgba(255,255,255,0.2) 100%)`,
+                      top: '11px',
+                      width: '54px',
+                      height: '9px',
+                      borderRadius: '50%',
+                      background: `linear-gradient(180deg, ${stg.pedestalStem} 0%, rgba(255,255,255,0.3) 100%)`,
+                      border: `1px solid ${stg.orbBorder}`,
+                      opacity: 0.85,
+                      transform: 'perspective(160px) rotateX(48deg)',
+                      zIndex: 1,
+                    }} />
+
+                    {/* Tier 3: Cylindrical Pedestal Stem crossing the pipe */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '14px',
+                      width: '26px',
+                      height: '18px',
+                      borderRadius: '0 0 12px 12px',
+                      background: `linear-gradient(90deg, rgba(255,255,255,0.4) 0%, ${stg.pedestalStem} 50%, rgba(0,0,0,0.1) 100%)`,
                       border: `1px solid ${stg.orbBorder}`,
                       borderTop: 'none',
+                      boxShadow: `0 3px 8px ${stg.pedestalGlow}`,
+                      zIndex: 1,
                     }} />
                   </div>
 
-                  {/* Floor Reflection Light Dot */}
-                  <div style={{
-                    width: '32px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    background: stg.orbGlow,
-                    filter: 'blur(3px)',
-                    marginTop: '8px',
-                  }} />
+
 
                   {/* Micro Tooltip on Hover */}
                   {isHovered && (() => {
