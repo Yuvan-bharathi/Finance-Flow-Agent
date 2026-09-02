@@ -296,6 +296,7 @@ export const ActionCenterDrawer = ({
   const normStatus = (currentCase.status || '').toLowerCase();
   const rec = (currentCase.latest_recommendation || (currentCase.recommendations && currentCase.recommendations[0])) as DrawerRecommendation | undefined;
   const confidenceScore = rec ? parseFloat(String(rec.confidence_score)) : null;
+  const isAnalyzed = Boolean(rec || (normStatus !== 'new' && normStatus !== 'open'));
 
   const handleRunAnalysis = async () => {
     if (isViewer) {
@@ -593,8 +594,8 @@ export const ActionCenterDrawer = ({
             </div>
           </div>
 
-          {/* Operational Playbook */}
-          {playbook && (
+          {/* Operational Playbook - Exclusive to analysed payment transactions only */}
+          {playbook && isAnalyzed && (
             <div style={{
               background: '#ffffff',
               border: `1.5px solid ${playbook.severity === 'CRITICAL' ? '#fca5a5' : playbook.severity === 'HIGH' ? '#fed7aa' : '#e2e8f0'}`,
