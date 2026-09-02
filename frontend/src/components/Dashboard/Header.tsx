@@ -150,10 +150,10 @@ export const Header = ({ activeTab, searchQuery = '', setSearchQuery }: HeaderPr
       <div className="header-controls-wrap" style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
 
         {/* LIVE Badge */}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '20px', padding: '5px 12px', fontSize: '0.72rem', fontWeight: '800', color: '#15803d' }}>
+        {/* <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '20px', padding: '5px 12px', fontSize: '0.72rem', fontWeight: '800', color: '#15803d' }}>
           <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a', display: 'inline-block', boxShadow: '0 0 0 2px rgba(34,197,94,0.3)' }} />
           <span>LIVE</span>
-        </div>
+        </div> */}
 
         {/* Search */}
         <div style={{ position: 'relative' }}>
