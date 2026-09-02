@@ -247,11 +247,11 @@ export const getCasePlaybookService = async (caseId, user = null) => {
 
   // 1. Fetch case details, matched company, loan, and latest anomaly
   const [caseRows] = await pool.query(`
-    SELECT rc.id AS case_id, rc.status, rc.priority, rc.company_id AS case_company_id,
+    SELECT rc.id AS case_id, rc.status, rc.priority,
            p.id AS payment_id, p.transaction_id, p.amount, p.sender_name, p.sender_account, p.reference,
            pa.severity AS anomaly_severity, pa.anomaly_types, pa.anomaly_score, pa.recommendation AS anomaly_recommendation, pa.explanation AS anomaly_explanation,
            rec.recommended_company_id, rec.recommended_loan_id, rec.recommended_schedule_id, rec.confidence_score, rec.reasoning,
-           co.name AS matched_company_name, la.loan_number AS matched_loan_number
+           co.company_name AS matched_company_name, la.loan_number AS matched_loan_number
     FROM reconciliation_cases rc
     JOIN payments p ON rc.payment_id = p.id
     LEFT JOIN (
@@ -263,8 +263,8 @@ export const getCasePlaybookService = async (caseId, user = null) => {
         GROUP BY reconciliation_case_id
       ) r2 ON r1.id = r2.max_id
     ) rec ON rc.id = rec.reconciliation_case_id
-    LEFT JOIN companies co ON (rec.recommended_company_id = co.id OR rc.company_id = co.id)
-    LEFT JOIN loan_accounts la ON (rec.recommended_loan_id = la.id)
+    LEFT JOIN companies co ON rec.recommended_company_id = co.id
+    LEFT JOIN loans la ON rec.recommended_loan_id = la.id
     LEFT JOIN (
       SELECT pa1.*
       FROM payment_anomalies pa1
