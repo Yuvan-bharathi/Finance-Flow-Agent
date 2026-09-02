@@ -2,7 +2,7 @@ import React, { useState, useEffect, type ComponentType } from 'react';
 import {
   GitMerge, CreditCard, Building2, FileSpreadsheet, ShieldCheck,
   BarChart3, Files, Bell, Settings,
-  PanelLeftClose, PanelLeftOpen, ChevronRight, Bot, LogOut
+  PanelLeftClose, PanelLeftOpen, Bot, LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getAlerts } from '../../services/notificationService';
@@ -21,7 +21,6 @@ interface SidebarProps {
   pendingCount?: number;
   collapsed?: boolean;
   setCollapsed?: (v: boolean) => void;
-  onOpenAiAssistant?: () => void;
 }
 
 const navItems: NavItem[] = [
@@ -46,12 +45,10 @@ export const Sidebar = ({
   pendingCount: _pendingCount = 0,
   collapsed = false,
   setCollapsed,
-  onOpenAiAssistant,
 }: SidebarProps) => {
   const { user, logout } = useAuth();
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [logoHovered, setLogoHovered] = useState(false);
-  const [aiHovered, setAiHovered] = useState(false);
   const [notificationCount, setNotificationCount] = useState(8);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
@@ -83,15 +80,19 @@ export const Sidebar = ({
   };
 
   return (
-    <aside style={{
-      width: collapsed ? '72px' : '280px', minWidth: collapsed ? '72px' : '280px',
-      background: '#ffffff', borderRight: '1px solid #e2e8f0',
-      padding: collapsed ? '20px 12px' : '24px 18px',
-      display: 'flex', flexDirection: 'column', height: '100vh',
-      position: 'sticky', top: 0, zIndex: 40,
-      transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      overflow: 'visible', boxShadow: '2px 0 12px rgba(0, 0, 0, 0.03)',
-    }}>
+    <aside
+      onWheel={(e) => e.stopPropagation()}
+      style={{
+        width: collapsed ? '72px' : '280px', minWidth: collapsed ? '72px' : '280px',
+        background: '#ffffff', borderRight: '1px solid #e2e8f0',
+        padding: collapsed ? '20px 12px' : '24px 18px',
+        display: 'flex', flexDirection: 'column', height: '100vh',
+        position: 'sticky', top: 0, zIndex: 40,
+        overscrollBehavior: 'contain',
+        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        overflow: 'visible', boxShadow: '2px 0 12px rgba(0, 0, 0, 0.03)',
+      }}
+    >
       {/* Embedded 3D Keyframe Animations & Reduced Motion Handler */}
       <style>{`
         @keyframes sidebarAgentPulse {
@@ -177,7 +178,7 @@ export const Sidebar = ({
       </div>
 
       {/* Navigation */}
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1, overflowY: 'auto', overflowX: 'clip', paddingRight: '2px' }}>
+      <nav style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1, overflowY: 'auto', overflowX: 'clip', paddingRight: '2px', overscrollBehavior: 'contain' }}>
         {navItems.map(item => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -329,53 +330,6 @@ export const Sidebar = ({
       <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
         {!collapsed ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* AI Assistant Card */}
-            <div
-              onClick={() => onOpenAiAssistant?.()}
-              style={{
-                background: 'linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%)',
-                border: '1px solid #d8b4fe',
-                borderRadius: '14px',
-                padding: '12px 14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 8px rgba(124, 58, 237, 0.08)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 6px 18px rgba(124, 58, 237, 0.25)';
-                e.currentTarget.style.transform = 'translateY(-1.5px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(124, 58, 237, 0.08)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ffffff',
-                  boxShadow: '0 3px 10px rgba(124, 58, 237, 0.35), inset 0 1px 1px rgba(255,255,255,0.4)',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                }}>
-                  <Bot size={20} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.83rem', fontWeight: '700', color: '#4c1d95' }}>AI Assistant</div>
-                  <div style={{ fontSize: '0.68rem', color: '#6b21a8' }}>Ask FinanceFlow AI</div>
-                </div>
-              </div>
-              <ChevronRight size={16} color="#7c3aed" />
-            </div>
-
             {/* User Profile Row */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
@@ -412,20 +366,6 @@ export const Sidebar = ({
         ) : (
           /* Collapsed Footer */
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '4px 0' }}>
-            <div style={{ position: 'relative' }}
-              onMouseEnter={() => setAiHovered(true)}
-              onMouseLeave={() => setAiHovered(false)}>
-              <button
-                onClick={() => onOpenAiAssistant?.()}
-                style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)', color: '#ffffff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(124, 58, 237, 0.35)', transition: 'all 0.2s ease' }}
-              >
-                <Bot size={20} />
-              </button>
-              {aiHovered && (
-                <div style={{ ...tooltipStyle }}>AI Assistant</div>
-              )}
-            </div>
-
             <button onClick={logout} title={`Sign Out (${userName})`} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#4f46e5', color: '#ffffff', fontWeight: '800', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)' }}>
                 {userInitials}
