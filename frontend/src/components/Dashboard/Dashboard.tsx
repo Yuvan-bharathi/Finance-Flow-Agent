@@ -63,6 +63,7 @@ export const Dashboard = ({
   const [internalActiveTab, setInternalActiveTab] = useState('reconciliations');
   const [localError, setLocalError] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [copilotContext, setCopilotContext] = useState<CopilotContext>({
     page: 'reconciliations',
@@ -124,13 +125,15 @@ export const Dashboard = ({
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f8fafc' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', maxWidth: '100vw', overflowX: 'hidden', background: '#f8fafc' }}>
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         pendingCount={stats?.kpis?.pending_review || 0}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
+        mobileOpen={mobileMenuOpen}
+        setMobileOpen={setMobileMenuOpen}
       />
 
       <AiCopilotPanel
@@ -155,9 +158,12 @@ export const Dashboard = ({
         height: '100vh',
         overflow: 'hidden',
       }}>
-        <Header activeTab={activeTab} />
+        <Header 
+          activeTab={activeTab} 
+          onToggleMobileMenu={() => setMobileMenuOpen(prev => !prev)}
+        />
 
-        <main style={{ flex: 1, padding: '24px 32px 48px', overflowY: 'auto', minHeight: 0 }}>
+        <main className="dashboard-main-area">
           {(localError || reduxError) && (
             <div style={{
               background: '#fef2f2',
@@ -198,7 +204,7 @@ export const Dashboard = ({
               <KPISection kpis={stats.kpis} loading={loading} />
 
               {/* 3-Card Row: Case Status + Cases Over Time + AI Agent Performance */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '24px' }}>
+              <div className="dashboard-three-cards-row">
                 <CaseStatusChart statusBreakdown={stats.status_breakdown} loading={loading} />
                 <CasesOverTimeChart casesOverTime={stats.cases_over_time} loading={loading} />
                 <AIPerformanceCard
@@ -208,7 +214,7 @@ export const Dashboard = ({
               </div>
 
               {/* 2-Column Row: Pipeline Health (Left) + Attention Required 2x2 Matrix (Right) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 1fr) 2fr', gap: '20px', marginBottom: '24px', alignItems: 'stretch' }}>
+              <div className="dashboard-two-cards-row">
                 <PipelineHealthCard pipelineHealth={stats.pipeline_health} onNavigatePipeline={() => setActiveTab('agents')} />
                 <AttentionRequiredSection
                   cases={stats.attention_required}

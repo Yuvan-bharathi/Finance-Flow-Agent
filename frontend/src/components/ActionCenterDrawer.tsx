@@ -564,7 +564,9 @@ export const ActionCenterDrawer = ({
               <div>
                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Deposit Amount</span>
                 <div style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a' }}>
-                  ₹{parseFloat(String(caseItem.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{parseFloat(String(caseItem.amount)).toLocaleString('en-IN', {
+                    maximumFractionDigits: parseFloat(String(caseItem.amount)) % 1 === 0 ? 0 : 2
+                  })}
                 </div>
               </div>
               <div>
@@ -772,7 +774,11 @@ export const ActionCenterDrawer = ({
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#6b21a8', fontWeight: '700' }}>Total Payment Ingested:</span>
-                  <strong style={{ color: '#059669', fontSize: '0.95rem' }}>₹{parseFloat(String(caseItem.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                  <strong style={{ color: '#059669', fontSize: '0.95rem' }}>
+                    ₹{parseFloat(String(caseItem.amount)).toLocaleString('en-IN', {
+                      maximumFractionDigits: parseFloat(String(caseItem.amount)) % 1 === 0 ? 0 : 2
+                    })}
+                  </strong>
                 </div>
               </div>
 
@@ -797,7 +803,11 @@ export const ActionCenterDrawer = ({
                         <tr key={alloc.schedule_id} style={{ borderBottom: '1px solid #f3e8ff' }}>
                           <td style={{ padding: '8px', fontWeight: '800', color: '#4c1d95' }}>#{alloc.installment_number}</td>
                           <td style={{ padding: '8px', color: '#334155' }}>{formatAuditTimestamp(alloc.due_date)}</td>
-                          <td style={{ padding: '8px', fontWeight: '800', color: '#059669' }}>₹{alloc.allocated_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '8px', fontWeight: '800', color: '#059669' }}>
+                            ₹{alloc.allocated_amount.toLocaleString('en-IN', {
+                              maximumFractionDigits: alloc.allocated_amount % 1 === 0 ? 0 : 2
+                            })}
+                          </td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>
                             <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', padding: '2px 6px', borderRadius: '10px', fontSize: '0.65rem', fontWeight: '800' }}>
                               ✓ FULLY PAID
