@@ -71,7 +71,7 @@ export const AttentionRequiredSection = ({ cases = [], onSelectCase, onViewAll }
       </div>
 
       {/* Case Cards 2x2 Grid (4 cards total) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+      <div className="attention-cases-grid">
         {cases.slice(0, 4).map((item, idx) => {
           const isHigh = item.severity === 'HIGH' || item.severity === 'CRITICAL';
           const caseNum = item.id ?? (item as unknown as { case_id?: number }).case_id ?? item.payment_id ?? (idx + 1);
