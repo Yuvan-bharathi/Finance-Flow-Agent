@@ -232,13 +232,53 @@ export const ActionCenterDrawer = ({
       return;
     }
     if (!caseItem) return;
+
+    const targetCompleted = !currentCompleted;
+    const numStepId = typeof stepId === 'number' ? stepId : parseInt(String(stepId), 10) || 1;
+
+    // ⚡ Optimistic UI Update (0ms instant response without waiting for network)
+    setPlaybook(prev => {
+      if (!prev || !prev.steps) return prev;
+      const updatedSteps = prev.steps.map(s => {
+        if (s.id === stepId || s.id === numStepId || String(s.id) === String(stepId)) {
+          return { ...s, isCompleted: targetCompleted };
+        }
+        return s;
+      });
+      const allDone = updatedSteps.every(s => s.isCompleted);
+      const completedCount = updatedSteps.filter(s => s.isCompleted).length;
+      return {
+        ...prev,
+        steps: updatedSteps,
+        completedStepsCount: completedCount,
+        overallStatus: allDone ? 'COMPLETED' : (completedCount > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'),
+      };
+    });
+
     try {
-      const numStepId = typeof stepId === 'number' ? stepId : parseInt(String(stepId), 10) || 1;
-      const updatedPb = await updatePlaybookStep(caseItem.id, numStepId, !currentCompleted);
-      if (updatedPb) setPlaybook(updatedPb as unknown as PlaybookData);
+      const updatedPb = await updatePlaybookStep(caseItem.id, numStepId, targetCompleted);
+      if (updatedPb) {
+        setPlaybook(prev => ({
+          ...(prev || {}),
+          ...(updatedPb as unknown as PlaybookData),
+        }));
+      }
     } catch (err) {
       console.error(err);
       setErrorMsg('Failed to update playbook step progress.');
+      // Rollback on network failure
+      setPlaybook(prev => {
+        if (!prev || !prev.steps) return prev;
+        return {
+          ...prev,
+          steps: prev.steps.map(s => {
+            if (s.id === stepId || s.id === numStepId || String(s.id) === String(stepId)) {
+              return { ...s, isCompleted: currentCompleted };
+            }
+            return s;
+          }),
+        };
+      });
     }
   };
 
@@ -297,6 +337,9 @@ export const ActionCenterDrawer = ({
   const rec = (currentCase.latest_recommendation || (currentCase.recommendations && currentCase.recommendations[0])) as DrawerRecommendation | undefined;
   const confidenceScore = rec ? parseFloat(String(rec.confidence_score)) : null;
   const isAnalyzed = Boolean(rec || (normStatus !== 'new' && normStatus !== 'open'));
+  const allPlaybookStepsCompleted = playbook?.steps?.length
+    ? playbook.steps.every(s => s.isCompleted)
+    : true;
 
   const handleRunAnalysis = async () => {
     if (isViewer) {
@@ -686,17 +729,20 @@ export const ActionCenterDrawer = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <button
                   onClick={handleCompletePlaybookReview}
-                  disabled={isViewer}
+                  disabled={isViewer || !allPlaybookStepsCompleted || submitting}
+                  title={!allPlaybookStepsCompleted ? 'Please complete all verification checkboxes above before completing review' : 'Complete Playbook Review'}
                   style={{
                     flex: 1,
-                    background: '#4f46e5',
+                    background: (!allPlaybookStepsCompleted || isViewer) ? '#94a3b8' : '#4f46e5',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '8px',
                     padding: '9px 14px',
                     fontSize: '0.78rem',
                     fontWeight: '800',
-                    cursor: isViewer ? 'not-allowed' : 'pointer',
+                    cursor: (!allPlaybookStepsCompleted || isViewer || submitting) ? 'not-allowed' : 'pointer',
+                    opacity: (!allPlaybookStepsCompleted || isViewer) ? 0.6 : 1,
+                    transition: 'all 0.2s ease',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -704,7 +750,11 @@ export const ActionCenterDrawer = ({
                   }}
                 >
                   <CheckCircle size={15} />
-                  <span>Complete Review</span>
+                  <span>
+                    {!allPlaybookStepsCompleted && playbook?.steps?.length
+                      ? `Complete All Steps (${playbook?.completedStepsCount || 0}/${playbook?.totalStepsCount || playbook?.steps?.length})`
+                      : 'Complete Review'}
+                  </span>
                 </button>
 
                 <button
@@ -929,23 +979,28 @@ export const ActionCenterDrawer = ({
                   {(normStatus !== 'approved' && normStatus !== 'resolved') && (
                     <button
                       onClick={handleApprove}
-                      disabled={submitting}
+                      disabled={submitting || (Boolean(playbook && isAnalyzed && !allPlaybookStepsCompleted))}
                       className="interactive-btn"
+                      title={playbook && isAnalyzed && !allPlaybookStepsCompleted ? 'Please complete all operational playbook verification checkboxes above before approving settlement' : 'Approve Match & Execute Continuous Waterfall'}
                       style={{
                         flex: 2,
-                        background: submitting ? '#059669' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        background: (playbook && isAnalyzed && !allPlaybookStepsCompleted)
+                          ? '#94a3b8'
+                          : (submitting ? '#059669' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'),
                         color: '#ffffff',
                         border: 'none',
                         padding: '12px 18px',
                         borderRadius: '12px',
                         fontSize: '0.9rem',
                         fontWeight: '800',
-                        cursor: submitting ? 'not-allowed' : 'pointer',
+                        cursor: (submitting || (Boolean(playbook && isAnalyzed && !allPlaybookStepsCompleted))) ? 'not-allowed' : 'pointer',
+                        opacity: (playbook && isAnalyzed && !allPlaybookStepsCompleted) ? 0.6 : 1,
+                        transition: 'all 0.2s ease',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                        boxShadow: (playbook && isAnalyzed && !allPlaybookStepsCompleted) ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.35)',
                       }}
                     >
                       {submitting ? (
@@ -956,7 +1011,11 @@ export const ActionCenterDrawer = ({
                       ) : (
                         <>
                           <CheckCircle size={18} />
-                          <span>Approve Match</span>
+                          <span>
+                            {playbook && isAnalyzed && !allPlaybookStepsCompleted
+                              ? 'Complete Checklist to Approve'
+                              : 'Approve Match'}
+                          </span>
                         </>
                       )}
                     </button>

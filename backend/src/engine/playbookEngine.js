@@ -245,13 +245,26 @@ export const getCasePlaybookService = async (caseId, user = null) => {
   if (!caseId) return null;
   await initPlaybookDatabase();
 
-  // 1. Fetch case details and latest anomaly
+  // 1. Fetch case details, matched company, loan, and latest anomaly
   const [caseRows] = await pool.query(`
-    SELECT rc.id AS case_id, rc.status, rc.priority,
-           p.id AS payment_id, p.transaction_id, p.amount, p.sender_name, p.sender_account,
-           pa.severity AS anomaly_severity, pa.anomaly_types, pa.anomaly_score, pa.recommendation AS anomaly_recommendation, pa.explanation AS anomaly_explanation
+    SELECT rc.id AS case_id, rc.status, rc.priority, rc.company_id AS case_company_id,
+           p.id AS payment_id, p.transaction_id, p.amount, p.sender_name, p.sender_account, p.reference,
+           pa.severity AS anomaly_severity, pa.anomaly_types, pa.anomaly_score, pa.recommendation AS anomaly_recommendation, pa.explanation AS anomaly_explanation,
+           rec.recommended_company_id, rec.recommended_loan_id, rec.recommended_schedule_id, rec.confidence_score, rec.reasoning,
+           co.name AS matched_company_name, la.loan_number AS matched_loan_number
     FROM reconciliation_cases rc
     JOIN payments p ON rc.payment_id = p.id
+    LEFT JOIN (
+      SELECT r1.*
+      FROM ai_recommendations r1
+      INNER JOIN (
+        SELECT reconciliation_case_id, MAX(id) AS max_id
+        FROM ai_recommendations
+        GROUP BY reconciliation_case_id
+      ) r2 ON r1.id = r2.max_id
+    ) rec ON rc.id = rec.reconciliation_case_id
+    LEFT JOIN companies co ON (rec.recommended_company_id = co.id OR rc.company_id = co.id)
+    LEFT JOIN loan_accounts la ON (rec.recommended_loan_id = la.id)
     LEFT JOIN (
       SELECT pa1.*
       FROM payment_anomalies pa1
@@ -309,13 +322,54 @@ export const getCasePlaybookService = async (caseId, user = null) => {
 
   const overallStatus = statusRows[0]?.status || (stepRows.length > 0 ? 'IN_PROGRESS' : 'NOT_STARTED');
 
-  const stepsWithProgress = playbook.steps.map(step => ({
-    ...step,
-    isCompleted: !!completedMap[step.id],
-    completedBy: completedMap[step.id]?.completedBy || null,
-    completedAt: completedMap[step.id]?.completedAt || null,
-    notes: completedMap[step.id]?.notes || null
-  }));
+  // Exact entity formatting
+  const companyName = c.matched_company_name || c.sender_name || 'Borrower Entity';
+  const loanRef = c.matched_loan_number || (c.recommended_loan_id ? `Facility #${c.recommended_loan_id}` : 'Active Loan');
+  const amountNum = parseFloat(String(c.amount || 0));
+  const amountStr = '₹' + amountNum.toLocaleString('en-IN', { maximumFractionDigits: amountNum % 1 === 0 ? 0 : 2 });
+  const refStr = c.reference ? `'${c.reference}'` : 'N/A';
+
+  // Dynamic precise description customized to the exact company and transaction
+  let tailoredDescription = playbook.description;
+  if (playbook.id === 'PLAYBOOK_STANDARD_RECONCILIATION') {
+    tailoredDescription = `Single-schedule continuous waterfall settlement for ${companyName} on loan facility ${loanRef} (${amountStr}).`;
+  } else if (playbook.id === 'PLAYBOOK_DUPLICATE_PAYMENT') {
+    tailoredDescription = `Deposit of ${amountStr} matches another ledger record for ${companyName} (Ref: ${refStr}). Hold allocation pending UTR confirmation.`;
+  } else if (playbook.id === 'PLAYBOOK_UNKNOWN_PAYER') {
+    tailoredDescription = `Deposit of ${amountStr} from account ${c.sender_account || 'unknown'} could not be mapped to registered master facilities for ${companyName}.`;
+  } else if (playbook.id === 'PLAYBOOK_AMOUNT_VARIANCE') {
+    tailoredDescription = `Deposit of ${amountStr} diverges from expected installment schedule EMI for ${companyName} on ${loanRef}.`;
+  } else if (playbook.id === 'PLAYBOOK_WATERFALL_ALLOCATION') {
+    tailoredDescription = `Deposit of ${amountStr} requires multi-schedule continuous waterfall allocation across facilities for ${companyName}.`;
+  }
+
+  // Personalize each step with company and transaction details
+  const stepsWithProgress = playbook.steps.map(step => {
+    let customLabel = step.label;
+    let customDesc = step.desc;
+
+    const sId = String(step.id);
+    if (sId === '1') {
+      customLabel = `Verify ${amountStr} deposit evidence against '${companyName}'`;
+      customDesc = `Confirm payer account (${c.sender_account || 'N/A'}) and reference (${refStr}) against facility ${loanRef}.`;
+    } else if (sId === '2') {
+      customLabel = `Check installment schedule allocation match for ${loanRef}`;
+      customDesc = `Ensure ${amountStr} correctly applies to outstanding fees, interest, and principal for ${companyName}.`;
+    } else if (sId === '3') {
+      customLabel = `Approve continuous waterfall allocation for ${companyName}`;
+      customDesc = `Commit ${amountStr} allocation to ${companyName} ledger and update loan balance.`;
+    }
+
+    return {
+      ...step,
+      label: customLabel,
+      desc: customDesc,
+      isCompleted: !!completedMap[step.id],
+      completedBy: completedMap[step.id]?.completedBy || null,
+      completedAt: completedMap[step.id]?.completedAt || null,
+      notes: completedMap[step.id]?.notes || null
+    };
+  });
 
   const completedCount = stepsWithProgress.filter(s => s.isCompleted).length;
   const totalCount = stepsWithProgress.length;
@@ -330,7 +384,7 @@ export const getCasePlaybookService = async (caseId, user = null) => {
     safeToAllocate: playbook.safeToAllocate,
     requiresManualReview: playbook.requiresManualReview,
     requiresAgent6Escalation: playbook.requiresAgent6Escalation,
-    description: playbook.description,
+    description: tailoredDescription,
     evidence: playbook.evidenceList,
     anomalyScore: c.anomaly_score || 0,
     overallStatus,
