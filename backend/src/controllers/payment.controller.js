@@ -7,11 +7,56 @@ import { sendSuccessResponse } from '../utils/apiResponse.js';
 import { cacheService } from '../services/cache.service.js';
 import { emitSocketEvent } from '../config/socket.js';
 import { runAnomalyAgentStageA } from '../agents/anomalyAgent.js';
+import { config } from '../config/env.js';
+import { agentQueue, PRIORITY } from '../services/agentQueue.service.js';
+import { runPipelineWorkflow, PIPELINE_WORKFLOWS } from '../services/orchestrator.service.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Controller: Payment Controller (Phase 7 Real-Time & Caching Enhanced)
  * Purpose: Express HTTP request handlers for Raw Payment Ingestion & Mock Bank Simulator endpoints.
  */
+
+/**
+ * Asynchronously queues and executes the Payment Reconciliation & Risk Pipeline
+ * whenever a new transaction arrives in the database, without blocking the HTTP response.
+ */
+const triggerAutomatedPipeline = (payment, reconciliationCase, userId) => {
+  if (config.agents?.autoTriggerPipeline === false) {
+    logger.info('[Auto-Pipeline] Automated pipeline trigger is disabled via configuration.');
+    return;
+  }
+
+  const caseId = reconciliationCase?.id;
+  const paymentId = payment?.id;
+  if (!caseId || !paymentId) return;
+
+  agentQueue.addJob({
+    name: `AutoPipeline-Case#${caseId}-Payment#${paymentId}`,
+    priority: PRIORITY.HIGH,
+    metadata: { caseId, paymentId, triggerSource: 'auto_ingestion' },
+    task: async () => {
+      logger.info(`⚡ [Auto-Pipeline] Triggering automated Payment Reconciliation & Risk Pipeline for Case #${caseId}`);
+      return await runPipelineWorkflow({
+        workflow: PIPELINE_WORKFLOWS.RECONCILIATION_AND_RISK,
+        contextData: {
+          caseId,
+          paymentId,
+          amount: payment.amount,
+          senderName: payment.sender_name,
+          senderAccount: payment.sender_account,
+          reference: payment.reference,
+          transactionId: payment.transaction_id
+        },
+        userId,
+        priority: PRIORITY.HIGH,
+        triggerSource: 'auto_ingestion'
+      });
+    }
+  }).catch(err => {
+    logger.warn(`[Auto-Pipeline] Automated pipeline execution failed for Case #${caseId}: ${err.message}`);
+  });
+};
 
 /**
  * Controller: ingestPayment (Section 17 Manual Ingestion API)
@@ -48,6 +93,9 @@ export const ingestPayment = async (req, res, next) => {
         );
       });
     }
+
+    // 4. Automatically trigger the Payment Reconciliation & Risk Pipeline in background
+    triggerAutomatedPipeline(result.payment, result.reconciliation_case, userId);
 
     return sendSuccessResponse(res, 201, 'Payment ingested successfully and reconciliation case opened', result);
   } catch (error) {
@@ -96,10 +144,13 @@ export const ingestMockBankDeposit = async (req, res, next) => {
       timestamp: new Date().toISOString()
     });
 
+    // Automatically trigger the Payment Reconciliation & Risk Pipeline in background
+    triggerAutomatedPipeline(result.payment, result.reconciliation_case, userId);
+
     return sendSuccessResponse(
       res,
       201,
-      '🏦 [Dummy Bank API] Mock bank payment deposit ingested successfully. Case created in status NEW.',
+      '🏦 [Dummy Bank API] Mock bank payment deposit ingested successfully. Case created in status NEW and automated pipeline queued.',
       result
     );
   } catch (error) {

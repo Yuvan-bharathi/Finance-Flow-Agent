@@ -148,14 +148,24 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
         swrCache.invalidate('anomalies');
       };
 
+      const handlePipelineOrReconciliationFinished = () => {
+        swrCache.invalidate('payments');
+        swrCache.invalidate('reconciliations');
+        void fetchPaymentsAndCases(false);
+      };
+
       socket.on('PAYMENT_INGESTED', handlePaymentIngested);
       socket.on('PAYMENT_RECEIVED', handlePaymentIngested);
       socket.on('ANOMALY_DETECTED', handleAnomalyDetected);
+      socket.on('RECONCILIATION_COMPLETED', handlePipelineOrReconciliationFinished);
+      socket.on('PIPELINE_COMPLETED', handlePipelineOrReconciliationFinished);
 
       return () => {
         socket.off('PAYMENT_INGESTED', handlePaymentIngested);
         socket.off('PAYMENT_RECEIVED', handlePaymentIngested);
         socket.off('ANOMALY_DETECTED', handleAnomalyDetected);
+        socket.off('RECONCILIATION_COMPLETED', handlePipelineOrReconciliationFinished);
+        socket.off('PIPELINE_COMPLETED', handlePipelineOrReconciliationFinished);
       };
     }
   }, [startDate, endDate]);
