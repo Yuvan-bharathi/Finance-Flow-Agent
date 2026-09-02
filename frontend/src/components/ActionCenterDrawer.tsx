@@ -67,6 +67,7 @@ export interface DrawerRecommendation {
   loan_number?: string;
   recommended_company_id?: number | string;
   recommended_loan_id?: number | string;
+  recommended_schedule_id?: number | string;
   waterfall_preview?: WaterfallPreview;
   status?: string;
 }
@@ -343,6 +344,7 @@ export const ActionCenterDrawer = ({
     ? mandatorySteps.every(s => s.isCompleted)
     : true;
   const isPlaybookCompleted = playbook?.overallStatus === 'COMPLETED';
+  const hasTargetLoan = Boolean(rec?.recommended_loan_id || rec?.recommended_schedule_id);
 
   const handleRunAnalysis = async () => {
     if (isViewer) {
@@ -377,6 +379,11 @@ export const ActionCenterDrawer = ({
   const handleApprove = async () => {
     if (isViewer) {
       setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot approve allocations.');
+      return;
+    }
+    if (!hasTargetLoan) {
+      setErrorMsg('⚠️ Cannot approve match: Target loan facility could not be identified by AI. Please use Override below to select a borrower and loan facility.');
+      setShowOverrideForm(true);
       return;
     }
     try {
@@ -1001,55 +1008,69 @@ export const ActionCenterDrawer = ({
               )}
 
               {!showRejectForm && !showOverrideForm && (
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  {(normStatus !== 'approved' && normStatus !== 'resolved') && (
-                    <button
-                      onClick={handleApprove}
-                      disabled={submitting || (Boolean(playbook && isAnalyzed && !mandatoryStepsCompleted))}
-                      className="interactive-btn"
-                      title={
-                        playbook && isAnalyzed && !mandatoryStepsCompleted
-                          ? 'Please complete all required operational playbook checkboxes above before approving settlement'
-                          : 'Approve Match & Execute Continuous Waterfall'
-                      }
-                      style={{
-                        flex: 2,
-                        background: (playbook && isAnalyzed && !mandatoryStepsCompleted)
-                          ? '#94a3b8'
-                          : (submitting ? '#059669' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'),
-                        color: '#ffffff',
-                        border: 'none',
-                        padding: '12px 18px',
-                        borderRadius: '12px',
-                        fontSize: '0.9rem',
-                        fontWeight: '800',
-                        cursor: (submitting || (Boolean(playbook && isAnalyzed && !mandatoryStepsCompleted))) ? 'not-allowed' : 'pointer',
-                        opacity: (playbook && isAnalyzed && !mandatoryStepsCompleted) ? 0.6 : 1,
-                        transition: 'all 0.2s ease',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        boxShadow: (playbook && isAnalyzed && !mandatoryStepsCompleted) ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.35)',
-                      }}
-                    >
-                      {submitting ? (
-                        <>
-                          <RefreshCw size={18} className="animate-spin" />
-                          <span>Allocating to Ledger...</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle size={18} />
-                          <span>
-                            {playbook && isAnalyzed && !mandatoryStepsCompleted
-                              ? 'Complete Required Steps to Approve'
-                              : 'Approve Match'}
-                          </span>
-                        </>
-                      )}
-                    </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {!hasTargetLoan && isAnalyzed && (
+                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '10px 14px', fontSize: '0.78rem', color: '#92400e', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertTriangle size={18} color="#d97706" style={{ flexShrink: 0 }} />
+                      <div>
+                        <strong>Unmapped Loan Facility:</strong> AI could not match this deposit to a borrower loan (Company #N/A, Loan #N/A). Please use <strong>Override</strong> to assign a loan, or <strong>Reject</strong>.
+                      </div>
+                    </div>
                   )}
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    {(normStatus !== 'approved' && normStatus !== 'resolved') && (
+                      <button
+                        onClick={handleApprove}
+                        disabled={submitting || !hasTargetLoan || (Boolean(playbook && isAnalyzed && !mandatoryStepsCompleted))}
+                        className="interactive-btn"
+                        title={
+                          !hasTargetLoan
+                            ? 'Target loan facility could not be identified by AI. Please use Override to assign a loan.'
+                            : (playbook && isAnalyzed && !mandatoryStepsCompleted
+                                ? 'Please complete all required operational playbook checkboxes above before approving settlement'
+                                : 'Approve Match & Execute Continuous Waterfall')
+                        }
+                        style={{
+                          flex: 2,
+                          background: (!hasTargetLoan || (playbook && isAnalyzed && !mandatoryStepsCompleted))
+                            ? '#94a3b8'
+                            : (submitting ? '#059669' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'),
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '12px 18px',
+                          borderRadius: '12px',
+                          fontSize: '0.9rem',
+                          fontWeight: '800',
+                          cursor: (submitting || !hasTargetLoan || (Boolean(playbook && isAnalyzed && !mandatoryStepsCompleted))) ? 'not-allowed' : 'pointer',
+                          opacity: (!hasTargetLoan || (playbook && isAnalyzed && !mandatoryStepsCompleted)) ? 0.6 : 1,
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          boxShadow: (!hasTargetLoan || (playbook && isAnalyzed && !mandatoryStepsCompleted)) ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.35)',
+                        }}
+                      >
+                        {submitting ? (
+                          <>
+                            <RefreshCw size={18} className="animate-spin" />
+                            <span>Allocating to Ledger...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle size={18} />
+                            <span>
+                              {!hasTargetLoan
+                                ? 'No Loan Identified (Use Override)'
+                                : (playbook && isAnalyzed && !mandatoryStepsCompleted
+                                    ? 'Complete Required Steps to Approve'
+                                    : 'Approve Match')}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    )}
 
                   {normStatus !== 'rejected' && (
                     <button
@@ -1089,7 +1110,8 @@ export const ActionCenterDrawer = ({
                     Override
                   </button>
                 </div>
-              )}
+              </div>
+            )}
 
               {/* Reject Form */}
               {showRejectForm && (
