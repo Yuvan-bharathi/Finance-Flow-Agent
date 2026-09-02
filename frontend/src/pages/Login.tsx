@@ -1,14 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
-import { ShieldCheck, Lock, Mail, ArrowRight, Sparkles } from 'lucide-react';
-
-interface DemoUser {
-  id?: number | string;
-  email: string;
-  name?: string;
-  role?: string;
-}
+import { ShieldCheck, Lock, Mail, ArrowRight } from 'lucide-react';
 
 export const Login = () => {
   const { login } = useAuth();
@@ -16,21 +8,6 @@ export const Login = () => {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [demoUsers, setDemoUsers] = useState<DemoUser[]>([]);
-
-  useEffect(() => {
-    const fetchDemoUsers = async () => {
-      try {
-        const res = await api.get('/auth/demo-users');
-        if (res.data?.data?.users) {
-          setDemoUsers(res.data.data.users);
-        }
-      } catch {
-        setDemoUsers([]);
-      }
-    };
-    fetchDemoUsers();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,11 +21,6 @@ export const Login = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickFill = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('Password123!');
   };
 
   return (
@@ -232,6 +204,7 @@ export const Login = () => {
           </button>
         </form>
 
+        {/* Quick Demo Accounts (Commented out)
         {demoUsers.length > 0 && (
           <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -268,6 +241,7 @@ export const Login = () => {
             </div>
           </div>
         )}
+        */}
       </div>
     </div>
   );
