@@ -181,7 +181,7 @@ export const RecentCasesTable = ({
       <div style={{ overflowX: 'auto', borderRadius: '12px 12px 0 0', border: '1px solid #e2e8f0' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
           <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #cbd5e1', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               <th style={{ padding: '14px 12px', width: '40px', textAlign: 'center' }}>
                 <input type="checkbox" checked={displayedCases.length > 0 && selectedCaseIds.length === displayedCases.length} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
               </th>
@@ -207,7 +207,7 @@ export const RecentCasesTable = ({
               return (
                 <tr key={item.id}
                   onClick={() => onSelectCase?.(item)}
-                  style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: isSelected ? '#f0f9ff' : 'transparent', transition: 'background 0.15s ease' }}
+                  style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: isSelected ? '#f0f9ff' : 'transparent', transition: 'background 0.15s ease' }}
                   onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
                   onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                 >
@@ -224,7 +224,9 @@ export const RecentCasesTable = ({
                   </td>
                   <td style={{ padding: '14px 18px' }}>
                     <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '0.9rem' }}>
-                      ₹{parseFloat(String(item.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{parseFloat(String(item.amount)).toLocaleString('en-IN', {
+                        maximumFractionDigits: parseFloat(String(item.amount)) % 1 === 0 ? 0 : 2
+                      })}
                     </div>
                     <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{item.payment_date}</div>
                   </td>
