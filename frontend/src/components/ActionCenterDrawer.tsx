@@ -166,7 +166,24 @@ export const ActionCenterDrawer = ({
     }
   }, [caseItem, selectedCompanyId]);
 
+  const [loanSchedulesMap, setLoanSchedulesMap] = useState<Record<number, Array<{ id: number; loan_id: number; installment_number: number; due_date: string; scheduled_amount: number; paid_amount: number; status: string }>>>({});
+
   // Compute available loan repayment schedules for the chosen company
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+    const companyLoans = loans.filter(l => String(l.company_id) === String(selectedCompanyId));
+    companyLoans.forEach(l => {
+      if (!loanSchedulesMap[l.id]) {
+        api.get(`/repayments/loan/${l.id}`)
+          .then(res => {
+            const list = (res.data?.data || []) as Array<{ id: number; loan_id: number; installment_number: number; due_date: string; scheduled_amount: number; paid_amount: number; status: string }>;
+            setLoanSchedulesMap(prev => ({ ...prev, [l.id]: list }));
+          })
+          .catch(err => console.warn(`Failed to fetch schedules for loan ${l.id}:`, err));
+      }
+    });
+  }, [selectedCompanyId, loans, loanSchedulesMap]);
+
   const availableSchedules = useMemo(() => {
     if (!selectedCompanyId) return [];
     const companyLoans = loans.filter(l => String(l.company_id) === String(selectedCompanyId));
@@ -182,17 +199,21 @@ export const ActionCenterDrawer = ({
     }> = [];
 
     companyLoans.forEach(l => {
-      if (Array.isArray(l.schedules) && l.schedules.length > 0) {
-        l.schedules.forEach(s => {
+      const realSchedules = loanSchedulesMap[l.id] || (Array.isArray(l.schedules) ? l.schedules : []);
+      if (realSchedules.length > 0) {
+        realSchedules.forEach(s => {
+          const schedAmt = typeof s.scheduled_amount === 'number' ? s.scheduled_amount : parseFloat(String(s.scheduled_amount || 0));
+          const paidAmt = typeof s.paid_amount === 'number' ? s.paid_amount : parseFloat(String(s.paid_amount || 0));
+          const outstanding = Math.max(0, schedAmt - paidAmt);
           schedList.push({
             id: s.id,
             loan_id: l.id,
             loan_ref: l.loan_reference || l.loan_number || `LN-${l.id}`,
             installment_number: s.installment_number,
             due_date: s.due_date,
-            total_due: s.total_due ?? s.scheduled_amount ?? s.outstanding,
-            scheduled_amount: s.scheduled_amount,
-            outstanding: s.outstanding,
+            total_due: outstanding || schedAmt,
+            scheduled_amount: schedAmt,
+            outstanding,
           });
         });
       } else {
@@ -207,7 +228,7 @@ export const ActionCenterDrawer = ({
       }
     });
     return schedList;
-  }, [selectedCompanyId, loans]);
+  }, [selectedCompanyId, loans, loanSchedulesMap]);
 
   useEffect(() => {
     setActiveCase(caseItem as EnrichedCase | null);

@@ -90,14 +90,20 @@ export const runPreCheckEngine = async (payment, agentRunId = null) => {
 
   // ──── STEP 2: COMPANY LOOKUP & BANK ACCOUNT MATCH ────
   const companySearchStart = Date.now();
-  const searchResults = await executeTool('searchCompany', {
-    query: payment.sender_account || payment.sender_name || ''
-  });
+  let searchResults = [];
+  let matchMethod = 'bank account';
+  if (payment.sender_account) {
+    searchResults = await executeTool('searchCompany', { query: payment.sender_account });
+  }
+  if ((!searchResults || searchResults.length === 0) && payment.sender_name) {
+    searchResults = await executeTool('searchCompany', { query: payment.sender_name });
+    matchMethod = 'sender company name';
+  }
 
   if (searchResults && searchResults.length > 0) {
     matchedCompany = searchResults[0];
     score += AGENT_CONFIG.precheck.scoring.bankAccount; // +40 pts
-    reasons.push(`Found company match: '${matchedCompany.company_name}' (ID: ${matchedCompany.id}) via bank details (+${AGENT_CONFIG.precheck.scoring.bankAccount} pts).`);
+    reasons.push(`Found company match: '${matchedCompany.company_name}' (ID: ${matchedCompany.id}) via ${matchMethod} (+${AGENT_CONFIG.precheck.scoring.bankAccount} pts).`);
 
     if (agentRunId) {
       await logStep({

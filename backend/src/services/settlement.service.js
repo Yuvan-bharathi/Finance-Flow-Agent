@@ -437,7 +437,18 @@ export const overrideRecommendationService = async (caseId, overrideData, user, 
     throw error;
   }
 
-  const schedule = await findScheduleById(repayment_schedule_id);
+  let schedule = await findScheduleById(repayment_schedule_id);
+  if (!schedule) {
+    // Fallback: If repayment_schedule_id was passed as a loan_id, resolve the earliest candidate schedule
+    const [loanSchedules] = await pool.query(
+      `SELECT * FROM repayment_schedules WHERE loan_id = ? ORDER BY (CASE WHEN status != 'paid' THEN 0 ELSE 1 END), installment_number ASC LIMIT 1;`,
+      [repayment_schedule_id]
+    );
+    if (loanSchedules && loanSchedules.length > 0) {
+      schedule = loanSchedules[0];
+    }
+  }
+
   if (!schedule) {
     const error = new Error(`Target repayment schedule with ID ${repayment_schedule_id} not found.`);
     error.statusCode = 404;

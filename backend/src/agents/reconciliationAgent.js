@@ -26,11 +26,20 @@ const runFallbackRuleBasedMatching = async (payment, agentRunId = null) => {
   let confidence = 50.0;
   let reasoningLines = ['[Engine: Fallback Rule-Based Search]'];
 
-  const searchResults = await executeTool('searchCompany', { query: payment.sender_account || payment.sender_name || '' });
+  let searchResults = [];
+  let matchMethod = 'bank account';
+  if (payment.sender_account) {
+    searchResults = await executeTool('searchCompany', { query: payment.sender_account });
+  }
+  if ((!searchResults || searchResults.length === 0) && payment.sender_name) {
+    searchResults = await executeTool('searchCompany', { query: payment.sender_name });
+    matchMethod = 'sender company name';
+  }
+
   if (searchResults && searchResults.length > 0) {
     matchedCompany = searchResults[0];
     confidence += 25.0;
-    reasoningLines.push(`Found company match: '${matchedCompany.company_name}' (ID: ${matchedCompany.id}) via sender details.`);
+    reasoningLines.push(`Found company match: '${matchedCompany.company_name}' (ID: ${matchedCompany.id}) via ${matchMethod}.`);
 
     const activeLoans = await executeTool('getActiveLoans', { companyId: matchedCompany.id });
     if (activeLoans && activeLoans.length > 0) {
