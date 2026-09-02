@@ -673,7 +673,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
         <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
           <table className="responsive-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
+              <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '2px solid #cbd5e1' }}>
                 <th style={{ width: '40px', padding: '16px 20px', textAlign: 'center' }}>
                   <input
                     type="checkbox"
@@ -720,7 +720,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                       key={p.id}
                       onClick={() => matchedCase && setSelectedCase(matchedCase)}
                       style={{
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid #e2e8f0',
                         cursor: matchedCase ? 'pointer' : 'default',
                         background: isSelected ? '#f5f3ff' : 'transparent',
                         transition: 'background 0.15s ease',
@@ -755,8 +755,10 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                         </div>
                       </td>
 
-                      <td style={{ padding: '12px 16px', fontWeight: '800', color: '#0f172a' }}>
-                        ₹{parseFloat(String(p.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      <td style={{ padding: '12px 16px', fontWeight: '800', color: '#0f172a', fontSize: '0.9rem' }}>
+                        ₹{parseFloat(String(p.amount)).toLocaleString('en-IN', {
+                          maximumFractionDigits: parseFloat(String(p.amount)) % 1 === 0 ? 0 : 2
+                        })}
                       </td>
 
                       <td style={{ padding: '12px 16px', color: '#334155', fontWeight: '600', fontSize: '0.8rem' }}>

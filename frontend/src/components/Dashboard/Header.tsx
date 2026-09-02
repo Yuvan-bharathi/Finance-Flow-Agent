@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Calendar, ChevronDown, LogOut, Mail, Shield } from 'lucide-react';
+import { Search, Calendar, ChevronDown, LogOut, Mail, Shield, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useDateFilter } from '../../context/DateFilterContext';
 import type { DatePreset } from '../../types/common';
@@ -8,6 +8,7 @@ interface HeaderProps {
   activeTab?: string;
   searchQuery?: string;
   setSearchQuery?: (q: string) => void;
+  onToggleMobileMenu?: () => void;
 }
 
 export interface PageHeaderInfo {
@@ -83,7 +84,7 @@ const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
   { id: 'ytd',        label: 'Year-to-Date' },
 ];
 
-export const Header = ({ activeTab, searchQuery = '', setSearchQuery }: HeaderProps) => {
+export const Header = ({ activeTab, searchQuery = '', setSearchQuery, onToggleMobileMenu }: HeaderProps) => {
   const { user, logout } = useAuth();
   const { startDate, endDate, activePreset, formattedDisplay, setPreset, setCustomRange } = useDateFilter();
 
@@ -124,39 +125,55 @@ export const Header = ({ activeTab, searchQuery = '', setSearchQuery }: HeaderPr
       position: 'sticky', top: 0, zIndex: 30, boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
     }}>
       {/* Left Heading / Title */}
-      <div>
-        {pageHeader.isDashboard ? (
-          <>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
-              Welcome back, {userName}! 👋
-            </h1>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px', margin: 0 }}>
-              {pageHeader.subtitle}
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
-              {pageHeader.title}
-            </h1>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px', margin: 0 }}>
-              {pageHeader.subtitle}
-            </p>
-          </>
+      <div className="header-title-area" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {onToggleMobileMenu && (
+          <button
+            onClick={onToggleMobileMenu}
+            className="mobile-menu-btn"
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              padding: '8px',
+              cursor: 'pointer',
+              color: '#0f172a',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Open Menu"
+          >
+            <Menu size={20} />
+          </button>
         )}
+
+        <div>
+          {pageHeader.isDashboard ? (
+            <>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
+                Welcome back, {userName}! 👋
+              </h1>
+              <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px', margin: 0 }}>
+                {pageHeader.subtitle}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: '800', color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
+                {pageHeader.title}
+              </h1>
+              <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '2px', margin: 0 }}>
+                {pageHeader.subtitle}
+              </p>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Right Controls */}
       <div className="header-controls-wrap" style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
 
-        {/* LIVE Badge */}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '20px', padding: '5px 12px', fontSize: '0.72rem', fontWeight: '800', color: '#15803d' }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a', display: 'inline-block', boxShadow: '0 0 0 2px rgba(34,197,94,0.3)' }} />
-          <span>LIVE</span>
-        </div>
-
         {/* Search */}
-        <div style={{ position: 'relative' }}>
+        <div className="header-search-wrap" style={{ position: 'relative' }}>
           <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
@@ -164,7 +181,7 @@ export const Header = ({ activeTab, searchQuery = '', setSearchQuery }: HeaderPr
             placeholder="Search by sender, reference, or TXN ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery?.(e.target.value)}
-            style={{ width: '300px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#0f172a', padding: '10px 14px 10px 40px', borderRadius: '12px', fontSize: '0.85rem', outline: 'none', transition: 'border-color 0.2s ease' }}
+            style={{ width: '100%', maxWidth: '300px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#0f172a', padding: '10px 14px 10px 40px', borderRadius: '12px', fontSize: '0.85rem', outline: 'none', transition: 'border-color 0.2s ease' }}
           />
         </div>
 

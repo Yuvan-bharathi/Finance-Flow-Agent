@@ -174,7 +174,9 @@ export const ActionCenter = () => {
 
                       <td style={{ padding: '16px 20px' }}>
                         <div style={{ fontWeight: '700', color: '#34d399', fontSize: '0.95rem' }}>
-                          ₹{parseFloat(String(item.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          ₹{parseFloat(String(item.amount)).toLocaleString('en-IN', {
+                            maximumFractionDigits: parseFloat(String(item.amount)) % 1 === 0 ? 0 : 2
+                          })}
                         </div>
                         <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>{item.payment_date}</div>
                       </td>

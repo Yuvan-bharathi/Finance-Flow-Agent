@@ -902,6 +902,40 @@ const getQuickPrompts = (ctx?: ContextPayload, role?: string) => {
   return ['What should I focus on today?', 'Show overdue payments', 'Which borrowers are high risk?', 'Portfolio health summary'];
 };
 
+const renderInlineFormatted = (text: string): ReactNode => {
+  if (typeof text !== 'string') return text;
+
+  // Handle bold **text** and inline code `code`
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+      return (
+        <strong key={idx} style={{ fontWeight: '750', color: '#0f172a' }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+      return (
+        <code
+          key={idx}
+          style={{
+            background: '#f1f5f9',
+            color: '#475569',
+            padding: '1px 5px',
+            borderRadius: '4px',
+            fontSize: '0.78rem',
+            fontFamily: 'monospace',
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return part;
+  });
+};
+
 const formatMessage = (content = ''): ReactNode => {
   const cleanContent = content
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -915,25 +949,122 @@ const formatMessage = (content = ''): ReactNode => {
   lines.forEach((line, i) => {
     const trimmed = line.trim();
     if (!trimmed) {
-      rendered.push(<div key={i} style={{ height: '4px' }} />);
+      rendered.push(<div key={i} style={{ height: '6px' }} />);
       return;
     }
+
+    // 1. Horizontal divider
+    if (trimmed === '---' || trimmed === '***' || trimmed === '___') {
+      rendered.push(
+        <hr key={i} style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '8px 0' }} />
+      );
+      return;
+    }
+
+    // 2. Markdown Headings: #, ##, ###, ####, #####, ######
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      let headingText = headingMatch[2].trim();
+
+      // Clean any trailing hashes or asterisks
+      headingText = headingText.replace(/\s*#+$/, '').replace(/^\*+|\*+$/g, '');
+
+      const headingStyles: Record<number, CSSProperties> = {
+        1: { fontSize: '0.98rem', fontWeight: '800', color: '#0f172a', margin: '12px 0 6px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' },
+        2: { fontSize: '0.92rem', fontWeight: '800', color: '#1e293b', margin: '10px 0 5px' },
+        3: { fontSize: '0.88rem', fontWeight: '800', color: '#1e293b', margin: '8px 0 4px' },
+        4: { fontSize: '0.84rem', fontWeight: '750', color: '#334155', margin: '6px 0 3px' },
+        5: { fontSize: '0.80rem', fontWeight: '700', color: '#475569', margin: '5px 0 2px' },
+        6: { fontSize: '0.78rem', fontWeight: '700', color: '#64748b', margin: '4px 0 2px' },
+      };
+
+      rendered.push(
+        <div key={i} style={headingStyles[level] || headingStyles[3]}>
+          {renderInlineFormatted(headingText)}
+        </div>
+      );
+      return;
+    }
+
+    // 3. Blockquotes: "> ..."
+    if (trimmed.startsWith('>')) {
+      const quoteText = trimmed.replace(/^>\s*/, '');
+      rendered.push(
+        <div
+          key={i}
+          style={{
+            borderLeft: '3px solid #6366f1',
+            paddingLeft: '10px',
+            margin: '6px 0',
+            color: '#475569',
+            fontStyle: 'italic',
+            fontSize: '0.80rem',
+            background: '#f8fafc',
+            borderRadius: '0 6px 6px 0',
+            paddingTop: '3px',
+            paddingBottom: '3px',
+          }}
+        >
+          {renderInlineFormatted(quoteText)}
+        </div>
+      );
+      return;
+    }
+
+    // 4. Bullet list items: "* ", "- ", "• "
+    const bulletMatch = trimmed.match(/^([*\-•])\s+(.*)$/);
+    if (bulletMatch) {
+      let bulletContent = bulletMatch[2].trim();
+
+      // Clean any trailing isolated asterisk like in "* 💡 Action: ...*"
+      if (bulletContent.endsWith('*') && !bulletContent.endsWith('**')) {
+        bulletContent = bulletContent.slice(0, -1).trim();
+      }
+
+      const isActionCallout = bulletContent.includes('💡 Action:') || bulletContent.includes('Action:');
+
+      rendered.push(
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            margin: isActionCallout ? '5px 0 5px 6px' : '3px 0 3px 6px',
+            fontSize: '0.82rem',
+            lineHeight: 1.45,
+            ...(isActionCallout ? {
+              background: '#fefce8',
+              border: '1px solid #fef08a',
+              borderRadius: '8px',
+              padding: '6px 10px',
+            } : {}),
+          }}
+        >
+          {!isActionCallout && (
+            <span style={{ color: '#6366f1', fontSize: '0.85rem', lineHeight: '1.4', userSelect: 'none' }}>•</span>
+          )}
+          <span style={{ flex: 1 }}>{renderInlineFormatted(bulletContent)}</span>
+        </div>
+      );
+      return;
+    }
+
+    // 5. Standard lines
+    let regularText = line;
+    if (regularText.endsWith('*') && !regularText.endsWith('**')) {
+      regularText = regularText.slice(0, -1);
+    }
+
     rendered.push(
       <div key={i} style={{ margin: '2px 0', fontSize: '0.82rem', lineHeight: 1.45 }}>
-        {renderInlineBold(line)}
+        {renderInlineFormatted(regularText)}
       </div>
     );
   });
 
   return rendered;
-};
-
-const renderInlineBold = (text: string): ReactNode => {
-  if (typeof text !== 'string') return text;
-  const parts = text.split(/\*\*(.*?)\*\*/g);
-  return parts.map((part, idx) =>
-    idx % 2 === 1 ? <strong key={idx}>{part}</strong> : part
-  );
 };
 
 const headerBtnStyle: CSSProperties = {

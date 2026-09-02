@@ -87,7 +87,7 @@ export const KPISection = ({ kpis = {}, paymentSummary = {}, loading = false }: 
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', marginBottom: '24px' }}>
       {/* 6 Top Operational Metric Cards */}
       <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
         {cardsData.map((card, idx) => (
