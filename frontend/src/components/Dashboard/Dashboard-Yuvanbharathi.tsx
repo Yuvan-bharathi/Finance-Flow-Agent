@@ -21,15 +21,16 @@ import { ReportsAnalytics } from '../../pages/ReportsAnalytics';
 import { AgentControlCenter } from '../../pages/AgentControlCenter';
 import { Notifications } from '../../pages/Notifications';
 import { Settings } from '../../pages/Settings';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import {
-  fetchDashboardStatsThunk,
-  fetchCasesThunk,
-  setSelectedCase,
-} from '../../store/slices/reconciliationSlice';
+import { getCases, getStats } from '../../services/reconciliationService';
 import { connectSocket } from '../../services/socketService';
 import { AlertCircle } from 'lucide-react';
-import type { ReconciliationCase } from '../../types/reconciliation';
+import type { DashboardKPIs, StatusBreakdown, AIPerformanceStats, PipelineHealthItem, CaseOverTime, ReconciliationCase } from '../../types/reconciliation';
+
+interface PaymentSummary {
+  total_processed?: number;
+  total_reconciled?: number;
+  period?: string;
+}
 
 interface CopilotContext {
   page: string;
@@ -43,6 +44,16 @@ interface DashboardProps {
   setActiveTab?: (tab: string) => void;
 }
 
+interface DashboardStatsState {
+  kpis: Partial<DashboardKPIs>;
+  payment_summary: PaymentSummary;
+  status_breakdown: StatusBreakdown[];
+  ai_performance: Partial<AIPerformanceStats>;
+  pipeline_health: PipelineHealthItem[];
+  attention_required: ReconciliationCase[];
+  cases_over_time: CaseOverTime[];
+}
+
 /**
  * Master Enterprise Fintech Dashboard Component
  * AI Agentic Repayment Platform Operations Center
@@ -51,17 +62,20 @@ export const Dashboard = ({
   activeTab: externalActiveTab = 'reconciliations',
   setActiveTab: externalSetActiveTab,
 }: DashboardProps) => {
-  const dispatch = useAppDispatch();
-  const {
-    cases,
-    stats,
-    selectedCase,
-    loading,
-    error: reduxError,
-  } = useAppSelector((state) => state.reconciliation);
-
   const [internalActiveTab, setInternalActiveTab] = useState('reconciliations');
-  const [localError, setLocalError] = useState('');
+  const [cases, setCases] = useState<ReconciliationCase[]>([]);
+  const [stats, setStats] = useState<DashboardStatsState>({
+    kpis: {},
+    payment_summary: {},
+    status_breakdown: [],
+    ai_performance: {},
+    pipeline_health: [],
+    attention_required: [],
+    cases_over_time: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [selectedCase, setSelectedCase] = useState<ReconciliationCase | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [copilotContext, setCopilotContext] = useState<CopilotContext>({
@@ -76,14 +90,34 @@ export const Dashboard = ({
 
   const fetchDashboardData = async (silent = false) => {
     try {
-      if (!silent) setLocalError('');
-      await Promise.all([
-        dispatch(fetchCasesThunk()).unwrap(),
-        dispatch(fetchDashboardStatsThunk()).unwrap(),
+      if (!silent) setLoading(true);
+      setErrorMsg('');
+      const [casesData, statsData] = await Promise.all([
+        getCases(),
+        getStats(),
       ]);
+
+      const casesList = Array.isArray(casesData)
+        ? casesData
+        : (casesData as { data?: ReconciliationCase[] })?.data ?? [];
+      setCases(casesList);
+
+      const raw = ((statsData as { kpis?: DashboardKPIs })?.kpis ? statsData : (statsData as { data?: Record<string, unknown> })?.data) as Record<string, unknown> | undefined;
+
+      setStats({
+        kpis: (raw?.kpis as Partial<DashboardKPIs>) || {},
+        payment_summary: (raw?.payment_summary as PaymentSummary) || {},
+        status_breakdown: Array.isArray(raw?.status_breakdown) ? raw.status_breakdown as StatusBreakdown[] : [],
+        ai_performance: (raw?.ai_performance as Partial<AIPerformanceStats>) || {},
+        pipeline_health: Array.isArray(raw?.pipeline_health) ? raw.pipeline_health as PipelineHealthItem[] : [],
+        attention_required: Array.isArray(raw?.attention_required) ? raw.attention_required as ReconciliationCase[] : [],
+        cases_over_time: Array.isArray(raw?.cases_over_time) ? raw.cases_over_time as CaseOverTime[] : [],
+      });
     } catch (err) {
       console.error('Error loading dashboard data:', err);
-      if (!silent) setLocalError('Failed to sync real-time database state. Please check MySQL backend connection.');
+      if (!silent) setErrorMsg('Failed to sync real-time database state. Please check MySQL backend connection.');
+    } finally {
+      if (!silent) setLoading(false);
     }
   };
 
@@ -142,7 +176,7 @@ export const Dashboard = ({
 
       <ActionCenterDrawer
         caseItem={selectedCase}
-        onClose={() => dispatch(setSelectedCase(null))}
+        onClose={() => setSelectedCase(null)}
         onRefresh={() => void fetchDashboardData(true)}
         onAskAI={(recordType: string, recordId: number) => handleAskAI(recordType, recordId)}
       />
@@ -158,7 +192,7 @@ export const Dashboard = ({
         <Header activeTab={activeTab} />
 
         <main style={{ flex: 1, padding: '24px 32px 48px', overflowY: 'auto', minHeight: 0 }}>
-          {(localError || reduxError) && (
+          {errorMsg && (
             <div style={{
               background: '#fef2f2',
               border: '1px solid #fecaca',
@@ -173,7 +207,7 @@ export const Dashboard = ({
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <AlertCircle size={18} color="#dc2626" />
-                <span>{localError || reduxError}</span>
+                <span>{errorMsg}</span>
               </div>
               <button
                 onClick={() => void fetchDashboardData()}
@@ -212,7 +246,7 @@ export const Dashboard = ({
                 <PipelineHealthCard pipelineHealth={stats.pipeline_health} onNavigatePipeline={() => setActiveTab('agents')} />
                 <AttentionRequiredSection
                   cases={stats.attention_required}
-                  onSelectCase={(item) => dispatch(setSelectedCase(item as ReconciliationCase))}
+                  onSelectCase={(item) => setSelectedCase(item as ReconciliationCase)}
                   onViewAll={() => setActiveTab('payments')}
                 />
               </div>
@@ -220,7 +254,7 @@ export const Dashboard = ({
               <RecentCasesTable
                 cases={cases}
                 loading={loading}
-                onSelectCase={(item) => dispatch(setSelectedCase(item as ReconciliationCase))}
+                onSelectCase={(item) => setSelectedCase(item as ReconciliationCase)}
                 onRefresh={() => void fetchDashboardData(true)}
                 onAskAI={(recordType, recordId) => handleAskAI(recordType, recordId)}
                 onViewAll={() => setActiveTab('payments')}
