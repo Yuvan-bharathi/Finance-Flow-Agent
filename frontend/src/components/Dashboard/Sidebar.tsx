@@ -5,7 +5,8 @@ import {
   PanelLeftClose, PanelLeftOpen, Bot, LogOut
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getAlerts } from '../../services/notificationService';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { fetchAlertsThunk } from '../../store/slices/notificationSlice';
 
 interface NavItem {
   id: string;
@@ -46,27 +47,33 @@ export const Sidebar = ({
   collapsed = false,
   setCollapsed,
 }: SidebarProps) => {
+  const dispatch = useAppDispatch();
+  const reduxUnreadCount = useAppSelector((state) => state.notifications.unreadCount);
   const { user, logout } = useAuth();
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [logoHovered, setLogoHovered] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(8);
+  const [notificationCount, setNotificationCount] = useState(reduxUnreadCount || 8);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
-    getAlerts({ status: 'pending' })
-      .then(res => {
-        const alerts = res?.data?.data;
-        const count = Array.isArray(alerts) ? alerts.length : 0;
-        if (typeof count === 'number') {
-          if (count > notificationCount) {
-            setHasNewNotifications(true);
-            setTimeout(() => setHasNewNotifications(false), 2000);
-          }
-          setNotificationCount(count);
+    void dispatch(fetchAlertsThunk({ status: 'pending' }))
+      .unwrap()
+      .then((alerts) => {
+        if (Array.isArray(alerts) && alerts.length > 0) {
+          setNotificationCount(alerts.length);
         }
       })
       .catch(() => {});
-  }, [notificationCount]);
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (reduxUnreadCount !== undefined && reduxUnreadCount > 0) {
+      setNotificationCount(reduxUnreadCount);
+      setHasNewNotifications(true);
+      const timer = setTimeout(() => setHasNewNotifications(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [reduxUnreadCount]);
 
   const userName = (user?.name?.trim()) ? user.name : (user?.email ?? 'User');
   const userInitials = userName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
