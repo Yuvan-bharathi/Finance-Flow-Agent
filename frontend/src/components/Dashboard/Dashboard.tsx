@@ -11,6 +11,7 @@ import { RecentCasesTable } from './RecentCasesTable';
 import { ActionCenterDrawer } from '../ActionCenterDrawer';
 import { LiveToastNotifications } from '../LiveToastNotifications';
 import { AiCopilotPanel } from '../AiCopilotPanel';
+import { FloatingAiAssistantButton } from '../FloatingAiAssistantButton';
 import { PaymentIngestion } from '../../pages/PaymentIngestion';
 import { CompanyList } from '../../pages/CompanyList';
 import { LoanList } from '../../pages/LoanList';
@@ -157,17 +158,13 @@ export const Dashboard = ({
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f8fafc' }}>
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         pendingCount={stats?.kpis?.pending_review || 0}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
-        onOpenAiAssistant={() => {
-          setCopilotContext({ page: activeTab, recordType: null, recordId: null });
-          setShowAiModal(true);
-        }}
       />
 
       <AiCopilotPanel
@@ -189,10 +186,12 @@ export const Dashboard = ({
         display: 'flex',
         flexDirection: 'column',
         minWidth: 0,
+        height: '100vh',
+        overflow: 'hidden',
       }}>
         <Header activeTab={activeTab} />
 
-        <main style={{ flex: 1, padding: '24px 32px 48px', overflowY: 'auto' }}>
+        <main style={{ flex: 1, padding: '24px 32px 48px', overflowY: 'auto', minHeight: 0 }}>
           {errorMsg && (
             <div style={{
               background: '#fef2f2',
@@ -301,6 +300,12 @@ export const Dashboard = ({
       </div>
 
       <LiveToastNotifications onRealtimeUpdate={() => void fetchDashboardData(true)} />
+
+      {/* Floating AI Assistant FAB */}
+      <FloatingAiAssistantButton onClick={() => {
+        setCopilotContext({ page: activeTab, recordType: null, recordId: null });
+        setShowAiModal(true);
+      }} />
     </div>
   );
 };

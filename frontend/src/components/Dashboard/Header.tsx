@@ -33,11 +33,11 @@ export const PAGE_HEADER_CONFIG: Record<string, PageHeaderInfo> = {
   },
   agents: {
     title: 'AI Agent Control & Orchestrator',
-    subtitle: 'Monitor autonomous agent operations, real-time pipeline execution, and model performance metrics.',
+    subtitle: 'Monitor autonomous agent operations, pipeline execution & model performance metrics.',
   },
   notifications: {
     title: 'Notifications',
-    subtitle: 'Real-time alerts, escalation notices, and automated system activity logs.',
+    subtitle: 'Real-time alerts, escalation notices & automated system activity logs.',
   },
   reports: {
     title: 'Reports & Analytics',
