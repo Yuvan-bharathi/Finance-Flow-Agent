@@ -180,8 +180,10 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
     return payments.filter((p) => {
       const matchedCase = cases.find(c => c.payment_id === p.id);
       const rawStatus = (p.case_status || matchedCase?.status || p.status || 'new').toLowerCase();
-      const hasRecommendation = matchedCase?.has_recommendation || matchedCase?.recommendation_id;
-      const normStatus = hasRecommendation ? 'pending_review' : (rawStatus === 'pending' ? 'new' : rawStatus);
+      const hasRecommendation = Boolean(matchedCase?.has_recommendation || matchedCase?.recommendation_id);
+      const isResolved = rawStatus === 'resolved' || rawStatus === 'approved' || rawStatus === 'completed';
+      const isRejected = rawStatus === 'rejected';
+      const normStatus = isResolved ? 'resolved' : (isRejected ? 'rejected' : (hasRecommendation ? 'pending_review' : (rawStatus === 'pending' ? 'new' : rawStatus)));
 
       if (statusFilter === 'PENDING_REVIEW' && normStatus !== 'pending_review') return false;
       if (statusFilter === 'NEW' && normStatus !== 'new' && normStatus !== 'open') return false;
@@ -710,8 +712,10 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                   const matchedCase = cases.find(c => c.payment_id === p.id);
                   const caseId = p.case_id || matchedCase?.id;
                   const rawStatus = (p.case_status || matchedCase?.status || p.status || 'new').toLowerCase();
-                  const hasRecommendation = matchedCase?.has_recommendation || matchedCase?.recommendation_id;
-                  const normStatus = hasRecommendation ? 'pending_review' : (rawStatus === 'pending' ? 'new' : rawStatus);
+                  const hasRecommendation = Boolean(matchedCase?.has_recommendation || matchedCase?.recommendation_id);
+                  const isResolved = rawStatus === 'resolved' || rawStatus === 'approved' || rawStatus === 'completed';
+                  const isRejected = rawStatus === 'rejected';
+                  const normStatus = isResolved ? 'resolved' : (isRejected ? 'rejected' : (hasRecommendation ? 'pending_review' : (rawStatus === 'pending' ? 'new' : rawStatus)));
                   const isSelected = Boolean(caseId && selectedCaseIds.includes(caseId));
                   const isProcessingThis = processingCaseId === caseId;
 
