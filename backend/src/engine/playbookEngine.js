@@ -16,11 +16,11 @@ export const PLAYBOOKS = {
     requiresAgent6Escalation: true,
     description: 'Payment matches another ledger deposit based on exact UTR/reference, amount, or hash collision.',
     steps: [
-      { id: 1, label: 'Cross-verify matching payment UTR / TXN', desc: 'Identify and compare the duplicate candidate in payment ledger records.' },
-      { id: 2, label: 'Compare Case #, Payment #, and TXN ID', desc: 'Confirm multi-level traceability identifiers against original transaction.' },
-      { id: 3, label: 'Verify timestamps and payer accounts', desc: 'Check sender bank account number and bank gateway timestamp.' },
-      { id: 4, label: 'Recommend allocation hold', desc: 'Ensure fund allocation remains paused until verification is confirmed.' },
-      { id: 5, label: 'Prepare formal notice for Agent 6 escalation', desc: 'If confirmed duplicate, route to Agent 6 notification dispatcher for refund/notice.' }
+      { id: 1, label: 'Cross-verify matching payment UTR / TXN', desc: 'Identify and compare the duplicate candidate in payment ledger records.', isMandatory: true },
+      { id: 2, label: 'Compare Case #, Payment #, and TXN ID', desc: 'Confirm multi-level traceability identifiers against original transaction.', isMandatory: true },
+      { id: 3, label: 'Verify timestamps and payer accounts', desc: 'Check sender bank account number and bank gateway timestamp.', isMandatory: false },
+      { id: 4, label: 'Recommend allocation hold', desc: 'Ensure fund allocation remains paused until verification is confirmed.', isMandatory: false },
+      { id: 5, label: 'Prepare formal notice for Agent 6 escalation', desc: 'If confirmed duplicate, route to Agent 6 notification dispatcher for refund/notice.', isMandatory: false }
     ]
   },
 
@@ -35,11 +35,11 @@ export const PLAYBOOKS = {
     requiresAgent6Escalation: true,
     description: 'Sender account or company name is not registered in the borrower facility directory.',
     steps: [
-      { id: 1, label: 'Compare sender bank account with borrower master', desc: 'Search for virtual accounts or secondary business entities.' },
-      { id: 2, label: 'Check nearest registered borrower candidate', desc: 'Review fuzzy company candidate suggestions from Pre-Check Engine.' },
-      { id: 3, label: 'Verify payment narration syntax & UTR', desc: 'Inspect bank remarks for loan account number or invoice ID.' },
-      { id: 4, label: 'Hold ledger allocation pending account re-assignment', desc: 'Prevent automated unallocated crediting.' },
-      { id: 5, label: 'Dispatch request-for-info notice via Agent 6', desc: 'Request updated KYC / authorized account details from borrower if unresolved.' }
+      { id: 1, label: 'Compare sender bank account with borrower master', desc: 'Search for virtual accounts or secondary business entities.', isMandatory: true },
+      { id: 2, label: 'Check nearest registered borrower candidate', desc: 'Review fuzzy company candidate suggestions from Pre-Check Engine.', isMandatory: true },
+      { id: 3, label: 'Verify payment narration syntax & UTR', desc: 'Inspect bank remarks for loan account number or invoice ID.', isMandatory: false },
+      { id: 4, label: 'Hold ledger allocation pending account re-assignment', desc: 'Prevent automated unallocated crediting.', isMandatory: false },
+      { id: 5, label: 'Dispatch request-for-info notice via Agent 6', desc: 'Request updated KYC / authorized account details from borrower if unresolved.', isMandatory: false }
     ]
   },
 
@@ -54,11 +54,11 @@ export const PLAYBOOKS = {
     requiresAgent6Escalation: false,
     description: 'Deposit amount differs significantly from the expected schedule installment EMI.',
     steps: [
-      { id: 1, label: 'Compare received deposit vs expected schedule EMI', desc: 'Calculate variance (+/- surplus or shortfall amount).' },
-      { id: 2, label: 'Check outstanding loan balance & prepayment terms', desc: 'Determine if borrower is pre-closing future milestones.' },
-      { id: 3, label: 'Verify borrower intent & installment breakdown', desc: 'Ensure interest and principal caps match contract terms.' },
-      { id: 4, label: 'Determine pre-closure vs refund policy', desc: 'Confirm whether surplus should reduce principal or be held.' },
-      { id: 5, label: 'Authorize allocation override with credit approval', desc: 'Approve customized allocation only if policy permits.' }
+      { id: 1, label: 'Compare received deposit vs expected schedule EMI', desc: 'Calculate variance (+/- surplus or shortfall amount).', isMandatory: true },
+      { id: 2, label: 'Check outstanding loan balance & prepayment terms', desc: 'Determine if borrower is pre-closing future milestones.', isMandatory: true },
+      { id: 3, label: 'Verify borrower intent & installment breakdown', desc: 'Ensure interest and principal caps match contract terms.', isMandatory: false },
+      { id: 4, label: 'Determine pre-closure vs refund policy', desc: 'Confirm whether surplus should reduce principal or be held.', isMandatory: false },
+      { id: 5, label: 'Authorize allocation override with credit approval', desc: 'Approve customized allocation only if policy permits.', isMandatory: false }
     ]
   },
 
@@ -73,11 +73,11 @@ export const PLAYBOOKS = {
     requiresAgent6Escalation: true,
     description: 'Borrower facility exhibits critical risk score with overdue installments or SLA breaches.',
     steps: [
-      { id: 1, label: 'Review overdue installment timeline & delinquency', desc: 'Inspect missed payment dates and accumulated overdue charges.' },
-      { id: 2, label: 'Verify Agent 2 continuous credit score', desc: 'Check risk score degradation and default probability.' },
-      { id: 3, label: 'Review previous collection notices history', desc: 'Verify if Agent 3 soft reminders were dispatched and acknowledged.' },
-      { id: 4, label: 'Recommend facility hold for authorized review', desc: 'Flag credit facility for Senior Risk Officer review.' },
-      { id: 5, label: 'Prepare formal default notification for Agent 6', desc: 'Dispatch formal cure notice / legal escalation via Agent 6 dispatcher.' }
+      { id: 1, label: 'Review overdue installment timeline & delinquency', desc: 'Inspect missed payment dates and accumulated overdue charges.', isMandatory: true },
+      { id: 2, label: 'Verify Agent 2 continuous credit score', desc: 'Check risk score degradation and default probability.', isMandatory: true },
+      { id: 3, label: 'Review previous collection notices history', desc: 'Verify if Agent 3 soft reminders were dispatched and acknowledged.', isMandatory: false },
+      { id: 4, label: 'Recommend facility hold for authorized review', desc: 'Flag credit facility for Senior Risk Officer review.', isMandatory: false },
+      { id: 5, label: 'Prepare formal default notification for Agent 6', desc: 'Dispatch formal cure notice / legal escalation via Agent 6 dispatcher.', isMandatory: false }
     ]
   },
 
@@ -92,10 +92,10 @@ export const PLAYBOOKS = {
     requiresAgent6Escalation: false,
     description: 'Multi-milestone settlement requiring strict interest-first waterfall sequence validation.',
     steps: [
-      { id: 1, label: 'Review borrower active loans & schedules', desc: 'Confirm priority order of outstanding installments.' },
-      { id: 2, label: 'Validate interest vs principal allocation sequence', desc: 'Ensure statutory interest is satisfied before principal reduction.' },
-      { id: 3, label: 'Check for overdue penalty fees or late charges', desc: 'Verify any penalty deductions prior to principal credit.' },
-      { id: 4, label: 'Authorize continuous waterfall settlement', desc: 'Execute autonomous allocation across schedule milestones.' }
+      { id: 1, label: 'Review borrower active loans & schedules', desc: 'Confirm priority order of outstanding installments.', isMandatory: true },
+      { id: 2, label: 'Validate interest vs principal allocation sequence', desc: 'Ensure statutory interest is satisfied before principal reduction.', isMandatory: true },
+      { id: 3, label: 'Check for overdue penalty fees or late charges', desc: 'Verify any penalty deductions prior to principal credit.', isMandatory: false },
+      { id: 4, label: 'Authorize continuous waterfall settlement', desc: 'Execute autonomous allocation across schedule milestones.', isMandatory: false }
     ]
   },
 
@@ -110,9 +110,9 @@ export const PLAYBOOKS = {
     requiresAgent6Escalation: false,
     description: 'Standard single-schedule settlement review.',
     steps: [
-      { id: 1, label: 'Verify bank deposit evidence against candidate borrower', desc: 'Confirm payer account and transaction reference.' },
-      { id: 2, label: 'Check installment schedule allocation match', desc: 'Ensure exact EMI amount alignment.' },
-      { id: 3, label: 'Approve ledger match', desc: 'Commit ledger reconciliation and update status.' }
+      { id: 1, label: 'Verify bank deposit evidence against candidate borrower', desc: 'Confirm payer account and transaction reference.', isMandatory: true },
+      { id: 2, label: 'Check installment schedule allocation match', desc: 'Ensure exact EMI amount alignment.', isMandatory: true },
+      { id: 3, label: 'Approve ledger match', desc: 'Commit ledger reconciliation and update status.', isMandatory: false }
     ]
   }
 };
@@ -364,6 +364,7 @@ export const getCasePlaybookService = async (caseId, user = null) => {
       ...step,
       label: customLabel,
       desc: customDesc,
+      isMandatory: step.isMandatory !== false,
       isCompleted: !!completedMap[step.id],
       completedBy: completedMap[step.id]?.completedBy || null,
       completedAt: completedMap[step.id]?.completedAt || null,
@@ -411,7 +412,7 @@ export const updatePlaybookStepService = async (caseId, stepId, completed, compl
       ON DUPLICATE KEY UPDATE status = 'completed', completed_by = VALUES(completed_by), completed_at = CURRENT_TIMESTAMP, notes = VALUES(notes);
     `, [caseId, playbookId, stepId, completedBy, notes]);
 
-    // Update status to IN_PROGRESS if not already
+    // Keep status as IN_PROGRESS while completing steps
     await pool.query(`
       INSERT INTO case_playbook_status (case_id, playbook_id, status, started_at)
       VALUES (?, ?, 'IN_PROGRESS', CURRENT_TIMESTAMP)
@@ -422,6 +423,17 @@ export const updatePlaybookStepService = async (caseId, stepId, completed, compl
       DELETE FROM case_playbook_progress
       WHERE case_id = ? AND playbook_id = ? AND step_id = ?;
     `, [caseId, playbookId, stepId]);
+
+    const [remaining] = await pool.query(`
+      SELECT COUNT(*) AS cnt FROM case_playbook_progress WHERE case_id = ? AND playbook_id = ?;
+    `, [caseId, playbookId]);
+
+    const nextStatus = (remaining[0]?.cnt || 0) > 0 ? 'IN_PROGRESS' : 'NOT_STARTED';
+    await pool.query(`
+      UPDATE case_playbook_status 
+      SET status = ?, completed_at = NULL 
+      WHERE case_id = ? AND playbook_id = ?;
+    `, [nextStatus, caseId, playbookId]);
   }
 
   return await getCasePlaybookService(caseId);

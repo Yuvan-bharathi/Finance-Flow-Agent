@@ -97,6 +97,7 @@ interface PlaybookData {
     desc?: string;
     description?: string;
     isCompleted?: boolean;
+    isMandatory?: boolean;
     completedBy?: string;
     completedAt?: string;
   }>;
@@ -245,13 +246,12 @@ export const ActionCenterDrawer = ({
         }
         return s;
       });
-      const allDone = updatedSteps.every(s => s.isCompleted);
       const completedCount = updatedSteps.filter(s => s.isCompleted).length;
       return {
         ...prev,
         steps: updatedSteps,
         completedStepsCount: completedCount,
-        overallStatus: allDone ? 'COMPLETED' : (completedCount > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'),
+        overallStatus: completedCount === 0 ? 'NOT_STARTED' : 'IN_PROGRESS',
       };
     });
 
@@ -290,6 +290,7 @@ export const ActionCenterDrawer = ({
     if (!caseItem) return;
     try {
       setSubmitting(true);
+      setPlaybook(prev => prev ? { ...prev, overallStatus: 'COMPLETED' } : null);
       const updatedPb = await updatePlaybookStatus(caseItem.id, 'COMPLETED');
       if (updatedPb) setPlaybook(updatedPb as unknown as PlaybookData);
       setSuccessMsg('Operational Playbook review marked as COMPLETED.');
@@ -337,9 +338,11 @@ export const ActionCenterDrawer = ({
   const rec = (currentCase.latest_recommendation || (currentCase.recommendations && currentCase.recommendations[0])) as DrawerRecommendation | undefined;
   const confidenceScore = rec ? parseFloat(String(rec.confidence_score)) : null;
   const isAnalyzed = Boolean(rec || (normStatus !== 'new' && normStatus !== 'open'));
-  const allPlaybookStepsCompleted = playbook?.steps?.length
-    ? playbook.steps.every(s => s.isCompleted)
+  const mandatorySteps = playbook?.steps?.filter(s => s.isMandatory !== false) || [];
+  const mandatoryStepsCompleted = mandatorySteps.length > 0
+    ? mandatorySteps.every(s => s.isCompleted)
     : true;
+  const isPlaybookCompleted = playbook?.overallStatus === 'COMPLETED';
 
   const handleRunAnalysis = async () => {
     if (isViewer) {
@@ -714,8 +717,19 @@ export const ActionCenterDrawer = ({
                       {step.isCompleted ? <CheckSquare size={18} /> : <Square size={18} />}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: '700', color: step.isCompleted ? '#15803d' : '#1e293b' }}>
-                        {step.label || step.title || `Step #${step.id}`}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: '700', color: step.isCompleted ? '#15803d' : '#1e293b' }}>
+                          {step.label || step.title || `Step #${step.id}`}
+                        </div>
+                        {step.isMandatory !== false ? (
+                          <span style={{ fontSize: '0.62rem', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', padding: '1px 5px', borderRadius: '4px', fontWeight: '800' }}>
+                            REQUIRED
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '0.62rem', background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0', padding: '1px 5px', borderRadius: '4px', fontWeight: '600' }}>
+                            OPTIONAL
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
                         {step.desc || step.description}
@@ -729,19 +743,29 @@ export const ActionCenterDrawer = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <button
                   onClick={handleCompletePlaybookReview}
-                  disabled={isViewer || !allPlaybookStepsCompleted || submitting}
-                  title={!allPlaybookStepsCompleted ? 'Please complete all verification checkboxes above before completing review' : 'Complete Playbook Review'}
+                  disabled={isViewer || !mandatoryStepsCompleted || isPlaybookCompleted || submitting}
+                  title={
+                    isPlaybookCompleted
+                      ? 'Operational Playbook review is completed'
+                      : (!mandatoryStepsCompleted
+                          ? 'Please complete all required checkboxes before completing review'
+                          : 'Complete Playbook Review')
+                  }
                   style={{
                     flex: 1,
-                    background: (!allPlaybookStepsCompleted || isViewer) ? '#94a3b8' : '#4f46e5',
-                    color: '#ffffff',
-                    border: 'none',
+                    background: isPlaybookCompleted
+                      ? '#d1fae5'
+                      : (!mandatoryStepsCompleted || isViewer)
+                        ? '#94a3b8'
+                        : '#4f46e5',
+                    color: isPlaybookCompleted ? '#065f46' : '#ffffff',
+                    border: isPlaybookCompleted ? '1.5px solid #a7f3d0' : 'none',
                     borderRadius: '8px',
                     padding: '9px 14px',
                     fontSize: '0.78rem',
                     fontWeight: '800',
-                    cursor: (!allPlaybookStepsCompleted || isViewer || submitting) ? 'not-allowed' : 'pointer',
-                    opacity: (!allPlaybookStepsCompleted || isViewer) ? 0.6 : 1,
+                    cursor: (isPlaybookCompleted || !mandatoryStepsCompleted || isViewer || submitting) ? 'default' : 'pointer',
+                    opacity: (!mandatoryStepsCompleted && !isPlaybookCompleted) ? 0.6 : 1,
                     transition: 'all 0.2s ease',
                     display: 'flex',
                     alignItems: 'center',
@@ -749,11 +773,13 @@ export const ActionCenterDrawer = ({
                     gap: '6px',
                   }}
                 >
-                  <CheckCircle size={15} />
+                  <CheckCircle size={15} color={isPlaybookCompleted ? '#059669' : '#ffffff'} />
                   <span>
-                    {!allPlaybookStepsCompleted && playbook?.steps?.length
-                      ? `Complete All Steps (${playbook?.completedStepsCount || 0}/${playbook?.totalStepsCount || playbook?.steps?.length})`
-                      : 'Complete Review'}
+                    {isPlaybookCompleted
+                      ? '✓ Review Completed'
+                      : (!mandatoryStepsCompleted && mandatorySteps.length
+                          ? `Complete Required Steps (${mandatorySteps.filter(s => s.isCompleted).length}/${mandatorySteps.length})`
+                          : 'Complete Review')}
                   </span>
                 </button>
 
@@ -979,12 +1005,16 @@ export const ActionCenterDrawer = ({
                   {(normStatus !== 'approved' && normStatus !== 'resolved') && (
                     <button
                       onClick={handleApprove}
-                      disabled={submitting || (Boolean(playbook && isAnalyzed && !allPlaybookStepsCompleted))}
+                      disabled={submitting || (Boolean(playbook && isAnalyzed && !mandatoryStepsCompleted))}
                       className="interactive-btn"
-                      title={playbook && isAnalyzed && !allPlaybookStepsCompleted ? 'Please complete all operational playbook verification checkboxes above before approving settlement' : 'Approve Match & Execute Continuous Waterfall'}
+                      title={
+                        playbook && isAnalyzed && !mandatoryStepsCompleted
+                          ? 'Please complete all required operational playbook checkboxes above before approving settlement'
+                          : 'Approve Match & Execute Continuous Waterfall'
+                      }
                       style={{
                         flex: 2,
-                        background: (playbook && isAnalyzed && !allPlaybookStepsCompleted)
+                        background: (playbook && isAnalyzed && !mandatoryStepsCompleted)
                           ? '#94a3b8'
                           : (submitting ? '#059669' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'),
                         color: '#ffffff',
@@ -993,14 +1023,14 @@ export const ActionCenterDrawer = ({
                         borderRadius: '12px',
                         fontSize: '0.9rem',
                         fontWeight: '800',
-                        cursor: (submitting || (Boolean(playbook && isAnalyzed && !allPlaybookStepsCompleted))) ? 'not-allowed' : 'pointer',
-                        opacity: (playbook && isAnalyzed && !allPlaybookStepsCompleted) ? 0.6 : 1,
+                        cursor: (submitting || (Boolean(playbook && isAnalyzed && !mandatoryStepsCompleted))) ? 'not-allowed' : 'pointer',
+                        opacity: (playbook && isAnalyzed && !mandatoryStepsCompleted) ? 0.6 : 1,
                         transition: 'all 0.2s ease',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        boxShadow: (playbook && isAnalyzed && !allPlaybookStepsCompleted) ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.35)',
+                        boxShadow: (playbook && isAnalyzed && !mandatoryStepsCompleted) ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.35)',
                       }}
                     >
                       {submitting ? (
@@ -1012,8 +1042,8 @@ export const ActionCenterDrawer = ({
                         <>
                           <CheckCircle size={18} />
                           <span>
-                            {playbook && isAnalyzed && !allPlaybookStepsCompleted
-                              ? 'Complete Checklist to Approve'
+                            {playbook && isAnalyzed && !mandatoryStepsCompleted
+                              ? 'Complete Required Steps to Approve'
                               : 'Approve Match'}
                           </span>
                         </>
