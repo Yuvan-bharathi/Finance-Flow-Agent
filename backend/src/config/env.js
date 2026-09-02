@@ -58,6 +58,7 @@ export const config = {
     clientUrl: process.env.CLIENT_URL || 'http://localhost:5173'
   },
   agents: {
+    autoTriggerPipeline: process.env.AUTO_TRIGGER_PIPELINE !== 'false',
     precheckThreshold: parseInt(process.env.RECONCILIATION_PRECHECK_THRESHOLD || '85', 10),
     maxBulkCases: parseInt(process.env.MAX_BULK_CASES || '50', 10),
     maxSelectedCases: parseInt(process.env.MAX_SELECTED_CASES || '20', 10),

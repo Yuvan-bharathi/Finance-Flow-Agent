@@ -221,6 +221,16 @@ const _executePipelineSteps = async (pipelineId, workflow, stepRecords, initialC
       // Merge step outputs into runtimeContext for downstream steps
       Object.assign(runtimeContext, stepResult);
 
+      // Automatically forward matched company and loan from recommendation to downstream agents
+      if (stepResult?.recommendation?.recommended_company_id) {
+        runtimeContext.companyId = stepResult.recommendation.recommended_company_id;
+        runtimeContext.company_id = stepResult.recommendation.recommended_company_id;
+      }
+      if (stepResult?.recommendation?.recommended_loan_id) {
+        runtimeContext.loanId = stepResult.recommendation.recommended_loan_id;
+        runtimeContext.loan_id = stepResult.recommendation.recommended_loan_id;
+      }
+
       // Complete step record in database
       await completePipelineStep(step.id, {
         status: 'completed',
