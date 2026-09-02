@@ -57,6 +57,9 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
   const [selectedCase, setSelectedCase] = useState<EnrichedCase | null>(null);
   const [selectedAnomalyPayment, setSelectedAnomalyPayment] = useState<PaymentRecord | null>(null);
 
+  // Holds optimistic status overrides that survive a background refetch
+  const pendingStatusOverrides = React.useRef<Record<number, string>>({});
+
   // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -93,7 +96,16 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
       ]);
 
       setPayments((payData as PaymentRecord[]) || []);
-      setCases((casesData || []) as EnrichedCase[]);
+
+      // Apply any pending optimistic status overrides so resolved cases don't flip back
+      const overrides = pendingStatusOverrides.current;
+      const mergedCases = ((casesData || []) as EnrichedCase[]).map(c => {
+        if (overrides[c.id] !== undefined) {
+          return { ...c, status: overrides[c.id] as EnrichedCase['status'] };
+        }
+        return c;
+      });
+      setCases(mergedCases);
     } catch (err) {
       console.error(err);
     } finally {
@@ -999,8 +1011,16 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
           caseItem={selectedCase as ReconciliationCase}
           onClose={() => setSelectedCase(null)}
           onRefresh={(optimisticData?: { id?: number; status?: string }) => {
-            if (optimisticData && optimisticData.id) {
-              setCases(prev => prev.map(c => c.id === optimisticData.id ? { ...c, status: optimisticData.status as EnrichedCase['status'] } : c));
+            if (optimisticData && optimisticData.id && optimisticData.status) {
+              // 1. Store the optimistic override so refetches can't overwrite it
+              pendingStatusOverrides.current[optimisticData.id] = optimisticData.status;
+
+              // 2. Immediately apply to local cases state
+              setCases(prev => prev.map(c =>
+                c.id === optimisticData.id
+                  ? { ...c, status: optimisticData.status as EnrichedCase['status'] }
+                  : c
+              ));
               setPayments(prev => prev.map(p => {
                 const match = (p.case_id === optimisticData.id || (cases.find(c => c.id === optimisticData.id && c.payment_id === p.id)));
                 if (match) {
@@ -1009,7 +1029,20 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                 return p;
               }));
             }
-            void fetchPaymentsAndCases(false);
+
+            // 3. Invalidate SWR cache so the refetch goes to the server not stale cache
+            swrCache.invalidate('payments');
+            swrCache.invalidate('reconciliations');
+
+            void fetchPaymentsAndCases(false).then(() => {
+              // 4. After fresh data is loaded, clear pending overrides after 5s
+              // (by then the server's real resolved status will have propagated)
+              if (optimisticData?.id) {
+                setTimeout(() => {
+                  delete pendingStatusOverrides.current[optimisticData.id!];
+                }, 5000);
+              }
+            });
           }}
         />
       )}
