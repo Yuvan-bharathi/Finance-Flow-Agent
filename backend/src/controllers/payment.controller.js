@@ -27,9 +27,12 @@ const triggerAutomatedPipeline = (payment, reconciliationCase, userId) => {
     return;
   }
 
-  const caseId = reconciliationCase?.id;
-  const paymentId = payment?.id;
-  if (!caseId || !paymentId) return;
+  const caseId = reconciliationCase?.id || reconciliationCase?.case_id || payment?.case_id;
+  const paymentId = payment?.id || payment?.payment_id;
+  if (!caseId || !paymentId) {
+    logger.warn(`[Auto-Pipeline] Skipping trigger: caseId (${caseId}) or paymentId (${paymentId}) missing.`);
+    return;
+  }
 
   agentQueue.addJob({
     name: `AutoPipeline-Case#${caseId}-Payment#${paymentId}`,
@@ -66,6 +69,7 @@ export const ingestPayment = async (req, res, next) => {
   try {
     const userId = req.user ? req.user.id : null;
     const result = await ingestPaymentService(req.body, userId);
+    const caseRecord = result.case || result.reconciliation_case;
 
     // 1. Invalidate cache tags
     cacheService.invalidateByTag('payments');
@@ -75,12 +79,12 @@ export const ingestPayment = async (req, res, next) => {
     // 2. Broadcast near-real-time WebSocket events for zero-reload UI updates
     emitSocketEvent('PAYMENT_INGESTED', {
       payment: result.payment,
-      case: result.reconciliation_case,
+      case: caseRecord,
       timestamp: new Date().toISOString()
     });
 
     emitSocketEvent('RECONCILIATION_CASE_CREATED', {
-      case: result.reconciliation_case,
+      case: caseRecord,
       timestamp: new Date().toISOString()
     });
 
@@ -95,7 +99,7 @@ export const ingestPayment = async (req, res, next) => {
     }
 
     // 4. Automatically trigger the Payment Reconciliation & Risk Pipeline in background
-    triggerAutomatedPipeline(result.payment, result.reconciliation_case, userId);
+    triggerAutomatedPipeline(result.payment, caseRecord, userId);
 
     return sendSuccessResponse(res, 201, 'Payment ingested successfully and reconciliation case opened', result);
   } catch (error) {
@@ -132,6 +136,7 @@ export const ingestMockBankDeposit = async (req, res, next) => {
 
     const userId = req.user ? req.user.id : null;
     const result = await ingestPaymentService(payload, userId);
+    const caseRecord = result.case || result.reconciliation_case;
 
     // Invalidate cache & emit real-time event
     cacheService.invalidateByTag('payments');
@@ -140,12 +145,12 @@ export const ingestMockBankDeposit = async (req, res, next) => {
 
     emitSocketEvent('PAYMENT_INGESTED', {
       payment: result.payment,
-      case: result.reconciliation_case,
+      case: caseRecord,
       timestamp: new Date().toISOString()
     });
 
     // Automatically trigger the Payment Reconciliation & Risk Pipeline in background
-    triggerAutomatedPipeline(result.payment, result.reconciliation_case, userId);
+    triggerAutomatedPipeline(result.payment, caseRecord, userId);
 
     return sendSuccessResponse(
       res,
