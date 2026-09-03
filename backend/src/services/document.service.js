@@ -85,6 +85,55 @@ export const uploadDocumentService = async ({
 };
 
 /**
+ * Service: updateDocumentService
+ * Updates document metadata (file_name, company_id, document_type).
+ */
+export const updateDocumentService = async (documentId, { file_name, company_id, document_type }) => {
+  const updates = [];
+  const params = [];
+
+  if (file_name) {
+    updates.push('file_name = ?');
+    params.push(file_name);
+  }
+  if (company_id !== undefined) {
+    updates.push('company_id = ?');
+    params.push(company_id ? parseInt(company_id, 10) : null);
+  }
+  if (document_type) {
+    updates.push('document_type = ?');
+    params.push(document_type);
+  }
+
+  if (updates.length > 0) {
+    params.push(documentId);
+    await pool.query(`UPDATE documents SET ${updates.join(', ')} WHERE id = ?`, params);
+  }
+
+  const [updated] = await pool.query(`
+    SELECT d.*, c.company_name, u.name AS uploader_name
+    FROM documents d
+    LEFT JOIN companies c ON d.company_id = c.id
+    LEFT JOIN users u ON d.uploaded_by = u.id
+    WHERE d.id = ?
+  `, [documentId]);
+
+  return updated[0] || null;
+};
+
+/**
+ * Service: deleteDocumentService
+ * Removes a document record from the database.
+ */
+export const deleteDocumentService = async (documentId) => {
+  const [existing] = await pool.query(`SELECT * FROM documents WHERE id = ?`, [documentId]);
+  if (existing.length === 0) return null;
+
+  await pool.query(`DELETE FROM documents WHERE id = ?`, [documentId]);
+  return { id: documentId, file_name: existing[0].file_name };
+};
+
+/**
  * Service: extractDocumentTermsService
  * Calls Agent 4 to parse structured loan contract terms.
  */

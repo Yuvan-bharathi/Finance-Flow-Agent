@@ -88,6 +88,42 @@ export const uploadDocument = async (req, res, next) => {
   }
 };
 
+export const updateDocument = async (req, res, next) => {
+  try {
+    const documentId = parseInt(req.params.id, 10);
+    const { file_name, company_id, document_type } = req.body;
+
+    const updated = await updateDocumentService(documentId, {
+      file_name,
+      company_id,
+      document_type
+    });
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    return sendSuccessResponse(res, 200, 'Document metadata updated successfully', updated);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deleteDocument = async (req, res, next) => {
+  try {
+    const documentId = parseInt(req.params.id, 10);
+    const result = await deleteDocumentService(documentId);
+
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    return sendSuccessResponse(res, 200, `Document #${documentId} (${result.file_name}) deleted successfully`, result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const extractDocumentTerms = async (req, res, next) => {
   try {
     const documentId = parseInt(req.params.documentId, 10);

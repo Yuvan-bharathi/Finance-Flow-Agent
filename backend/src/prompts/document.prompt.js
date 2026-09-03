@@ -13,6 +13,7 @@ Requirements:
 
 JSON Schema:
 {
+  "borrower_company": "string (the exact borrowing company entity name found in the text/document)",
   "loan_reference": "string",
   "facility_type": "string",
   "facility_amount": number,

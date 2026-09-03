@@ -1,10 +1,11 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse');
+import mammoth from 'mammoth';
 
 /**
  * Utility: extractTextFromFileBuffer
- * Extracts plain text from an uploaded document buffer (PDF, TXT, HTML, Markdown).
+ * Extracts plain text from an uploaded document buffer (PDF, DOCX, DOC, TXT, HTML, Markdown).
  * 
  * @param {Buffer} buffer - File buffer
  * @param {string} mimeType - File mime type
@@ -17,7 +18,25 @@ export const extractTextFromFileBuffer = async (buffer, mimeType = 'application/
   const lowerName = fileName.toLowerCase();
   const lowerMime = (mimeType || '').toLowerCase();
 
-  // 1. PDF File extraction via pdf-parse
+  // 1. DOCX / Word File extraction via mammoth
+  if (
+    lowerName.endsWith('.docx') ||
+    lowerName.endsWith('.doc') ||
+    lowerMime.includes('word') ||
+    lowerMime.includes('officedocument')
+  ) {
+    try {
+      const result = await mammoth.extractRawText({ buffer });
+      const text = (result.value || '').trim();
+      if (text.length > 20) {
+        return text;
+      }
+    } catch (err) {
+      console.warn('[Mammoth DOCX Extractor Warning]:', err.message);
+    }
+  }
+
+  // 2. PDF File extraction via pdf-parse
   if (lowerMime.includes('pdf') || lowerName.endsWith('.pdf')) {
     try {
       const data = await pdfParse(buffer);

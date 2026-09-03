@@ -18,7 +18,10 @@ import {
   Printer,
   Search,
   ChevronDown,
-  Check
+  Check,
+  Edit2,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { exportElementToPdf } from '../utils/pdfGenerator';
@@ -34,6 +37,7 @@ export interface DocumentItem {
   document_type?: string;
   file_size?: number;
   uploader_name?: string;
+  extracted_text?: string;
 }
 
 interface ExtractedTerms {
@@ -77,6 +81,7 @@ interface ExtractedData {
   confidence_score?: number;
   extracted_terms?: ExtractedTerms;
   key_clauses?: string[];
+  extracted_text?: string;
 }
 
 interface GeneratedDocModal {
@@ -98,6 +103,16 @@ export const DocumentList = () => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [emailModalData, setEmailModalData] = useState<GeneratedDocModal | null>(null);
   const [emailSentToast, setEmailSentToast] = useState(false);
+  const [showRawTextPreview, setShowRawTextPreview] = useState(false);
+
+  // Registered Companies List
+  const [registeredCompanies, setRegisteredCompanies] = useState<Array<{ id: number; company_name: string }>>([
+    { id: 1, company_name: 'Sunrise Solar Energy' },
+    { id: 2, company_name: 'Apex Logistics Pvt Ltd' },
+    { id: 3, company_name: 'ABC Technologies Pvt Ltd' },
+    { id: 4, company_name: 'Metro Logistics Solutions' },
+    { id: 5, company_name: 'Zenith Freight Systems' }
+  ]);
 
   // Upload Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -106,10 +121,31 @@ export const DocumentList = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadForm, setUploadForm] = useState({
     file_name: '',
-    company_name: 'Sunrise Solar Energy',
+    company_name: 'auto',
     document_type: 'loan_agreement',
     file_size_kb: 420
   });
+
+  // Edit Document Modal State
+  const [editingDoc, setEditingDoc] = useState<DocumentItem | null>(null);
+  const [editForm, setEditForm] = useState({
+    file_name: '',
+    company_id: 1,
+    document_type: 'loan_agreement'
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Delete Document State
+  const [deletingDoc, setDeletingDoc] = useState<DocumentItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Toast Notification
+  const [crudToast, setCrudToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setCrudToast({ message, type });
+    setTimeout(() => setCrudToast(null), 4000);
+  };
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
@@ -171,12 +207,29 @@ export const DocumentList = () => {
       }
     };
 
+    const fetchCompanies = async () => {
+      try {
+        const res = await api.get('/companies');
+        const compData = res.data?.data || [];
+        if (Array.isArray(compData) && compData.length > 0) {
+          setRegisteredCompanies(compData.map((c: Record<string, unknown>) => ({
+            id: Number(c.id),
+            company_name: String(c.company_name)
+          })));
+        }
+      } catch (err) {
+        console.warn('Could not fetch companies:', err);
+      }
+    };
+
+    void fetchCompanies();
     void fetchCasesList();
   }, []);
 
   const handleInspectDocument = async (doc: DocumentItem) => {
     setSelectedDoc(doc);
     setExtractedData(null);
+    setShowRawTextPreview(false);
     if (isViewer) {
       window.dispatchEvent(new CustomEvent('ff-auth-permission-error', {
         detail: { status: 403, message: 'Your account role (Viewer) is read-only and cannot trigger Document Intelligence extraction.' },
@@ -200,6 +253,59 @@ export const DocumentList = () => {
     }
   };
 
+  const handleEditClick = (doc: DocumentItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingDoc(doc);
+    setEditForm({
+      file_name: doc.file_name,
+      company_id: doc.company_id || 1,
+      document_type: doc.document_type || 'loan_agreement'
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoc) return;
+
+    try {
+      setSavingEdit(true);
+      await api.put(`/documents/${editingDoc.id}`, editForm);
+      showToast(`Document #${editingDoc.id} metadata updated successfully!`, 'success');
+      setEditingDoc(null);
+      await fetchDocuments();
+    } catch (err) {
+      console.error('Edit failed:', err);
+      showToast('Failed to update document metadata. Please try again.', 'error');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteClick = (doc: DocumentItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingDoc(doc);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingDoc) return;
+
+    try {
+      setIsDeleting(true);
+      await api.delete(`/documents/${deletingDoc.id}`);
+      showToast(`Document "${deletingDoc.file_name}" deleted from vault.`, 'success');
+      if (selectedDoc?.id === deletingDoc.id) {
+        setSelectedDoc(null);
+      }
+      setDeletingDoc(null);
+      await fetchDocuments();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      showToast('Failed to delete document. Please try again.', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalFileName = selectedFile ? selectedFile.name : uploadForm.file_name;
@@ -211,7 +317,9 @@ export const DocumentList = () => {
       if (selectedFile) {
         const formData = new FormData();
         formData.append('file', selectedFile);
-        formData.append('company_name', uploadForm.company_name);
+        if (uploadForm.company_name && uploadForm.company_name !== 'auto') {
+          formData.append('company_name', uploadForm.company_name);
+        }
         formData.append('document_type', uploadForm.document_type);
 
         await api.post('/documents/upload', formData, {
@@ -220,21 +328,25 @@ export const DocumentList = () => {
           },
         });
       } else {
-        const payload = {
+        const payload: Record<string, unknown> = {
           file_name: finalFileName.endsWith('.pdf') || finalFileName.includes('.') ? finalFileName : `${finalFileName}.pdf`,
-          company_name: uploadForm.company_name,
           document_type: uploadForm.document_type,
           file_size: (uploadForm.file_size_kb || 350) * 1024
         };
+        if (uploadForm.company_name && uploadForm.company_name !== 'auto') {
+          payload.company_name = uploadForm.company_name;
+        }
         await api.post('/documents/upload', payload);
       }
 
+      showToast('Document uploaded and registered in vault!', 'success');
       await fetchDocuments();
       setShowUploadModal(false);
       setSelectedFile(null);
-      setUploadForm({ file_name: '', company_name: 'Sunrise Solar Energy', document_type: 'loan_agreement', file_size_kb: 420 });
+      setUploadForm({ file_name: '', company_name: 'auto', document_type: 'loan_agreement', file_size_kb: 420 });
     } catch (err) {
       console.error('Upload failed:', err);
+      showToast('Upload failed. Please check file format and try again.', 'error');
     } finally {
       setUploading(false);
     }
@@ -625,25 +737,64 @@ export const DocumentList = () => {
                     {d.uploader_name || 'System Admin'}
                   </td>
                   <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); void handleInspectDocument(d); }}
-                      style={{
-                        background: '#4f46e5',
-                        color: '#ffffff',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '8px',
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Sparkles size={14} />
-                      <span>Extract Terms</span>
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); void handleInspectDocument(d); }}
+                        style={{
+                          background: '#4f46e5',
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                        title="Run AI Document Intelligence"
+                      >
+                        <Sparkles size={14} />
+                        <span>Extract Terms</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => handleEditClick(d, e)}
+                        style={{
+                          background: '#f1f5f9',
+                          color: '#475569',
+                          border: '1px solid #cbd5e1',
+                          padding: '6px 8px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        title="Edit Document Metadata"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+
+                      <button
+                        onClick={(e) => handleDeleteClick(d, e)}
+                        style={{
+                          background: '#fef2f2',
+                          color: '#dc2626',
+                          border: '1px solid #fecaca',
+                          padding: '6px 8px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        title="Delete Document from Vault"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1344,6 +1495,55 @@ export const DocumentList = () => {
                         </div>
                       ))}
                     </div>
+
+                    {/* Section 6: Extracted Document Raw Text (OCR / Mammoth Inspection) */}
+                    {(selectedDoc.extracted_text || extractedData.extracted_text) && (
+                      <div style={{ marginTop: '16px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowRawTextPreview(!showRawTextPreview)}
+                          style={{
+                            background: '#f8fafc',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '10px',
+                            padding: '10px 14px',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            color: '#334155',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            width: '100%'
+                          }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FileText size={14} color="#4f46e5" />
+                            <span>Inspect Parsed Document Text (DOCX / PDF OCR)</span>
+                          </span>
+                          <span style={{ color: '#4f46e5' }}>{showRawTextPreview ? '▲ Collapse' : '▼ Expand'}</span>
+                        </button>
+
+                        {showRawTextPreview && (
+                          <pre style={{
+                            background: '#0f172a',
+                            color: '#e2e8f0',
+                            padding: '14px',
+                            borderRadius: '10px',
+                            fontSize: '0.725rem',
+                            maxHeight: '220px',
+                            overflowY: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            marginTop: '8px',
+                            fontFamily: 'monospace',
+                            lineHeight: '1.5'
+                          }}>
+                            {selectedDoc.extracted_text || extractedData.extracted_text}
+                          </pre>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               ) : null}
@@ -1384,7 +1584,7 @@ export const DocumentList = () => {
                 <div style={{ padding: '8px', borderRadius: '10px', background: '#e0e7ff', color: '#4f46e5' }}>
                   <Upload size={20} />
                 </div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Upload PDF Legal Agreement</h3>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Upload Legal Agreement (PDF / DOCX)</h3>
               </div>
               <button onClick={() => setShowUploadModal(false)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', width: '32px', height: '32px', cursor: 'pointer' }}>
                 <X size={16} />
@@ -1395,7 +1595,7 @@ export const DocumentList = () => {
               {/* Interactive Drag & Drop File Picker Box */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                  Select PDF / Legal Document File
+                  Select PDF / Word / Legal Document File
                 </label>
                 <div
                   onClick={() => fileInputRef.current?.click()}
@@ -1425,7 +1625,7 @@ export const DocumentList = () => {
                         handleFileSelect(e.target.files[0]);
                       }
                     }}
-                    accept=".pdf,.doc,.docx,.csv,.xlsx,.jpg,.jpeg,.png"
+                    accept=".pdf,.doc,.docx,.csv,.xlsx,.jpg,.jpeg,.png,.txt,.md"
                     style={{ display: 'none' }}
                   />
 
@@ -1438,7 +1638,7 @@ export const DocumentList = () => {
                         {selectedFile ? selectedFile.name : uploadForm.file_name}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#047857', fontWeight: '700' }}>
-                        Size: {uploadForm.file_size_kb} KB • Ready for Vault Registration
+                        Size: {uploadForm.file_size_kb} KB • Ready for Cloudinary &amp; OCR
                       </div>
                       <span style={{ fontSize: '0.725rem', color: '#4f46e5', fontWeight: '700', textDecoration: 'underline', marginTop: '2px' }}>
                         Click to change selected file
@@ -1453,7 +1653,7 @@ export const DocumentList = () => {
                         Click to Choose File or Drag &amp; Drop Here
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                        Supports PDF, DOCX, CSV, PNG, JPG (up to 25MB)
+                        Supports PDF, Word (.docx), CSV, TXT (up to 25MB)
                       </div>
                     </div>
                   )}
@@ -1466,7 +1666,7 @@ export const DocumentList = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Apex_Logistics_Sanction_Letter_2026.pdf"
+                  placeholder="e.g. Apex_Logistics_Facility_Agreement.docx"
                   value={uploadForm.file_name}
                   onChange={(e) => setUploadForm({ ...uploadForm, file_name: e.target.value })}
                   required
@@ -1480,6 +1680,35 @@ export const DocumentList = () => {
                     boxSizing: 'border-box'
                   }}
                 />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                  Borrower Organization
+                </label>
+                <select
+                  value={uploadForm.company_name}
+                  onChange={(e) => setUploadForm({ ...uploadForm, company_name: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    background: '#ffffff',
+                    boxSizing: 'border-box',
+                    fontWeight: uploadForm.company_name === 'auto' ? '700' : '600',
+                    color: uploadForm.company_name === 'auto' ? '#4f46e5' : '#0f172a'
+                  }}
+                >
+                  <option value="auto">✨ Auto-Detect from Document Content (Recommended)</option>
+                  {registeredCompanies.map(c => (
+                    <option key={c.id} value={c.company_name}>
+                      🏢 {c.company_name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -1550,6 +1779,271 @@ export const DocumentList = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Edit Document Modal */}
+      {editingDoc && (
+        <div
+          onClick={() => setEditingDoc(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.45)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 110,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '500px',
+              maxWidth: '100%',
+              background: '#ffffff',
+              borderRadius: '20px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              overflow: 'hidden'
+            }}
+          >
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ padding: '8px', borderRadius: '10px', background: '#e0e7ff', color: '#4f46e5' }}>
+                  <Edit2 size={20} />
+                </div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Edit Document #{editingDoc.id}</h3>
+              </div>
+              <button onClick={() => setEditingDoc(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', width: '32px', height: '32px', cursor: 'pointer' }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => void handleEditSubmit(e)} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                  Document Title / File Name
+                </label>
+                <input
+                  type="text"
+                  value={editForm.file_name}
+                  onChange={(e) => setEditForm({ ...editForm, file_name: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                  Linked Borrower Company
+                </label>
+                <select
+                  value={editForm.company_id}
+                  onChange={(e) => setEditForm({ ...editForm, company_id: parseInt(e.target.value, 10) })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    background: '#ffffff',
+                    boxSizing: 'border-box',
+                    fontWeight: '600'
+                  }}
+                >
+                  {registeredCompanies.map(c => (
+                    <option key={c.id} value={c.id}>
+                      🏢 {c.company_name} (ID #{c.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                  Document Type
+                </label>
+                <select
+                  value={editForm.document_type}
+                  onChange={(e) => setEditForm({ ...editForm, document_type: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    background: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="loan_agreement">Loan Agreement / Facility Contract</option>
+                  <option value="bank_statement">Bank Statement / Advice Note</option>
+                  <option value="payment_proof">Payment Proof / UTR Receipt</option>
+                  <option value="invoice">Commercial Invoice</option>
+                  <option value="company_document">Company MOA / KYC Proof</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingDoc(null)}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '10px',
+                    border: '1px solid #cbd5e1',
+                    background: '#f8fafc',
+                    fontWeight: '700',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="btn-primary"
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '10px',
+                    fontWeight: '700',
+                    fontSize: '0.875rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {savingEdit ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  <span>{savingEdit ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Document Confirmation Modal */}
+      {deletingDoc && (
+        <div
+          onClick={() => setDeletingDoc(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 120,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '460px',
+              maxWidth: '100%',
+              background: '#ffffff',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+              overflow: 'hidden',
+              padding: '24px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ padding: '10px', borderRadius: '12px', background: '#fee2e2', color: '#dc2626' }}>
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Delete Document?</h3>
+                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '2px 0 0 0' }}>This action will remove the document from your vault.</p>
+              </div>
+            </div>
+
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 14px', marginBottom: '18px' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0f172a' }}>{deletingDoc.file_name}</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>ID #{deletingDoc.id} • {deletingDoc.company_name || 'Borrower Document'}</div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setDeletingDoc(null)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  fontWeight: '700',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleConfirmDelete()}
+                disabled={isDeleting}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  fontWeight: '700',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isDeleting ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                <span>{isDeleting ? 'Deleting...' : 'Confirm Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Action Toast */}
+      {crudToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '30px',
+          right: '30px',
+          background: crudToast.type === 'success' ? '#0f172a' : '#991b1b',
+          color: '#ffffff',
+          padding: '14px 20px',
+          borderRadius: '12px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          zIndex: 200,
+          fontWeight: '700',
+          fontSize: '0.85rem'
+        }}>
+          {crudToast.type === 'success' ? <CheckCircle2 size={18} color="#10b981" /> : <AlertTriangle size={18} color="#fca5a5" />}
+          <span>{crudToast.message}</span>
         </div>
       )}
 

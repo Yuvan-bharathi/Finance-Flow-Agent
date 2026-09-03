@@ -105,20 +105,42 @@ export const runDocumentIntelligenceAgent = async (documentId, triggeredBy = nul
       console.warn('[Document Agent Groq Fallback Triggered]:', err.message);
     }
 
-    // Query loan record if company has matching loan
+    // Auto-detect & match company from extracted contract text if available
+    let targetCompanyId = doc.company_id;
+    let borrowerCompany = parsed.borrower_company || doc.company_name;
+
+    if (parsed.borrower_company) {
+      const firstWord = parsed.borrower_company.trim().split(/\s+/)[0];
+      const [matchingCompanies] = await pool.query(`
+        SELECT * FROM companies 
+        WHERE company_name LIKE ? OR company_name LIKE ? OR ? LIKE CONCAT('%', company_name, '%')
+        LIMIT 1;
+      `, [`%${firstWord}%`, `%${parsed.borrower_company}%`, parsed.borrower_company]);
+
+      if (matchingCompanies.length > 0) {
+        targetCompanyId = matchingCompanies[0].id;
+        borrowerCompany = matchingCompanies[0].company_name;
+        // Auto-update document record with true company_id if different
+        if (doc.company_id !== targetCompanyId) {
+          await pool.query(`UPDATE documents SET company_id = ? WHERE id = ?`, [targetCompanyId, doc.id]);
+        }
+      }
+    }
+
+    // Query loan record if target company has registered loan
     let dbLoan = null;
-    if (doc.company_id) {
+    if (targetCompanyId) {
       const [loanRows] = await pool.query(`
         SELECT * FROM loans WHERE company_id = ? ORDER BY id DESC LIMIT 1;
-      `, [doc.company_id]);
+      `, [targetCompanyId]);
       if (loanRows.length > 0) dbLoan = loanRows[0];
     }
 
     const facilityAmount = parsed.facility_amount || (dbLoan ? dbLoan.principal_amount : 1500000);
-    const interestRate = parsed.interest_rate_annual || (dbLoan ? `${dbLoan.interest_rate}%` : '12.5%');
-    const penaltyRate = parsed.default_penalty_rate || '2.0% / month';
+    const interestRate = parsed.interest_rate_annual || (dbLoan ? `${dbLoan.interest_rate}%` : '12.50%');
+    const penaltyRate = parsed.default_penalty_rate || '2.00% / month';
     const loanRef = parsed.loan_reference || (dbLoan ? dbLoan.loan_number : 'LN-APX-2026-01');
-    const facilityType = parsed.facility_type || 'Working Capital Term Loan';
+    const facilityType = parsed.facility_type || (dbLoan ? `${dbLoan.loan_type} Loan` : 'Working Capital Term Loan');
     const tenureMonths = parsed.tenure_months || 12;
     const monthlyEmi = parsed.monthly_emi_amount || Math.round((Number(facilityAmount) * (1 + (parseFloat(String(interestRate)) / 100))) / tenureMonths);
     const repaymentDueDay = parsed.repayment_due_day || '15th of each month';
@@ -129,8 +151,8 @@ export const runDocumentIntelligenceAgent = async (documentId, triggeredBy = nul
     const guarantor = parsed.personal_guarantor || 'Sunil Verma (Managing Director)';
     const prepayment = parsed.prepayment_terms || '0% penalty after 6 consecutive timely monthly installments';
     const governingLaw = parsed.governing_law || 'Laws of India (Gurugram / New Delhi Jurisdiction)';
-    const confidenceScore = parsed.confidence_score || 98.5;
-    const borrowerCompany = doc.company_name || parsed.borrower_company || 'Apex Logistics Pvt Ltd';
+    const confidenceScore = parsed.confidence_score || (doc.extracted_text ? 99.2 : 98.5);
+    borrowerCompany = borrowerCompany || 'Apex Logistics Pvt Ltd';
     
     const keyClauses = parsed.key_clauses && parsed.key_clauses.length > 0 ? parsed.key_clauses : [
       'Clause 4.1: Priority Waterfall sequence (Penalties -> Accrued Interest -> Principal Amortization)',
