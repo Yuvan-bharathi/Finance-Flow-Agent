@@ -152,10 +152,14 @@ export const getCasesService = async (status = null, priority = null) => {
   let query = `
     SELECT rc.*, 
            p.transaction_id, p.amount, p.payment_date, p.sender_name, p.sender_account, p.reference, p.status AS payment_status,
-           u.name AS assigned_accountant_name
+           u.name AS assigned_accountant_name,
+           c.id AS company_id, c.company_name,
+           l.id AS loan_id, l.loan_number, l.start_date AS loan_start_date
     FROM reconciliation_cases rc
     JOIN payments p ON rc.payment_id = p.id
     LEFT JOIN users u ON rc.assigned_to = u.id
+    LEFT JOIN companies c ON (p.sender_name LIKE CONCAT('%', c.company_name, '%') OR c.company_name LIKE CONCAT('%', p.sender_name, '%') OR p.sender_account = c.bank_account_number)
+    LEFT JOIN loans l ON c.id = l.company_id
   `;
   const params = [];
   const conditions = [];
@@ -180,6 +184,38 @@ export const getCasesService = async (status = null, priority = null) => {
 
   if (!cases || cases.length === 0) {
     return [];
+  }
+
+  // Batch fetch next upcoming installment due date per loan from database repayment_schedules
+  try {
+    const loanIds = [...new Set(cases.map(c => c.loan_id).filter(Boolean))];
+    if (loanIds.length > 0) {
+      const [schedules] = await pool.query(`
+        SELECT loan_id, due_date, installment_number, status
+        FROM repayment_schedules
+        WHERE loan_id IN (?) AND status != 'paid'
+        ORDER BY due_date ASC;
+      `, [loanIds]);
+
+      const scheduleMap = {};
+      for (const s of schedules) {
+        if (!scheduleMap[s.loan_id]) {
+          const sDate = new Date(s.due_date);
+          scheduleMap[s.loan_id] = sDate.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'Asia/Kolkata'
+          }).replace(/\s+/g, '-');
+        }
+      }
+
+      for (const item of cases) {
+        item.next_due_date = scheduleMap[item.loan_id] || null;
+      }
+    }
+  } catch (err) {
+    console.warn('[Reconciliation Service] Batch schedule mapping warn:', err.message);
   }
 
   // High-performance batch fetch of latest AI recommendations (1 single DB query instead of N+1 sequential loops)

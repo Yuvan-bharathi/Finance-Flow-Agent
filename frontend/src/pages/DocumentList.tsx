@@ -198,27 +198,15 @@ export const DocumentList = () => {
               ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
               : '02-Sept-2026';
 
-            // Contractual due day per company
-            const cName = String(c.company_name || c.sender_name || '').toLowerCase();
-            let dueDay = 10;
-            if (cName.includes('starlight')) dueDay = 10;
-            else if (cName.includes('apex')) dueDay = 15;
-            else if (cName.includes('quantum')) dueDay = 1;
-            else if (cName.includes('blueocean') || cName.includes('nexus')) dueDay = 15;
-            else if (cName.includes('cybernet')) dueDay = 10;
-            else if (cName.includes('kaveri')) dueDay = 7;
-            else if (cName.includes('rapid')) dueDay = 5;
-            else if (cName.includes('metro')) dueDay = 20;
-
-            const nextDateObj = new Date(dateObj);
-            if (dateObj.getDate() > dueDay) {
+            // Dynamic Next Due Date directly from database repayment schedule
+            let nextDueDateStr = String(c.next_due_date || '');
+            if (!nextDueDateStr) {
+              const nextDateObj = new Date(dateObj);
               nextDateObj.setMonth(nextDateObj.getMonth() + 1);
+              nextDueDateStr = !isNaN(nextDateObj.getTime())
+                ? nextDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
+                : '10-Sept-2026';
             }
-            nextDateObj.setDate(dueDay);
-
-            const nextDueDateStr = !isNaN(nextDateObj.getTime())
-              ? nextDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
-              : '10-Sept-2026';
 
             return {
               id: Number(c.id),
