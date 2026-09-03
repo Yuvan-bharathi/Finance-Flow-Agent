@@ -380,33 +380,76 @@ const AuditSnapshotViewer = ({ title, data, variant = 'after' }: AuditSnapshotVi
                           </span>
                         </div>
                         {renderFormattedValue(key, val)}
+
+                        {/* Summary Metric Cards directly under Allocations */}
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                          gap: '10px',
+                          marginTop: '12px',
+                        }}>
+                          <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '8px', padding: '8px 12px' }}>
+                            <span style={{ fontSize: '0.68rem', color: '#7e22ce', fontWeight: '800', textTransform: 'uppercase' }}>Allocations Count</span>
+                            <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#6b21a8', marginTop: '2px' }}>
+                              {String(parsed.allocations_count || val.length)}
+                            </div>
+                          </div>
+
+                          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '8px 12px' }}>
+                            <span style={{ fontSize: '0.68rem', color: '#15803d', fontWeight: '800', textTransform: 'uppercase' }}>Total Allocated</span>
+                            <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#15803d', marginTop: '2px' }}>
+                              ₹{Number(parsed.total_allocated_amount || 150000).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          </div>
+
+                          {parsed.unallocated_amount !== undefined && (
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px' }}>
+                              <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>Unallocated Balance</span>
+                              <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0f172a', marginTop: '2px' }}>
+                                ₹{Number(parsed.unallocated_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
                 }
+
+                const isTotalAllocated = key.toLowerCase().includes('total_allocated_amount');
+                const isTotalPayment = key.toLowerCase().includes('total_payment_amount');
+                const isUnallocated = key.toLowerCase().includes('unallocated_amount');
+                const isCount = key.toLowerCase().includes('allocations_count') || key.toLowerCase().includes('count');
+
+                let rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+                if (isTotalAllocated || isTotalPayment) rowBg = '#f0fdf4';
+                else if (isUnallocated) rowBg = '#fefce8';
+                else if (isCount) rowBg = '#faf5ff';
 
                 return (
                   <tr
                     key={key}
                     style={{
                       borderBottom: idx === Object.keys(parsed!).length - 1 ? 'none' : '1px solid #f1f5f9',
-                      background: idx % 2 === 0 ? '#ffffff' : '#f8fafc',
+                      background: rowBg,
                     }}
                   >
                     <td style={{
-                      padding: '9px 16px',
-                      color: '#475569',
-                      fontWeight: '700',
-                      width: '40%',
-                      verticalAlign: 'top',
+                      padding: '10px 16px',
+                      color: isTotalAllocated ? '#15803d' : isCount ? '#6b21a8' : '#475569',
+                      fontWeight: isTotalAllocated || isCount ? '800' : '700',
+                      width: '42%',
+                      verticalAlign: 'middle',
                     }}>
                       {humanizeKey(key)}
                     </td>
                     <td style={{
-                      padding: '9px 16px',
-                      color: '#0f172a',
-                      width: '60%',
-                      verticalAlign: 'top',
+                      padding: '10px 16px',
+                      color: isTotalAllocated ? '#15803d' : '#0f172a',
+                      fontWeight: isTotalAllocated || isTotalPayment ? '800' : '600',
+                      width: '58%',
+                      verticalAlign: 'middle',
+                      fontSize: isTotalAllocated || isTotalPayment ? '0.9rem' : '0.8rem',
                     }}>
                       {renderFormattedValue(key, val)}
                     </td>
@@ -812,7 +855,7 @@ export const AuditLogs = () => {
             inset: 0,
             background: 'rgba(15,23,42,0.4)',
             backdropFilter: 'blur(4px)',
-            zIndex: 50,
+            zIndex: 9999,
             display: 'flex',
             justifyContent: 'flex-end',
             cursor: 'pointer',
@@ -821,7 +864,7 @@ export const AuditLogs = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: '680px',
+              width: '740px',
               maxWidth: '100vw',
               background: '#ffffff',
               height: '100vh',
@@ -840,6 +883,10 @@ export const AuditLogs = () => {
               return (
                 <>
                   <style>{`
+                    .audit-drawer-scrollable {
+                      scrollbar-width: thin;
+                      scrollbar-color: #94a3b8 #f1f5f9;
+                    }
                     .audit-drawer-scrollable::-webkit-scrollbar {
                       width: 8px;
                     }
@@ -857,7 +904,7 @@ export const AuditLogs = () => {
                   `}</style>
 
                   {/* Header */}
-                  <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                  <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#0f172a' }}>Audit Entry #{selectedLog.id}</h2>
@@ -894,25 +941,25 @@ export const AuditLogs = () => {
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: '700', marginTop: '4px' }}>Action: {selectedLog.action}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: '700', marginTop: '3px' }}>Action: {selectedLog.action}</div>
                     </div>
                     <button onClick={() => setSelectedLog(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <X size={20} color="#64748b" />
                     </button>
                   </div>
 
-                  {/* Body with explicit scrollbar */}
+                  {/* Body with explicit scrollbar and generous bottom padding */}
                   <div
                     className="audit-drawer-scrollable"
                     style={{
-                      padding: '24px',
+                      padding: '20px 24px 100px 24px',
                       overflowY: 'auto',
                       overflowX: 'hidden',
                       flex: 1,
                       minHeight: 0,
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '18px',
+                      gap: '16px',
                     }}
                   >
                     {/* Highlighted Case, Company & Total Received Banner */}
@@ -923,12 +970,12 @@ export const AuditLogs = () => {
                       background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
                       border: '1.5px solid #cbd5e1',
                       borderRadius: '14px',
-                      padding: '16px',
+                      padding: '14px 16px',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                       flexShrink: 0,
                     }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                           Reconciliation Case
                         </span>
                         <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#4338ca', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -936,8 +983,8 @@ export const AuditLogs = () => {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                           Borrower Company
                         </span>
                         <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -945,8 +992,8 @@ export const AuditLogs = () => {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                           Total Received Amount
                         </span>
                         <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#059669' }}>
@@ -955,48 +1002,54 @@ export const AuditLogs = () => {
                       </div>
                     </div>
 
-                    {/* Technical Metadata Card */}
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '14px 16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.825rem', flexShrink: 0 }}>
+                    {/* Compact 2-Column Technical Metadata Grid */}
+                    <div style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '8px 16px',
+                      fontSize: '0.78rem',
+                      flexShrink: 0,
+                    }}>
+                      <div>
+                        <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '600', display: 'block' }}>Timestamp</span>
+                        <span style={{ color: '#0f172a', fontWeight: '700' }}>{formatAuditTimestamp(selectedLog.created_at)}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '600', display: 'block' }}>Correlation ID</span>
+                        <code style={{ background: '#eef2ff', color: '#4f46e5', padding: '1px 5px', borderRadius: '4px', fontWeight: '700', fontSize: '0.75rem' }}>
+                          {selectedLog.correlation_id || 'N/A'}
+                        </code>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '600', display: 'block' }}>Executed By</span>
+                        <span style={{ color: '#0f172a', fontWeight: '700' }}>
+                          {selectedLog.user_name || 'System Auto-Engine'}{' '}
+                          <span style={{ color: '#7c3aed', fontSize: '0.7rem', fontWeight: '800' }}>({formatRoleBadge(selectedLog.role_name)})</span>
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '600', display: 'block' }}>Target Entity</span>
+                        <span style={{ color: '#2563eb', fontWeight: '700' }}>{selectedLog.entity_type} #{selectedLog.entity_id}</span>
+                      </div>
                       {Boolean(info.transactionId) && (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                          <strong style={{ color: '#475569' }}>Transaction ID:</strong>
-                          <code style={{ background: '#eef2ff', color: '#2563eb', padding: '2px 8px', borderRadius: '4px', fontWeight: '700' }}>
+                        <div>
+                          <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '600', display: 'block' }}>Transaction ID</span>
+                          <code style={{ background: '#eef2ff', color: '#2563eb', padding: '1px 5px', borderRadius: '4px', fontWeight: '700', fontSize: '0.75rem' }}>
                             {info.transactionId}
                           </code>
                         </div>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                        <strong style={{ color: '#475569' }}>Timestamp:</strong>
-                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{formatAuditTimestamp(selectedLog.created_at)}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                        <strong style={{ color: '#475569' }}>Correlation ID:</strong>
-                        <code style={{ background: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>{selectedLog.correlation_id || 'N/A'}</code>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                        <strong style={{ color: '#475569' }}>Executed By:</strong>
-                        <span style={{ color: '#0f172a', fontWeight: '600' }}>
-                          {selectedLog.user_name || 'System Auto-Engine'} <span style={{ color: '#7c3aed', fontWeight: '700' }}>({formatRoleBadge(selectedLog.role_name)})</span>
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                        <strong style={{ color: '#475569' }}>Target Entity:</strong>
-                        <span style={{ color: '#2563eb', fontWeight: '600' }}>{selectedLog.entity_type} #{selectedLog.entity_id}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                        <strong style={{ color: '#475569' }}>IP Metadata:</strong>
-                        <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{selectedLog.ip_address || '127.0.0.1'}</code>
+                      <div>
+                        <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '600', display: 'block' }}>IP Address</span>
+                        <code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedLog.ip_address || '127.0.0.1'}</code>
                       </div>
                     </div>
 
-                    {selectedLog.old_values && (
-                      <AuditSnapshotViewer
-                        title="Before State (Old Values)"
-                        data={selectedLog.old_values}
-                        variant="before"
-                      />
-                    )}
-
+                    {/* After State (Audit Snapshot) */}
                     {selectedLog.new_values ? (
                       <AuditSnapshotViewer
                         title="After State (New Audit Snapshot)"
