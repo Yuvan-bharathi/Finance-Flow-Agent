@@ -82,7 +82,9 @@ app.use(cors({
     'X-Correlation-ID',
     'Correlation-ID',
     'Idempotency-Key',
-    'X-Idempotency-Key'
+    'X-Idempotency-Key',
+    'x-bypass-cache',
+    'X-Bypass-Cache'
   ],
   exposedHeaders: [
     'X-Correlation-ID',

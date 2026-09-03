@@ -356,8 +356,18 @@ export const ActionCenterDrawer = ({
   if (!caseItem) return null;
 
   const currentCase = activeCase || (caseItem as EnrichedCase);
-  const normStatus = (currentCase.status || '').toLowerCase();
   const rec = (currentCase.latest_recommendation || (currentCase.recommendations && currentCase.recommendations[0])) as DrawerRecommendation | undefined;
+
+  // Derive consolidated status across activeCase, caseItem prop, and recommendation status
+  const rawCaseStatus = (currentCase.status || caseItem.status || '').toLowerCase();
+  const isResolved =
+    rawCaseStatus === 'approved' ||
+    rawCaseStatus === 'resolved' ||
+    rawCaseStatus === 'completed' ||
+    rec?.status === 'approved';
+  const isRejected = rawCaseStatus === 'rejected' || rec?.status === 'rejected';
+  const normStatus = isResolved ? 'resolved' : (isRejected ? 'rejected' : rawCaseStatus);
+
   const confidenceScore = rec ? parseFloat(String(rec.confidence_score)) : null;
   const isAnalyzed = Boolean(rec || (normStatus !== 'new' && normStatus !== 'open'));
   const mandatorySteps = playbook?.steps?.filter(s => s.isMandatory !== false) || [];
@@ -551,7 +561,7 @@ export const ActionCenterDrawer = ({
               <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a' }}>
                 Case #{caseItem.id} Details
               </h2>
-              <StatusBadge status={caseItem.status} />
+              <StatusBadge status={normStatus} />
             </div>
             <div style={{ fontSize: '0.75rem', color: '#2563eb', fontFamily: 'monospace', marginTop: '4px' }}>
               TXN ID: {caseItem.transaction_id}

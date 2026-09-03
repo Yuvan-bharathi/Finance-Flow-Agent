@@ -89,8 +89,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
       const [payData, casesData] = await Promise.all([
         bypassCache
           ? api.get('/payments', {
-              params: { startDate, endDate },
-              headers: { 'x-bypass-cache': '1' }
+              params: { startDate, endDate, _nocache: Date.now() }
             }).then(res => (res.data?.data || []) as PaymentRecord[])
           : swrCache.fetchWithSwr(
               cacheKey,
@@ -98,8 +97,9 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
               { ttlMs: 30000, onBackgroundUpdate: (fresh) => setPayments((fresh as PaymentRecord[]) || []) }
             ),
         bypassCache
-          ? api.get('/reconciliations/cases', { headers: { 'x-bypass-cache': '1' } })
-              .then(res => (res.data?.data || []) as EnrichedCase[])
+          ? api.get('/reconciliations/cases', {
+              params: { _nocache: Date.now() }
+            }).then(res => (res.data?.data || []) as EnrichedCase[])
           : getCases(),
       ]);
 
