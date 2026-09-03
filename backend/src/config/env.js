@@ -52,7 +52,13 @@ export const config = {
   },
   storage: {
     uploadDir: process.env.UPLOAD_DIR || 'uploads',
-    provider: process.env.STORAGE_PROVIDER || 'local'
+    provider: process.env.STORAGE_PROVIDER || 'cloudinary',
+    cloudinary: {
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME || 's6nrfj9n',
+      apiKey: process.env.CLOUDINARY_API_KEY || '515879427875558',
+      apiSecret: process.env.CLOUDINARY_API_SECRET || '2u-xoR7c98MH7Qkur392yScc5gw',
+      url: process.env.CLOUDINARY_URL || 'cloudinary://515879427875558:2u-xoR7c98MH7Qkur392yScc5gw@s6nrfj9n'
+    }
   },
   cors: {
     clientUrl: process.env.CLIENT_URL || 'http://localhost:5173'

@@ -74,7 +74,7 @@ export const runDocumentIntelligenceAgent = async (documentId, triggeredBy = nul
 
     // Groq LLM Document Analysis
     try {
-      const userPrompt = buildDocumentExtractionPrompt(doc.file_name, doc.company_name);
+      const userPrompt = buildDocumentExtractionPrompt(doc.file_name, doc.company_name, doc.extracted_text || '');
 
       const completion = await groq.chat.completions.create({
         model: GROQ_MODEL,

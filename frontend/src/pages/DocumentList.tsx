@@ -26,6 +26,8 @@ import { exportElementToPdf } from '../utils/pdfGenerator';
 export interface DocumentItem {
   id: number | string;
   file_name: string;
+  file_url?: string;
+  storage_provider?: string;
   created_at: string;
   company_name?: string;
   company_id?: number;
@@ -205,13 +207,28 @@ export const DocumentList = () => {
 
     try {
       setUploading(true);
-      const payload = {
-        file_name: finalFileName.endsWith('.pdf') || finalFileName.includes('.') ? finalFileName : `${finalFileName}.pdf`,
-        document_type: uploadForm.document_type,
-        file_size: (uploadForm.file_size_kb || 350) * 1024
-      };
 
-      await api.post('/documents/upload', payload);
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('company_name', uploadForm.company_name);
+        formData.append('document_type', uploadForm.document_type);
+
+        await api.post('/documents/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      } else {
+        const payload = {
+          file_name: finalFileName.endsWith('.pdf') || finalFileName.includes('.') ? finalFileName : `${finalFileName}.pdf`,
+          company_name: uploadForm.company_name,
+          document_type: uploadForm.document_type,
+          file_size: (uploadForm.file_size_kb || 350) * 1024
+        };
+        await api.post('/documents/upload', payload);
+      }
+
       await fetchDocuments();
       setShowUploadModal(false);
       setSelectedFile(null);
@@ -1081,9 +1098,33 @@ export const DocumentList = () => {
                   </p>
                 </div>
               </div>
-              <button onClick={() => setSelectedDoc(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X size={20} color="#64748b" />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {selectedDoc.file_url && (selectedDoc.file_url.startsWith('http') || selectedDoc.storage_provider === 'cloudinary') && (
+                  <a
+                    href={selectedDoc.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      background: '#e0e7ff',
+                      color: '#4338ca',
+                      border: '1px solid #c7d2fe',
+                      borderRadius: '8px',
+                      padding: '6px 12px',
+                      fontSize: '0.75rem',
+                      fontWeight: '700',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    <span>Cloudinary Cloud PDF</span>
+                  </a>
+                )}
+                <button onClick={() => setSelectedDoc(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={20} color="#64748b" />
+                </button>
+              </div>
             </div>
 
             {/* Body */}
@@ -1157,7 +1198,10 @@ export const DocumentList = () => {
                       <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '12px', padding: '12px 16px' }}>
                         <div style={{ fontSize: '0.7rem', color: '#3730a3', fontWeight: '800', textTransform: 'uppercase' }}>Monthly EMI Repayment</div>
                         <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#4338ca', marginTop: '2px' }}>
-                          {String(extractedData.monthly_emi_amount || extractedData.extracted_terms?.monthly_emi || '₹1,40,625')} / mo
+                          {(() => {
+                            const emi = String(extractedData.monthly_emi_amount || extractedData.extracted_terms?.monthly_emi || '₹1,40,625');
+                            return emi.toLowerCase().includes('/ mo') || emi.toLowerCase().includes('/mo') ? emi : `${emi} / mo`;
+                          })()}
                         </div>
                       </div>
 

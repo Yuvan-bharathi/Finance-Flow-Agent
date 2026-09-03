@@ -26,27 +26,52 @@ export const uploadDocumentService = async ({
   document_type = 'loan_agreement',
   file_name,
   file_url = '/uploads/sample_agreement.pdf',
-  storage_provider = 'local',
+  storage_provider = 'cloudinary',
   mime_type = 'application/pdf',
   file_size = 350000,
-  uploaded_by = 1
+  uploaded_by = 1,
+  extracted_text = null
 }) => {
-  const [result] = await pool.query(`
-    INSERT INTO documents (
-      company_id, payment_id, document_type, file_name, file_url,
-      storage_provider, mime_type, file_size, uploaded_by, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-  `, [
-    company_id || null,
-    payment_id || null,
-    document_type,
-    file_name,
-    file_url,
-    storage_provider,
-    mime_type,
-    file_size,
-    uploaded_by
-  ]);
+  let docId = null;
+  try {
+    const [result] = await pool.query(`
+      INSERT INTO documents (
+        company_id, payment_id, document_type, file_name, file_url,
+        storage_provider, mime_type, file_size, uploaded_by, extracted_text, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      company_id || null,
+      payment_id || null,
+      document_type,
+      file_name,
+      file_url,
+      storage_provider,
+      mime_type,
+      file_size,
+      uploaded_by,
+      extracted_text || null
+    ]);
+    docId = result.insertId;
+  } catch {
+    // If extracted_text column is not yet present, insert without it
+    const [result] = await pool.query(`
+      INSERT INTO documents (
+        company_id, payment_id, document_type, file_name, file_url,
+        storage_provider, mime_type, file_size, uploaded_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      company_id || null,
+      payment_id || null,
+      document_type,
+      file_name,
+      file_url,
+      storage_provider,
+      mime_type,
+      file_size,
+      uploaded_by
+    ]);
+    docId = result.insertId;
+  }
 
   const [created] = await pool.query(`
     SELECT d.*, c.company_name, u.name AS uploader_name
@@ -54,7 +79,7 @@ export const uploadDocumentService = async ({
     LEFT JOIN companies c ON d.company_id = c.id
     LEFT JOIN users u ON d.uploaded_by = u.id
     WHERE d.id = ?
-  `, [result.insertId]);
+  `, [docId]);
 
   return created[0];
 };

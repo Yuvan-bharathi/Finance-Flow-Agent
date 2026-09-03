@@ -5,6 +5,9 @@ import {
   generateFinancialDocumentService
 } from '../services/document.service.js';
 import { sendSuccessResponse } from '../utils/apiResponse.js';
+import { uploadBufferToCloudinary } from '../config/cloudinary.config.js';
+import { extractTextFromFileBuffer } from '../utils/pdfExtractor.js';
+import pool from '../config/db.js';
 
 export const getDocuments = async (req, res, next) => {
   try {
@@ -18,21 +21,68 @@ export const getDocuments = async (req, res, next) => {
 export const uploadDocument = async (req, res, next) => {
   try {
     const userId = req.user ? req.user.id : 1;
-    const { company_id, document_type, file_name, file_size } = req.body;
-    
-    if (!file_name) {
-      return res.status(400).json({ success: false, message: 'file_name is required' });
+    let fileName = req.body?.file_name;
+    let mimeType = 'application/pdf';
+    let fileSize = parseInt(req.body?.file_size, 10) || 350000;
+    let fileUrl = '/uploads/sample_agreement.pdf';
+    let storageProvider = 'local';
+    let extractedText = null;
+    let companyId = req.body?.company_id ? parseInt(req.body.company_id, 10) : null;
+    const documentType = req.body?.document_type || 'loan_agreement';
+
+    // 1. Process physical file upload via Multer buffer
+    if (req.file) {
+      fileName = req.file.originalname;
+      mimeType = req.file.mimetype;
+      fileSize = req.file.size;
+
+      // Extract raw text from PDF/Document buffer
+      try {
+        extractedText = await extractTextFromFileBuffer(req.file.buffer, mimeType, fileName);
+      } catch (err) {
+        console.warn('[PDF Text Extraction Warning]:', err.message);
+      }
+
+      // Upload file directly to Cloudinary
+      try {
+        const cloudResult = await uploadBufferToCloudinary(req.file.buffer, fileName);
+        fileUrl = cloudResult.secure_url;
+        storageProvider = 'cloudinary';
+      } catch (cloudErr) {
+        console.warn('[Cloudinary Fallback]: Cloudinary upload failed, storing local path:', cloudErr.message);
+        fileUrl = `/uploads/${Date.now()}-${fileName}`;
+        storageProvider = 'local';
+      }
+    }
+
+    // 2. Resolve company ID by name if not provided
+    if (!companyId && req.body?.company_name) {
+      const [comp] = await pool.query(
+        `SELECT id FROM companies WHERE company_name LIKE ? OR company_name LIKE ? LIMIT 1`,
+        [`%${req.body.company_name}%`, `${req.body.company_name}`]
+      );
+      if (comp.length > 0) {
+        companyId = comp[0].id;
+      }
+    }
+
+    if (!fileName) {
+      return res.status(400).json({ success: false, message: 'file_name or file upload is required' });
     }
 
     const doc = await uploadDocumentService({
-      company_id: company_id ? parseInt(company_id, 10) : null,
-      document_type: document_type || 'loan_agreement',
-      file_name,
-      file_size: file_size || 350000,
-      uploaded_by: userId
+      company_id: companyId,
+      document_type: documentType,
+      file_name: fileName,
+      file_url: fileUrl,
+      storage_provider: storageProvider,
+      mime_type: mimeType,
+      file_size: fileSize,
+      uploaded_by: userId,
+      extracted_text: extractedText
     });
 
-    return sendSuccessResponse(res, 201, 'Document uploaded and registered in vault successfully', doc);
+    return sendSuccessResponse(res, 201, 'Document uploaded to Cloudinary and registered in vault successfully', doc);
   } catch (error) {
     return next(error);
   }

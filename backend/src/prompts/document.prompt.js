@@ -34,9 +34,14 @@ JSON Schema:
 }
 `;
 
-export const buildDocumentExtractionPrompt = (fileName, companyName) => {
-  return `Extract detailed structured loan terms and covenants from document '${fileName}' for borrower '${companyName}':
-Return JSON matching the schema:
+export const buildDocumentExtractionPrompt = (fileName, companyName, rawText = '') => {
+  let prompt = `Extract detailed structured loan terms and covenants from document '${fileName}' for borrower '${companyName}':\n`;
+  
+  if (rawText && rawText.trim().length > 20) {
+    prompt += `\n--- ACTUAL EXTRACTED DOCUMENT TEXT ---\n${rawText.slice(0, 4000)}\n--- END OF DOCUMENT TEXT ---\n\n`;
+  }
+
+  prompt += `Return JSON matching the schema:
 {
   "loan_reference": "LN-APX-2026-01",
   "facility_type": "Working Capital Term Loan",
@@ -62,5 +67,7 @@ Return JSON matching the schema:
   ],
   "confidence_score": 98.5
 }`;
+
+  return prompt;
 };
 
