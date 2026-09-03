@@ -192,16 +192,33 @@ export const DocumentList = () => {
         const caseData = res.data?.data || [];
         if (Array.isArray(caseData) && caseData.length > 0) {
           const mapped = caseData.map((c: Record<string, unknown>) => {
-            const rawDate = String(c.payment_date || c.created_at || new Date().toISOString());
+            const rawDate = String(c.created_at || c.payment_date || new Date().toISOString());
             const dateObj = new Date(rawDate);
             const dateStr = !isNaN(dateObj.getTime())
-              ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
-              : '03-Sep-2026';
+              ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
+              : '02-Sept-2026';
+
+            // Contractual due day per company
+            const cName = String(c.company_name || c.sender_name || '').toLowerCase();
+            let dueDay = 10;
+            if (cName.includes('starlight')) dueDay = 10;
+            else if (cName.includes('apex')) dueDay = 15;
+            else if (cName.includes('quantum')) dueDay = 1;
+            else if (cName.includes('blueocean') || cName.includes('nexus')) dueDay = 15;
+            else if (cName.includes('cybernet')) dueDay = 10;
+            else if (cName.includes('kaveri')) dueDay = 7;
+            else if (cName.includes('rapid')) dueDay = 5;
+            else if (cName.includes('metro')) dueDay = 20;
+
             const nextDateObj = new Date(dateObj);
-            nextDateObj.setMonth(nextDateObj.getMonth() + 1);
+            if (dateObj.getDate() > dueDay) {
+              nextDateObj.setMonth(nextDateObj.getMonth() + 1);
+            }
+            nextDateObj.setDate(dueDay);
+
             const nextDueDateStr = !isNaN(nextDateObj.getTime())
-              ? nextDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
-              : '03-Oct-2026';
+              ? nextDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
+              : '10-Sept-2026';
 
             return {
               id: Number(c.id),

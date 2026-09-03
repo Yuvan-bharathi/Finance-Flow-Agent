@@ -191,19 +191,51 @@ export const generateFinancialDocumentService = async (type, caseId = 1) => {
   const loanRef = c.loan_number || `LN-2026-${String(c.id || caseId || 1).padStart(3, '0')}`;
   const now = new Date().toISOString();
   
-  // Dynamic Transaction / Received Date
-  const rawDate = c.payment_date || c.created_at || new Date();
+  // Dynamic Transaction / Received Date in Indian Standard Time (IST)
+  const rawDate = c.created_at || c.payment_date || new Date();
   const dateObj = new Date(rawDate);
   const paymentDateStr = !isNaN(dateObj.getTime())
-    ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
-    : '03-Sep-2026';
+    ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
+    : '02-Sept-2026';
 
-  // Dynamic Next Due Date: 1 Month after transaction / payment date
-  const nextDueDateObj = new Date(dateObj);
-  nextDueDateObj.setMonth(nextDueDateObj.getMonth() + 1);
-  const nextDueDateStr = !isNaN(nextDueDateObj.getTime())
-    ? nextDueDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
-    : '03-Oct-2026';
+  // Dynamic Contractual Next Due Date queried from company's actual repayment schedule
+  let nextDueDateStr = '';
+  if (c.loan_id) {
+    try {
+      const [schedules] = await pool.query(`
+        SELECT rs.due_date, rs.installment_number
+        FROM repayment_schedules rs
+        WHERE rs.loan_id = ? AND rs.status != 'paid' AND rs.due_date >= ?
+        ORDER BY rs.due_date ASC
+        LIMIT 1
+      `, [c.loan_id, dateObj.toISOString().slice(0, 10)]);
+
+      if (schedules && schedules.length > 0) {
+        const sDateObj = new Date(schedules[0].due_date);
+        nextDueDateStr = sDateObj.toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          timeZone: 'Asia/Kolkata'
+        }).replace(/\s+/g, '-');
+      }
+    } catch (err) {
+      console.warn('[nextDueDate schedule query warn]:', err.message);
+    }
+  }
+
+  if (!nextDueDateStr) {
+    const dueDay = c.start_date ? new Date(c.start_date).getDate() : 10;
+    const nextDate = new Date(dateObj);
+    nextDate.setMonth(nextDate.getMonth() + 1);
+    nextDate.setDate(dueDay);
+    nextDueDateStr = nextDate.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    }).replace(/\s+/g, '-');
+  }
 
   const borrowerInfo = {
     company_name: companyName,
