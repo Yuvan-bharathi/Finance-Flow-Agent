@@ -146,60 +146,72 @@ export const extractDocumentTermsService = async (documentId, userId = null) => 
  * Generates one of the 5 standardized financial/reconciliation documents for a case.
  */
 export const generateFinancialDocumentService = async (type, caseId = 1) => {
-  let [caseRows] = await pool.query(`
-    SELECT rc.*, p.transaction_id, p.amount AS payment_amount, p.payment_date, p.sender_name, p.sender_account,
-           ar.confidence_score, ar.recommended_loan_id,
-           l.loan_reference, l.principal_amount, l.interest_rate,
-           c.company_name, c.pan_number, c.cin_number, c.gstin_number, c.registered_address, c.contact_name, c.contact_email
-    FROM reconciliation_cases rc
-    JOIN payments p ON rc.payment_id = p.id
-    LEFT JOIN ai_recommendations ar ON rc.id = ar.case_id
-    LEFT JOIN loans l ON ar.recommended_loan_id = l.id
-    LEFT JOIN companies c ON l.company_id = c.id
-    WHERE rc.id = ?
-    LIMIT 1
-  `, [caseId]);
-
-  if (caseRows.length === 0) {
-    const [fallbackRows] = await pool.query(`
-      SELECT rc.*, p.transaction_id, p.amount AS payment_amount, p.payment_date, p.sender_name, p.sender_account,
-             c.company_name, c.pan_number, c.cin_number, c.gstin_number, c.registered_address, c.contact_name, c.contact_email,
-             l.loan_reference, l.principal_amount, l.interest_rate
+  let caseRows = [];
+  try {
+    const [rows] = await pool.query(`
+      SELECT rc.id, rc.status, rc.created_at,
+             p.id AS payment_id, p.transaction_id, p.amount AS payment_amount, p.payment_date, p.sender_name, p.sender_account,
+             c.id AS company_id, c.company_name, c.tax_identifier, c.registration_number, c.address, c.contact_name, c.contact_email, c.bank_account_number,
+             l.id AS loan_id, l.loan_number, l.principal_amount, l.interest_rate, l.total_payable
       FROM reconciliation_cases rc
       JOIN payments p ON rc.payment_id = p.id
-      LEFT JOIN loans l ON rc.loan_id = l.id
-      LEFT JOIN companies c ON l.company_id = c.id
+      LEFT JOIN companies c ON (p.sender_name LIKE CONCAT('%', c.company_name, '%') OR c.company_name LIKE CONCAT('%', p.sender_name, '%') OR p.sender_account = c.bank_account_number)
+      LEFT JOIN loans l ON c.id = l.company_id
       WHERE rc.id = ?
       LIMIT 1
     `, [caseId]);
-    caseRows = fallbackRows;
+    caseRows = rows;
+  } catch (err) {
+    console.warn('[generateFinancialDocumentService query warn]:', err.message);
   }
 
-  if (caseRows.length === 0) {
-    const [latestRows] = await pool.query(`
-      SELECT rc.*, p.transaction_id, p.amount AS payment_amount, p.payment_date, p.sender_name, p.sender_account
-      FROM reconciliation_cases rc
-      JOIN payments p ON rc.payment_id = p.id
-      ORDER BY rc.id DESC
-      LIMIT 1
-    `);
-    caseRows = latestRows;
+  if (!caseRows || caseRows.length === 0) {
+    try {
+      const [latestRows] = await pool.query(`
+        SELECT rc.id, rc.status, rc.created_at,
+               p.id AS payment_id, p.transaction_id, p.amount AS payment_amount, p.payment_date, p.sender_name, p.sender_account,
+               c.id AS company_id, c.company_name, c.tax_identifier, c.registration_number, c.address, c.contact_name, c.contact_email, c.bank_account_number,
+               l.id AS loan_id, l.loan_number, l.principal_amount, l.interest_rate, l.total_payable
+        FROM reconciliation_cases rc
+        JOIN payments p ON rc.payment_id = p.id
+        LEFT JOIN companies c ON (p.sender_name LIKE CONCAT('%', c.company_name, '%') OR c.company_name LIKE CONCAT('%', p.sender_name, '%') OR p.sender_account = c.bank_account_number)
+        LEFT JOIN loans l ON c.id = l.company_id
+        ORDER BY rc.id DESC
+        LIMIT 1
+      `);
+      caseRows = latestRows;
+    } catch (e) {
+      console.warn('[generateFinancialDocumentService fallback warn]:', e.message);
+    }
   }
 
-  const c = caseRows[0] || {};
-  const paymentAmount = Number(c.payment_amount || 100000);
-  const companyName = c.company_name || c.sender_name || 'Borrower Representative';
-  const loanRef = c.loan_reference || `LN-2026-${String(c.id || 1).padStart(3, '0')}`;
+  const c = (caseRows && caseRows[0]) ? caseRows[0] : {};
+  const paymentAmount = Number(c.payment_amount || 133800);
+  const companyName = c.company_name || c.sender_name || 'Starlight Tech Solutions';
+  const loanRef = c.loan_number || `LN-2026-${String(c.id || caseId || 1).padStart(3, '0')}`;
   const now = new Date().toISOString();
-  const paymentDateStr = c.payment_date ? new Date(c.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '28-Aug-2026';
+  
+  // Dynamic Transaction / Received Date
+  const rawDate = c.payment_date || c.created_at || new Date();
+  const dateObj = new Date(rawDate);
+  const paymentDateStr = !isNaN(dateObj.getTime())
+    ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
+    : '03-Sep-2026';
+
+  // Dynamic Next Due Date: 1 Month after transaction / payment date
+  const nextDueDateObj = new Date(dateObj);
+  nextDueDateObj.setMonth(nextDueDateObj.getMonth() + 1);
+  const nextDueDateStr = !isNaN(nextDueDateObj.getTime())
+    ? nextDueDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
+    : '03-Oct-2026';
 
   const borrowerInfo = {
     company_name: companyName,
-    cin: c.cin_number || 'U60200TN2018PTC123456',
-    pan: c.pan_number || 'AABCA1234F',
+    cin: c.cin_number || c.registration_number || 'U60200TN2018PTC123456',
+    pan: c.pan_number || c.tax_identifier || 'AABCA1234F',
     gstin: c.gstin_number || '33AABCA1234F1Z8',
-    registered_address: c.registered_address || 'Plot No. 44, Industrial Estate, Chennai, TN - 600032',
-    authorized_contact: c.contact_name || 'Chief Financial Officer',
+    registered_address: c.registered_address || c.address || 'Plot No. 44, Guindy Industrial Estate, Chennai, TN - 600032',
+    authorized_contact: c.contact_name || 'Rajesh Kumar (Chief Financial Officer)',
     email: c.contact_email || 'finance@company.com',
     debited_bank_account: c.sender_account ? `Bank A/c ************${String(c.sender_account).slice(-4)}` : 'HDFC Bank A/c ************4781'
   };
@@ -208,11 +220,12 @@ export const generateFinancialDocumentService = async (type, caseId = 1) => {
     loan_account: loanRef,
     facility_type: 'Commercial Term Credit Facility',
     sanctioned_amount: Number(c.principal_amount || 2500000),
-    opening_principal: Number(c.principal_amount || 2500000),
+    opening_principal: Number(c.principal_amount || 1250000),
     principal_deducted: Math.round(paymentAmount * 0.8),
-    closing_principal: Math.max(0, Number(c.principal_amount || 2500000) - Math.round(paymentAmount * 0.8)),
+    closing_principal: Math.max(0, Number(c.principal_amount || 1250000) - Math.round(paymentAmount * 0.8)),
     interest_rate: c.interest_rate ? `${c.interest_rate}% p.a.` : '12.50% p.a.',
-    installment_milestone: `EMI Installment #${Math.min(12, Math.max(1, c.id || 1))} of 36`
+    installment_milestone: `EMI Installment #${Math.min(12, Math.max(1, Number(c.id || caseId || 1)))} of 36`,
+    next_due_date: nextDueDateStr
   };
 
   const lenderInfo = {

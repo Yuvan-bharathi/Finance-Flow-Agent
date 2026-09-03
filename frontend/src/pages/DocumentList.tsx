@@ -162,7 +162,7 @@ export const DocumentList = () => {
 
   // Case selection for document generator
   const [selectedCaseId, setSelectedCaseId] = useState<number>(1);
-  const [availableCases, setAvailableCases] = useState<Array<{ id: number; company_name: string; amount: number; txn_id: string }>>([]);
+  const [availableCases, setAvailableCases] = useState<Array<{ id: number; company_name: string; amount: number; txn_id: string; payment_date?: string; next_due_date?: string }>>([]);
 
   const fetchDocuments = async () => {
     try {
@@ -191,12 +191,27 @@ export const DocumentList = () => {
         const res = await api.get('/reconciliations/cases');
         const caseData = res.data?.data || [];
         if (Array.isArray(caseData) && caseData.length > 0) {
-          const mapped = caseData.map((c: Record<string, unknown>) => ({
-            id: Number(c.id),
-            company_name: String(c.company_name || c.sender_name || `Case #${c.id}`),
-            amount: Number(c.payment_amount || c.amount || 0),
-            txn_id: String(c.transaction_id || `TXN-${c.id}`)
-          }));
+          const mapped = caseData.map((c: Record<string, unknown>) => {
+            const rawDate = String(c.payment_date || c.created_at || new Date().toISOString());
+            const dateObj = new Date(rawDate);
+            const dateStr = !isNaN(dateObj.getTime())
+              ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
+              : '03-Sep-2026';
+            const nextDateObj = new Date(dateObj);
+            nextDateObj.setMonth(nextDateObj.getMonth() + 1);
+            const nextDueDateStr = !isNaN(nextDateObj.getTime())
+              ? nextDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/\s+/g, '-')
+              : '03-Oct-2026';
+
+            return {
+              id: Number(c.id),
+              company_name: String(c.company_name || c.sender_name || `Case #${c.id}`),
+              amount: Number(c.payment_amount || c.amount || 0),
+              txn_id: String(c.transaction_id || `TXN-${c.id}`),
+              payment_date: dateStr,
+              next_due_date: nextDueDateStr
+            };
+          });
           setAvailableCases(mapped);
           if (!caseIdParam && mapped[0]) {
             setSelectedCaseId(mapped[0].id);
@@ -388,9 +403,10 @@ export const DocumentList = () => {
   const buildFallbackDocumentData = (_type: string, title: string, caseId = 1): Record<string, unknown> => {
     const selectedCaseObj = availableCases.find(c => c.id === caseId);
     const companyName = selectedCaseObj?.company_name || 'Borrower Representative';
-    const amount = selectedCaseObj?.amount || 100000;
+    const amount = selectedCaseObj?.amount || 133800;
     const txnId = selectedCaseObj?.txn_id || `TXN-BANK-SIM-${caseId}`;
-    const dateStr = '28-Aug-2026';
+    const dateStr = selectedCaseObj?.payment_date || '03-Sep-2026';
+    const nextDueDateStr = selectedCaseObj?.next_due_date || '03-Oct-2026';
 
     const interestAmt = Math.round(amount * 0.2);
     const principalAmt = Math.round(amount * 0.8);
@@ -441,7 +457,8 @@ export const DocumentList = () => {
         principal_deducted: principalAmt,
         closing_principal: Math.max(0, Math.max(amount, 1250000) - principalAmt),
         interest_rate: '12.50% p.a. (Fixed Reducing)',
-        installment_milestone: `EMI Installment #${Math.min(12, Math.max(1, caseId))} of 36`
+        installment_milestone: `EMI Installment #${Math.min(12, Math.max(1, caseId))} of 36`,
+        next_due_date: nextDueDateStr
       },
 
       waterfall: [
@@ -1148,7 +1165,7 @@ export const DocumentList = () => {
                     <div style={{ fontSize: '0.825rem', color: '#475569', lineHeight: '1.5', marginTop: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px' }}>
                       <div><strong>Borrower:</strong> {displayBorrower}</div>
                       <div><strong>Ref:</strong> {displayTxn}</div>
-                      <div><strong>Date:</strong> {doc.date}</div>
+                      <div><strong>Date:</strong> {activeCaseObj?.payment_date || doc.date}</div>
                       <div style={{ color: '#6366f1', fontWeight: '600', marginTop: '4px' }}>Deterministic 0-Hallucination Template</div>
                     </div>
                   </div>
@@ -2248,7 +2265,7 @@ export const DocumentList = () => {
                       <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginTop: '6px' }}>
                         Ref: {String(generatedDocModal.data.statement_ref || generatedDocModal.data.reference_id || 'SET-STMT-2026-001')}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: 28-Aug-2026</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: {String(generatedDocModal.data.payment_date || generatedDocModal.data.settlement_date || '03-Sep-2026')}</div>
                     </div>
                   </div>
 
@@ -2393,7 +2410,7 @@ export const DocumentList = () => {
                       <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginTop: '6px' }}>
                         Ref: {String(generatedDocModal.data.reference_id || generatedDocModal.data.receipt_number || 'INV-2026-00125')}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: 28-Aug-2026</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: {String(generatedDocModal.data.payment_date || generatedDocModal.data.settlement_date || '03-Sep-2026')}</div>
                     </div>
                   </div>
 
@@ -2533,7 +2550,7 @@ export const DocumentList = () => {
                           </div>
                           <div>
                             <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Next Due Date</div>
-                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>30-Sep-2026</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>{String(facilityObj.next_due_date || (generatedDocModal.data.facility as Record<string, string>)?.next_due_date || '03-Oct-2026')}</div>
                           </div>
                         </div>
                       </>
