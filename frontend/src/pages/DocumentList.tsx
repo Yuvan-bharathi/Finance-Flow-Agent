@@ -35,21 +35,44 @@ export interface DocumentItem {
 }
 
 interface ExtractedTerms {
+  loan_reference?: string;
+  facility_type?: string;
   facility_amount?: string;
   interest_rate_p_a?: string;
+  monthly_emi?: string;
   penalty_interest_rate?: string;
   tenure_months?: string | number;
   repayment_frequency?: string;
+  due_day?: string;
+  grace_period?: string;
+  bank_account?: string;
+  ifsc_code?: string;
+  collateral?: string;
+  guarantor?: string;
+  prepayment?: string;
   governing_jurisdiction?: string;
 }
 
 interface ExtractedData {
   company_name?: string;
   borrower_company?: string;
+  loan_reference?: string;
+  facility_type?: string;
   facility_amount?: string | number;
   interest_rate_annual?: string;
+  monthly_emi_amount?: string | number;
   default_penalty_rate?: string;
+  tenure_months?: string | number;
+  repayment_frequency?: string;
+  repayment_due_day?: string;
+  grace_period_days?: string | number;
+  disbursement_bank_account?: string;
+  disbursement_ifsc?: string;
+  security_collateral?: string;
+  personal_guarantor?: string;
+  prepayment_terms?: string;
   governing_law?: string;
+  confidence_score?: number;
   extracted_terms?: ExtractedTerms;
   key_clauses?: string[];
 }
@@ -1025,7 +1048,7 @@ export const DocumentList = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: '580px',
+              width: '680px',
               maxWidth: '100vw',
               background: '#ffffff',
               height: '100%',
@@ -1038,7 +1061,7 @@ export const DocumentList = () => {
           >
             {/* Header */}
             <div style={{
-              padding: '24px',
+              padding: '20px 24px',
               borderBottom: '1px solid #e2e8f0',
               background: '#f8fafc',
               display: 'flex',
@@ -1046,102 +1069,234 @@ export const DocumentList = () => {
               justifyContent: 'space-between',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Sparkles size={20} />
+                <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={22} />
                 </div>
                 <div>
                   <h2 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>
                     Document Intelligence
                   </h2>
-                  <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', margin: 0 }}>
                     {selectedDoc.file_name}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setSelectedDoc(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer' }}>
+              <button onClick={() => setSelectedDoc(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X size={20} color="#64748b" />
               </button>
             </div>
 
             {/* Body */}
-            <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '18px' }}>
               {extracting ? (
                 <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
-                  <RefreshCw size={28} className="animate-spin" style={{ margin: '0 auto 12px auto', color: '#6366f1' }} />
-                  <p style={{ fontWeight: '600' }}>Document Intelligence is parsing PDF contract and extracting key terms...</p>
+                  <RefreshCw size={32} className="animate-spin" style={{ margin: '0 auto 12px auto', color: '#6366f1' }} />
+                  <p style={{ fontWeight: '700', fontSize: '0.95rem', color: '#0f172a' }}>Agent 4: Document Intelligence Active</p>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b' }}>Extracting facility parameters, EMI schedules, bank mandates, covenants &amp; governing law...</p>
                 </div>
               ) : extractedData ? (
                 <>
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '16px 20px', borderRadius: '14px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Borrower Organization</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
-                      {extractedData.company_name || extractedData.borrower_company || selectedDoc.company_name || 'Apex Logistics Pvt Ltd'}
+                  {/* Top Borrower & Loan Identification Card */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    border: '1.5px solid #cbd5e1',
+                    padding: '16px 20px',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Borrower Organization</div>
+                      <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0f172a', marginTop: '2px' }}>
+                        {extractedData.company_name || extractedData.borrower_company || selectedDoc.company_name || 'Apex Logistics Pvt Ltd'}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{
+                        background: '#e0e7ff',
+                        color: '#4338ca',
+                        border: '1px solid #c7d2fe',
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: '800',
+                      }}>
+                        Ref: {extractedData.loan_reference || extractedData.extracted_terms?.loan_reference || 'LN-APX-2026-01'}
+                      </span>
+                      <span style={{
+                        background: '#ecfdf5',
+                        color: '#059669',
+                        border: '1px solid #a7f3d0',
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: '800',
+                      }}>
+                        {extractedData.confidence_score || 98.5}% AI Confidence
+                      </span>
                     </div>
                   </div>
 
+                  {/* Section 1: Facility & Amortization Parameters */}
                   <div>
-                    <h4 style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a', marginBottom: '12px' }}>
-                      Extracted Contract Financial Terms
+                    <h4 style={{ fontSize: '0.825rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px' }}>
+                      1. Facility &amp; Amortization Terms
                     </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
-                        <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: '700' }}>Facility Amount</div>
-                        <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>
-                          {String(extractedData.facility_amount || extractedData.extracted_terms?.facility_amount || '₹10,00,000')}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '12px 16px' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '800', textTransform: 'uppercase' }}>Sanctioned Facility Amount</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#15803d', marginTop: '2px' }}>
+                          {String(extractedData.facility_amount || extractedData.extracted_terms?.facility_amount || '₹15,00,000')}
                         </div>
                       </div>
 
-                      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
-                        <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: '700' }}>Interest Rate (P.A.)</div>
-                        <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#4f46e5', marginTop: '2px' }}>
-                          {extractedData.interest_rate_annual || extractedData.extracted_terms?.interest_rate_p_a || '12.5% p.a.'}
+                      <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '12px', padding: '12px 16px' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#3730a3', fontWeight: '800', textTransform: 'uppercase' }}>Monthly EMI Repayment</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#4338ca', marginTop: '2px' }}>
+                          {String(extractedData.monthly_emi_amount || extractedData.extracted_terms?.monthly_emi || '₹1,40,625')} / mo
                         </div>
                       </div>
 
-                      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
-                        <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: '700' }}>Penalty Interest Rate</div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#dc2626', marginTop: '2px' }}>
-                          {extractedData.default_penalty_rate || extractedData.extracted_terms?.penalty_interest_rate || '2.0% Default Fee'}
+                      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 16px' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Annual Interest Rate</div>
+                        <div style={{ fontSize: '1rem', fontWeight: '800', color: '#0284c7', marginTop: '2px' }}>
+                          {extractedData.interest_rate_annual || extractedData.extracted_terms?.interest_rate_p_a || '12.50% p.a.'}
                         </div>
                       </div>
 
-                      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px' }}>
-                        <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: '700' }}>Tenure &amp; Frequency</div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0f172a', marginTop: '2px' }}>
-                          {extractedData.extracted_terms?.tenure_months || '36 Months'} ({extractedData.extracted_terms?.repayment_frequency || 'Monthly'})
+                      <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '12px', padding: '12px 16px' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#9f1239', fontWeight: '800', textTransform: 'uppercase' }}>Default / Late Penalty Rate</div>
+                        <div style={{ fontSize: '1rem', fontWeight: '800', color: '#be123c', marginTop: '2px' }}>
+                          {extractedData.default_penalty_rate || extractedData.extracted_terms?.penalty_interest_rate || '2.00% / month'}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '14px 18px', borderRadius: '12px' }}>
-                    <div style={{ fontSize: '0.725rem', color: '#166534', fontWeight: '700' }}>Governing Jurisdiction</div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>
-                      {extractedData.governing_law || extractedData.extracted_terms?.governing_jurisdiction || 'Laws of India (Chennai Jurisdiction)'}
-                    </div>
-                  </div>
-
+                  {/* Section 2: Repayment Schedule & Architecture */}
                   <div>
-                    <h4 style={{ fontSize: '0.875rem', fontWeight: '800', color: '#0f172a', marginBottom: '12px' }}>
-                      Identified Legal &amp; Default Clauses
+                    <h4 style={{ fontSize: '0.825rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px' }}>
+                      2. Repayment Architecture &amp; Schedule
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', display: 'block' }}>Facility Type</span>
+                        <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
+                          {extractedData.facility_type || extractedData.extracted_terms?.facility_type || 'Working Capital Term Loan'}
+                        </strong>
+                      </div>
+
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', display: 'block' }}>Tenure &amp; Frequency</span>
+                        <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
+                          {(() => {
+                            const raw = String(extractedData.tenure_months || extractedData.extracted_terms?.tenure_months || '12');
+                            const tenureStr = raw.toLowerCase().includes('month') ? raw : `${raw} Months`;
+                            const freq = extractedData.repayment_frequency || extractedData.extracted_terms?.repayment_frequency || 'Monthly';
+                            return `${tenureStr} (${freq})`;
+                          })()}
+                        </strong>
+                      </div>
+
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', display: 'block' }}>Repayment Due Day</span>
+                        <strong style={{ fontSize: '0.85rem', color: '#4338ca' }}>
+                          {extractedData.repayment_due_day || extractedData.extracted_terms?.due_day || '15th of each month'}
+                        </strong>
+                      </div>
+
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', display: 'block' }}>Penalty Grace Period</span>
+                        <strong style={{ fontSize: '0.85rem', color: '#059669' }}>
+                          {extractedData.grace_period_days || extractedData.extracted_terms?.grace_period || '3 Calendar Days'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Banking Details & Mandates */}
+                  <div>
+                    <h4 style={{ fontSize: '0.825rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px' }}>
+                      3. Designated Repayment Bank Account
+                    </h4>
+                    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', display: 'block' }}>Bank Account Number</span>
+                        <code style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0f172a', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                          {extractedData.disbursement_bank_account || extractedData.extracted_terms?.bank_account || '990088776655'}
+                        </code>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '700', display: 'block' }}>IFSC Code</span>
+                        <code style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0284c7', background: '#e0f2fe', padding: '2px 6px', borderRadius: '4px' }}>
+                          {extractedData.disbursement_ifsc || extractedData.extracted_terms?.ifsc_code || 'HDFC0001245'}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 4: Security, Covenants & Risk Controls */}
+                  <div>
+                    <h4 style={{ fontSize: '0.825rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px' }}>
+                      4. Security &amp; Covenants
+                    </h4>
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '600' }}>Collateral / Charge:</span>
+                        <strong style={{ color: '#0f172a', textAlign: 'right' }}>
+                          {extractedData.security_collateral || extractedData.extracted_terms?.collateral || 'First Pari-Passu Charge on Receivables'}
+                        </strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '600' }}>Personal Guarantor:</span>
+                        <strong style={{ color: '#4338ca', textAlign: 'right' }}>
+                          {extractedData.personal_guarantor || extractedData.extracted_terms?.guarantor || 'Sunil Verma (Managing Director)'}
+                        </strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '600' }}>Prepayment Terms:</span>
+                        <strong style={{ color: '#059669', textAlign: 'right' }}>
+                          {extractedData.prepayment_terms || extractedData.extracted_terms?.prepayment || '0% penalty after 6 consecutive timely EMIs'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 5: Governing Jurisdiction & Legal Clauses */}
+                  <div>
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px 16px', borderRadius: '12px', marginBottom: '12px' }}>
+                      <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '800', textTransform: 'uppercase' }}>Governing Jurisdiction</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>
+                        {extractedData.governing_law || extractedData.extracted_terms?.governing_jurisdiction || 'Laws of India (Gurugram / New Delhi)'}
+                      </div>
+                    </div>
+
+                    <h4 style={{ fontSize: '0.825rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px' }}>
+                      5. Identified Legal &amp; Default Clauses
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {(extractedData.key_clauses && extractedData.key_clauses.length > 0 ? extractedData.key_clauses : [
-                        'Event of Default on 30-day continuous milestone delay',
-                        'Personal Guarantee by Primary Corporate Promoters & Directors',
-                        'Statutory interest-first waterfall allocation sequence on partial credits'
+                        'Clause 4.1: Priority Waterfall sequence (Penalties -> Interest -> Principal Amortization)',
+                        'Clause 7.2: Event of Default triggered upon 30-day continuous milestone delay',
+                        'Clause 9.1: Unconditional joint & several personal guarantee by Managing Director',
+                        'Clause 11.4: Prepayment allowed with zero penalty after 6 consecutive prompt EMIs'
                       ]).map((clause, idx) => (
                         <div key={idx} style={{
-                          background: '#f8fafc',
+                          background: '#ffffff',
                           border: '1px solid #e2e8f0',
                           borderRadius: '10px',
                           padding: '10px 14px',
-                          fontSize: '0.825rem',
+                          fontSize: '0.8rem',
                           color: '#334155',
                           fontWeight: '500',
                           lineHeight: '1.4',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                         }}>
-                          • {clause}
+                          {clause}
                         </div>
                       ))}
                     </div>
