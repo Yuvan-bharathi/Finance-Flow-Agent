@@ -722,7 +722,7 @@ export const DocumentList = () => {
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID #{d.id} • {new Date(d.created_at).toLocaleDateString()}</div>
                   </td>
                   <td style={{ padding: '16px 20px', fontWeight: '700', color: '#334155' }}>
-                    {d.company_name || 'Apex Logistics Pvt Ltd'}
+                    {d.company_name || 'Unassigned Document'}
                   </td>
                   <td style={{ padding: '16px 20px' }}>
                     <span style={{
@@ -1310,7 +1310,7 @@ export const DocumentList = () => {
                     <div>
                       <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Borrower Organization</div>
                       <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0f172a', marginTop: '2px' }}>
-                        {extractedData.company_name || extractedData.borrower_company || selectedDoc.company_name || 'Apex Logistics Pvt Ltd'}
+                        {extractedData.borrower_company || extractedData.company_name || selectedDoc.company_name || 'Borrower Entity'}
                       </div>
                     </div>
 
@@ -1324,7 +1324,7 @@ export const DocumentList = () => {
                         fontSize: '0.78rem',
                         fontWeight: '800',
                       }}>
-                        Ref: {extractedData.loan_reference || extractedData.extracted_terms?.loan_reference || 'LN-APX-2026-01'}
+                        Ref: {extractedData.loan_reference || extractedData.extracted_terms?.loan_reference || 'REF-EXTRACTED'}
                       </span>
                       <span style={{
                         background: '#ecfdf5',
