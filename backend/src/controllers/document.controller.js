@@ -2,7 +2,9 @@ import {
   getDocumentsService,
   extractDocumentTermsService,
   uploadDocumentService,
-  generateFinancialDocumentService
+  generateFinancialDocumentService,
+  updateDocumentService,
+  deleteDocumentService
 } from '../services/document.service.js';
 import { sendSuccessResponse } from '../utils/apiResponse.js';
 import { uploadBufferToCloudinary } from '../config/cloudinary.config.js';
