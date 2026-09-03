@@ -298,9 +298,16 @@ export const DocumentList = () => {
       }
       setDeletingDoc(null);
       await fetchDocuments();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Delete failed:', err);
-      showToast('Failed to delete document. Please try again.', 'error');
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        showToast(`Document already removed. Vault list refreshed.`, 'success');
+        setDeletingDoc(null);
+        await fetchDocuments();
+      } else {
+        showToast('Failed to delete document. Please try again.', 'error');
+      }
     } finally {
       setIsDeleting(false);
     }
