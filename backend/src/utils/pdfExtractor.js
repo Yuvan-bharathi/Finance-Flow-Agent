@@ -39,10 +39,15 @@ export const extractTextFromFileBuffer = async (buffer, mimeType = 'application/
   // 2. PDF File extraction via pdf-parse
   if (lowerMime.includes('pdf') || lowerName.endsWith('.pdf')) {
     try {
-      const data = await pdfParse(buffer);
-      const text = (data.text || '').trim();
-      if (text.length > 20) {
-        return text;
+      if (typeof pdfParse === 'function') {
+        const data = await pdfParse(buffer);
+        const text = (data.text || '').trim();
+        if (text.length > 20) return text;
+      } else if (pdfParse?.PDFParse) {
+        const parser = new pdfParse.PDFParse({ data: buffer });
+        const data = await parser.getText();
+        const text = (typeof data === 'string' ? data : data?.text || '').trim();
+        if (text.length > 20) return text;
       }
     } catch (err) {
       console.warn('[PDF Extractor Warning]: Failed to parse PDF with pdf-parse:', err.message);
