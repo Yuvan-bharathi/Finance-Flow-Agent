@@ -90,6 +90,29 @@ interface GeneratedDocModal {
   data: Record<string, unknown>;
 }
 
+const formatDynamicISTDate = (dateInput?: string | Date | null): string => {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = !isNaN(d.getTime()) ? d : new Date();
+  return validDate.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata'
+  }).replace(/\s+/g, '-');
+};
+
+const formatDynamicNextDueDate = (dateInput?: string | Date | null): string => {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = !isNaN(d.getTime()) ? d : new Date();
+  validDate.setMonth(validDate.getMonth() + 1);
+  return validDate.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata'
+  }).replace(/\s+/g, '-');
+};
+
 export const DocumentList = () => {
   const { user } = useAuth();
   const isViewer = ((user as unknown as Record<string, string>)?.role_name || user?.role || '').toLowerCase() === 'viewer';
@@ -193,20 +216,8 @@ export const DocumentList = () => {
         if (Array.isArray(caseData) && caseData.length > 0) {
           const mapped = caseData.map((c: Record<string, unknown>) => {
             const rawDate = String(c.created_at || c.payment_date || new Date().toISOString());
-            const dateObj = new Date(rawDate);
-            const dateStr = !isNaN(dateObj.getTime())
-              ? dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
-              : '02-Sept-2026';
-
-            // Dynamic Next Due Date directly from database repayment schedule
-            let nextDueDateStr = String(c.next_due_date || '');
-            if (!nextDueDateStr) {
-              const nextDateObj = new Date(dateObj);
-              nextDateObj.setMonth(nextDateObj.getMonth() + 1);
-              nextDueDateStr = !isNaN(nextDateObj.getTime())
-                ? nextDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\s+/g, '-')
-                : '10-Sept-2026';
-            }
+            const dateStr = formatDynamicISTDate(rawDate);
+            const nextDueDateStr = c.next_due_date ? String(c.next_due_date) : formatDynamicNextDueDate(rawDate);
 
             return {
               id: Number(c.id),
@@ -410,8 +421,8 @@ export const DocumentList = () => {
     const companyName = selectedCaseObj?.company_name || 'Borrower Representative';
     const amount = selectedCaseObj?.amount || 133800;
     const txnId = selectedCaseObj?.txn_id || `TXN-BANK-SIM-${caseId}`;
-    const dateStr = selectedCaseObj?.payment_date || '03-Sep-2026';
-    const nextDueDateStr = selectedCaseObj?.next_due_date || '03-Oct-2026';
+    const dateStr = selectedCaseObj?.payment_date || formatDynamicISTDate();
+    const nextDueDateStr = selectedCaseObj?.next_due_date || formatDynamicNextDueDate();
 
     const interestAmt = Math.round(amount * 0.2);
     const principalAmt = Math.round(amount * 0.8);
@@ -2270,7 +2281,7 @@ export const DocumentList = () => {
                       <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginTop: '6px' }}>
                         Ref: {String(generatedDocModal.data.statement_ref || generatedDocModal.data.reference_id || 'SET-STMT-2026-001')}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: {String(generatedDocModal.data.payment_date || generatedDocModal.data.settlement_date || '03-Sep-2026')}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: {String(generatedDocModal.data.payment_date || generatedDocModal.data.settlement_date || formatDynamicISTDate())}</div>
                     </div>
                   </div>
 
@@ -2415,7 +2426,7 @@ export const DocumentList = () => {
                       <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#334155', marginTop: '6px' }}>
                         Ref: {String(generatedDocModal.data.reference_id || generatedDocModal.data.receipt_number || 'INV-2026-00125')}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: {String(generatedDocModal.data.payment_date || generatedDocModal.data.settlement_date || '03-Sep-2026')}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Date: {String(generatedDocModal.data.payment_date || generatedDocModal.data.settlement_date || formatDynamicISTDate())}</div>
                     </div>
                   </div>
 
@@ -2555,7 +2566,7 @@ export const DocumentList = () => {
                           </div>
                           <div>
                             <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: '700' }}>Next Due Date</div>
-                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>{String(facilityObj.next_due_date || (generatedDocModal.data.facility as Record<string, string>)?.next_due_date || '03-Oct-2026')}</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d', marginTop: '2px' }}>{String(facilityObj.next_due_date || (generatedDocModal.data.facility as Record<string, string>)?.next_due_date || formatDynamicNextDueDate())}</div>
                           </div>
                         </div>
                       </>
