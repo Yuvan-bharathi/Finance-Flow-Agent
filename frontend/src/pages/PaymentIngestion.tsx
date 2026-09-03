@@ -81,18 +81,26 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
   const [senderAccount, setSenderAccount] = useState('');
   const [reference, setReference] = useState('');
 
-  const fetchPaymentsAndCases = async (showSpinner = false) => {
+  const fetchPaymentsAndCases = async (showSpinner = false, bypassCache = false) => {
     try {
       if (showSpinner && payments.length === 0) setLoading(true);
       const cacheKey = `payments:${startDate}:${endDate}`;
 
       const [payData, casesData] = await Promise.all([
-        swrCache.fetchWithSwr(
-          cacheKey,
-          () => api.get('/payments', { params: { startDate, endDate } }).then(res => (res.data?.data || []) as PaymentRecord[]),
-          { ttlMs: 30000, onBackgroundUpdate: (fresh) => setPayments((fresh as PaymentRecord[]) || []) }
-        ),
-        getCases(),
+        bypassCache
+          ? api.get('/payments', {
+              params: { startDate, endDate },
+              headers: { 'x-bypass-cache': '1' }
+            }).then(res => (res.data?.data || []) as PaymentRecord[])
+          : swrCache.fetchWithSwr(
+              cacheKey,
+              () => api.get('/payments', { params: { startDate, endDate } }).then(res => (res.data?.data || []) as PaymentRecord[]),
+              { ttlMs: 30000, onBackgroundUpdate: (fresh) => setPayments((fresh as PaymentRecord[]) || []) }
+            ),
+        bypassCache
+          ? api.get('/reconciliations/cases', { headers: { 'x-bypass-cache': '1' } })
+              .then(res => (res.data?.data || []) as EnrichedCase[])
+          : getCases(),
       ]);
 
       setPayments((payData as PaymentRecord[]) || []);
@@ -1034,8 +1042,9 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
             swrCache.invalidate('payments');
             swrCache.invalidate('reconciliations');
 
-            void fetchPaymentsAndCases(false).then(() => {
-              // 4. After fresh data is loaded, clear pending overrides after 5s
+            // 4. Force-bypass BOTH SWR and Axios client caches so fresh server data is loaded
+            void fetchPaymentsAndCases(false, true).then(() => {
+              // 5. After fresh data is loaded, clear pending overrides after 5s
               // (by then the server's real resolved status will have propagated)
               if (optimisticData?.id) {
                 setTimeout(() => {

@@ -83,6 +83,14 @@ api.interceptors.response.use(
 
     if (['post', 'put', 'patch', 'delete'].includes(method)) {
       const tags = clientCache.inferTagsFromUrl(url);
+
+      // Explicitly purge reconciliation + payment caches on any settlement mutation
+      const isSettlementAction = /\/(approve|reject|override|analyze|reconciliations)/.test(url);
+      if (isSettlementAction) {
+        clientCache.invalidateByTag('reconciliations');
+        clientCache.invalidateByTag('payments');
+      }
+
       tags.forEach(tag => clientCache.invalidateByTag(tag));
     }
 
