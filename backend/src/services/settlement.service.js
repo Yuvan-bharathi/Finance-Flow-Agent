@@ -284,10 +284,15 @@ export const approveRecommendationService = async (recommendationId, approvedByU
       entity_type: 'payment_allocations',
       entity_id: waterfallResult.allocations[0]?.allocation_id || 0,
       old_values: {
+        case_id: rec.reconciliation_case_id,
         recommendation_status: rec.status,
         payment_status: payment.status
       },
       new_values: {
+        case_id: rec.reconciliation_case_id,
+        company_name: rec.company_name || payment.sender_name || 'N/A',
+        loan_number: rec.loan_number || `LN-${targetLoanId}`,
+        transaction_id: payment.transaction_id,
         total_payment_amount: waterfallResult.total_payment_amount,
         total_allocated_amount: waterfallResult.total_allocated_amount,
         unallocated_amount: waterfallResult.unallocated_amount,

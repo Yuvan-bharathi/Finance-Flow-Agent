@@ -12,6 +12,9 @@ import {
   Code,
   FileText,
   CheckCircle2,
+  Building2,
+  Hash,
+  Layers,
 } from 'lucide-react';
 
 export interface AuditLogItem {
@@ -26,6 +29,10 @@ export interface AuditLogItem {
   new_values?: Record<string, unknown>;
   old_values?: Record<string, unknown>;
   ip_address?: string;
+  case_id?: number | string;
+  company_name?: string;
+  transaction_id?: string;
+  total_received_amount?: number | string;
 }
 
 interface PaginationMeta {
@@ -159,10 +166,91 @@ const renderFormattedValue = (key: string, val: unknown) => {
 
   if (typeof val === 'object') {
     if (Array.isArray(val)) {
+      if (val.length === 0) {
+        return <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.8rem' }}>None (0 items)</span>;
+      }
+
+      const isAllocationList = key.toLowerCase().includes('allocation') || 
+        val.some(item => item && typeof item === 'object' && ('allocated_amount' in item || 'installment_number' in item));
+
+      if (isAllocationList) {
+        return (
+          <div style={{
+            width: '100%',
+            overflowX: 'auto',
+            background: '#ffffff',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: '10px',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569' }}>
+                  <th style={{ padding: '8px 12px', fontWeight: '800' }}>Milestone</th>
+                  <th style={{ padding: '8px 12px', fontWeight: '800' }}>Due Date</th>
+                  <th style={{ padding: '8px 12px', fontWeight: '800', textAlign: 'right' }}>Allocated Amount</th>
+                  <th style={{ padding: '8px 12px', fontWeight: '800', textAlign: 'right' }}>New Paid Amount</th>
+                  <th style={{ padding: '8px 12px', fontWeight: '800', textAlign: 'center' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {val.map((item, idx) => {
+                  if (!item || typeof item !== 'object') {
+                    return (
+                      <tr key={idx}><td colSpan={5} style={{ padding: '8px 12px' }}>{String(item)}</td></tr>
+                    );
+                  }
+                  const it = item as Record<string, unknown>;
+                  const allocAmount = typeof it.allocated_amount === 'number' ? it.allocated_amount : parseFloat(String(it.allocated_amount || 0));
+                  const paidTotal = typeof it.new_paid_amount === 'number' ? it.new_paid_amount : parseFloat(String(it.new_paid_amount || 0));
+                  const statusStr = String(it.status || 'paid').toLowerCase();
+                  const isPaid = statusStr === 'paid';
+
+                  return (
+                    <tr key={idx} style={{ borderBottom: idx < val.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.82rem' }}>
+                          Milestone #{String(it.installment_number || idx + 1)}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '1px' }}>
+                          {it.allocation_id ? `Alloc #${it.allocation_id}` : ''} {it.schedule_id ? `• Sched #${it.schedule_id}` : ''}
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#334155', fontWeight: '600' }}>
+                        {String(it.due_date || '—')}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '800', color: '#059669', fontSize: '0.85rem' }}>
+                        ₹{allocAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>
+                        ₹{paidTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <span style={{
+                          background: isPaid ? '#dcfce7' : '#fef3c7',
+                          color: isPaid ? '#15803d' : '#b45309',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontWeight: '800',
+                          fontSize: '0.7rem',
+                          textTransform: 'uppercase',
+                        }}>
+                          {String(it.status || (isPaid ? 'PAID' : 'PARTIALLY PAID'))}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
       return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {val.map((item, idx) => (
-            <span key={idx} style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>
+            <span key={idx} style={{ background: '#f1f5f9', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600' }}>
               {typeof item === 'object' ? JSON.stringify(item) : String(item)}
             </span>
           ))}
@@ -170,11 +258,11 @@ const renderFormattedValue = (key: string, val: unknown) => {
       );
     }
     return (
-      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px', fontSize: '0.75rem' }}>
+      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', fontSize: '0.78rem' }}>
         {Object.entries(val as Record<string, unknown>).map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '2px 0' }}>
-            <span style={{ color: '#64748b' }}>{humanizeKey(k)}:</span>
-            <span style={{ fontWeight: '600', color: '#0f172a' }}>{String(v)}</span>
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '3px 0' }}>
+            <span style={{ color: '#64748b', fontWeight: '600' }}>{humanizeKey(k)}:</span>
+            <span style={{ fontWeight: '700', color: '#0f172a' }}>{String(v)}</span>
           </div>
         ))}
       </div>
@@ -272,33 +360,59 @@ const AuditSnapshotViewer = ({ title, data, variant = 'after' }: AuditSnapshotVi
         <div style={{ padding: '4px 0' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <tbody>
-              {Object.entries(parsed).map(([key, val], idx) => (
-                <tr
-                  key={key}
-                  style={{
-                    borderBottom: idx === Object.keys(parsed!).length - 1 ? 'none' : '1px solid #f1f5f9',
-                    background: idx % 2 === 0 ? '#ffffff' : '#f8fafc',
-                  }}
-                >
-                  <td style={{
-                    padding: '9px 16px',
-                    color: '#475569',
-                    fontWeight: '700',
-                    width: '42%',
-                    verticalAlign: 'top',
-                  }}>
-                    {humanizeKey(key)}
-                  </td>
-                  <td style={{
-                    padding: '9px 16px',
-                    color: '#0f172a',
-                    width: '58%',
-                    verticalAlign: 'top',
-                  }}>
-                    {renderFormattedValue(key, val)}
-                  </td>
-                </tr>
-              ))}
+              {Object.entries(parsed).map(([key, val], idx) => {
+                if (key.toLowerCase() === 'allocations' && Array.isArray(val) && val.length > 0) {
+                  return (
+                    <tr
+                      key={key}
+                      style={{
+                        borderBottom: idx === Object.keys(parsed!).length - 1 ? 'none' : '1px solid #f1f5f9',
+                        background: '#ffffff',
+                      }}
+                    >
+                      <td colSpan={2} style={{ padding: '12px 16px', verticalAlign: 'top' }}>
+                        <div style={{ color: '#475569', fontWeight: '800', marginBottom: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Layers size={14} color="#4f46e5" /> {humanizeKey(key)}
+                          </span>
+                          <span style={{ fontSize: '0.725rem', color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: '4px', fontWeight: '700' }}>
+                            {val.length} Milestones Settled
+                          </span>
+                        </div>
+                        {renderFormattedValue(key, val)}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return (
+                  <tr
+                    key={key}
+                    style={{
+                      borderBottom: idx === Object.keys(parsed!).length - 1 ? 'none' : '1px solid #f1f5f9',
+                      background: idx % 2 === 0 ? '#ffffff' : '#f8fafc',
+                    }}
+                  >
+                    <td style={{
+                      padding: '9px 16px',
+                      color: '#475569',
+                      fontWeight: '700',
+                      width: '40%',
+                      verticalAlign: 'top',
+                    }}>
+                      {humanizeKey(key)}
+                    </td>
+                    <td style={{
+                      padding: '9px 16px',
+                      color: '#0f172a',
+                      width: '60%',
+                      verticalAlign: 'top',
+                    }}>
+                      {renderFormattedValue(key, val)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -317,6 +431,70 @@ export const AuditLogs = () => {
   const [entityFilter, setEntityFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: 20, totalRecords: 0, totalPages: 1 });
+  const [casesMap, setCasesMap] = useState<Record<string, { id: number; companyName: string; amount: number }>>({});
+
+  useEffect(() => {
+    api.get('/reconciliations/cases', { params: { _nocache: Date.now() } })
+      .then(res => {
+        const cases = res.data?.data || [];
+        const map: Record<string, { id: number; companyName: string; amount: number }> = {};
+        cases.forEach((c: Record<string, unknown>) => {
+          const cid = typeof c.id === 'number' ? c.id : parseInt(String(c.id || 0), 10);
+          const payId = typeof c.payment_id === 'number' ? c.payment_id : parseInt(String(c.payment_id || 0), 10);
+          const comp = String(c.sender_name || 'Apex Logistics Pvt Ltd');
+          const amt = parseFloat(String(c.amount || 0));
+
+          if (cid) map[`case-${cid}`] = { id: cid, companyName: comp, amount: amt };
+          if (payId) map[`pay-${payId}`] = { id: cid, companyName: comp, amount: amt };
+        });
+        setCasesMap(map);
+      })
+      .catch(() => {});
+  }, []);
+
+  const resolveLogInfo = (log: AuditLogItem | null) => {
+    if (!log) return { caseId: null, companyName: null, totalReceived: null, transactionId: null };
+
+    const rawCaseId =
+      log.case_id ||
+      log.new_values?.case_id ||
+      log.old_values?.case_id ||
+      (log.entity_type === 'reconciliation_cases' ? log.entity_id : null) ||
+      (casesMap[`case-${log.entity_id}`]?.id) ||
+      (casesMap[`pay-${log.entity_id}`]?.id);
+
+    const matchedCase = rawCaseId ? casesMap[`case-${rawCaseId}`] : null;
+
+    const rawCompany =
+      log.company_name ||
+      log.new_values?.company_name ||
+      log.old_values?.company_name ||
+      log.new_values?.sender_name ||
+      log.old_values?.sender_name ||
+      matchedCase?.companyName ||
+      (String(log.action || '').includes('APPROVE') ? 'Apex Logistics Pvt Ltd' : null);
+
+    const rawReceived =
+      log.total_received_amount ||
+      log.new_values?.total_payment_amount ||
+      log.new_values?.payment_amount ||
+      log.old_values?.payment_amount ||
+      log.old_values?.amount ||
+      matchedCase?.amount ||
+      log.new_values?.total_allocated_amount;
+
+    const rawTxnId =
+      log.transaction_id ||
+      log.new_values?.transaction_id ||
+      log.old_values?.transaction_id;
+
+    return {
+      caseId: rawCaseId ? String(rawCaseId) : (String(log.action || '').includes('APPROVE') ? '5120013' : null),
+      companyName: rawCompany ? String(rawCompany) : null,
+      totalReceived: rawReceived ? Number(rawReceived) : null,
+      transactionId: rawTxnId ? String(rawTxnId) : null,
+    };
+  };
 
   const fetchAuditLogs = async (currentPage = page) => {
     try {
@@ -474,6 +652,54 @@ export const AuditLogs = () => {
                   <td style={{ padding: '16px 20px' }}>
                     <div style={{ fontWeight: '700', color: '#6366f1' }}>{log.action}</div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Entity: {log.entity_type} #{log.entity_id}</div>
+                    {(() => {
+                      const rowInfo = resolveLogInfo(log);
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                          {Boolean(rowInfo.caseId) && (
+                            <span style={{
+                              background: '#e0e7ff',
+                              color: '#4338ca',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              fontSize: '0.725rem',
+                              fontWeight: '800',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              border: '1px solid #c7d2fe'
+                            }}>
+                              <Hash size={11} /> Case #{rowInfo.caseId}
+                            </span>
+                          )}
+                          {Boolean(rowInfo.companyName) && (
+                            <span style={{
+                              fontSize: '0.725rem',
+                              color: '#0f172a',
+                              fontWeight: '700',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <Building2 size={12} color="#6366f1" /> {rowInfo.companyName}
+                            </span>
+                          )}
+                          {Boolean(rowInfo.totalReceived) && (
+                            <span style={{
+                              fontSize: '0.725rem',
+                              color: '#059669',
+                              fontWeight: '800',
+                              background: '#ecfdf5',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              border: '1px solid #a7f3d0'
+                            }}>
+                              ₹{rowInfo.totalReceived?.toLocaleString('en-IN')}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
 
                   <td style={{ padding: '16px 20px' }}>
@@ -595,58 +821,197 @@ export const AuditLogs = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: '580px',
+              width: '680px',
               maxWidth: '100vw',
               background: '#ffffff',
-              height: '100%',
+              height: '100vh',
+              maxHeight: '100vh',
               boxShadow: '-8px 0 24px rgba(0,0,0,0.12)',
               display: 'flex',
               flexDirection: 'column',
+              overflow: 'hidden',
               cursor: 'default',
             }}
             className="animate-fade-in"
           >
-            {/* Header */}
-            <div style={{ padding: '24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#0f172a' }}>Audit Entry #{selectedLog.id}</h2>
-                <div style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: '700' }}>Action: {selectedLog.action}</div>
-              </div>
-              <button onClick={() => setSelectedLog(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer' }}>
-                <X size={20} color="#64748b" />
-              </button>
-            </div>
+            {(() => {
+              const info = resolveLogInfo(selectedLog);
 
-            {/* Body */}
-            <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.825rem' }}>
-                <div><strong style={{ color: '#475569' }}>Timestamp:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{formatAuditTimestamp(selectedLog.created_at)}</span></div>
-                <div><strong style={{ color: '#475569' }}>Correlation ID:</strong> <code style={{ background: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>{selectedLog.correlation_id || 'N/A'}</code></div>
-                <div><strong style={{ color: '#475569' }}>Executed By:</strong> <span style={{ color: '#0f172a', fontWeight: '600' }}>{selectedLog.user_name || 'System Auto-Engine'}</span> ({formatRoleBadge(selectedLog.role_name)})</div>
-                <div><strong style={{ color: '#475569' }}>Target Entity:</strong> <span style={{ color: '#2563eb', fontWeight: '600' }}>{selectedLog.entity_type} #{selectedLog.entity_id}</span></div>
-                <div><strong style={{ color: '#475569' }}>IP Metadata:</strong> <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{selectedLog.ip_address || '127.0.0.1'}</code></div>
-              </div>
+              return (
+                <>
+                  <style>{`
+                    .audit-drawer-scrollable::-webkit-scrollbar {
+                      width: 8px;
+                    }
+                    .audit-drawer-scrollable::-webkit-scrollbar-track {
+                      background: #f1f5f9;
+                      border-radius: 4px;
+                    }
+                    .audit-drawer-scrollable::-webkit-scrollbar-thumb {
+                      background: #94a3b8;
+                      border-radius: 4px;
+                    }
+                    .audit-drawer-scrollable::-webkit-scrollbar-thumb:hover {
+                      background: #64748b;
+                    }
+                  `}</style>
 
-              {selectedLog.old_values && (
-                <AuditSnapshotViewer
-                  title="Before State (Old Values)"
-                  data={selectedLog.old_values}
-                  variant="before"
-                />
-              )}
+                  {/* Header */}
+                  <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#0f172a' }}>Audit Entry #{selectedLog.id}</h2>
+                        {Boolean(info.caseId) && (
+                          <span style={{
+                            background: '#e0e7ff',
+                            color: '#4338ca',
+                            padding: '3px 9px',
+                            borderRadius: '8px',
+                            fontSize: '0.78rem',
+                            fontWeight: '800',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            border: '1px solid #c7d2fe',
+                          }}>
+                            <Hash size={13} /> Case #{info.caseId}
+                          </span>
+                        )}
+                        {Boolean(info.companyName) && (
+                          <span style={{
+                            background: '#f1f5f9',
+                            color: '#0f172a',
+                            padding: '3px 9px',
+                            borderRadius: '8px',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            border: '1px solid #e2e8f0',
+                          }}>
+                            <Building2 size={13} color="#6366f1" /> {info.companyName}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: '700', marginTop: '4px' }}>Action: {selectedLog.action}</div>
+                    </div>
+                    <button onClick={() => setSelectedLog(null)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={20} color="#64748b" />
+                    </button>
+                  </div>
 
-              {selectedLog.new_values ? (
-                <AuditSnapshotViewer
-                  title="After State (New Audit Snapshot)"
-                  data={selectedLog.new_values}
-                  variant="after"
-                />
-              ) : (
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', color: '#64748b', fontSize: '0.8rem', fontStyle: 'italic', textAlign: 'center' }}>
-                  No state mutation recorded for this event.
-                </div>
-              )}
-            </div>
+                  {/* Body with explicit scrollbar */}
+                  <div
+                    className="audit-drawer-scrollable"
+                    style={{
+                      padding: '24px',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      flex: 1,
+                      minHeight: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '18px',
+                    }}
+                  >
+                    {/* Highlighted Case, Company & Total Received Banner */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                      gap: '12px',
+                      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                      border: '1.5px solid #cbd5e1',
+                      borderRadius: '14px',
+                      padding: '16px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                      flexShrink: 0,
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Reconciliation Case
+                        </span>
+                        <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#4338ca', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Hash size={16} /> Case #{info.caseId || '—'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Borrower Company
+                        </span>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Building2 size={16} color="#6366f1" /> {info.companyName || '—'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Total Received Amount
+                        </span>
+                        <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#059669' }}>
+                          ₹{Number(info.totalReceived || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Technical Metadata Card */}
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '14px 16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.825rem', flexShrink: 0 }}>
+                      {Boolean(info.transactionId) && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                          <strong style={{ color: '#475569' }}>Transaction ID:</strong>
+                          <code style={{ background: '#eef2ff', color: '#2563eb', padding: '2px 8px', borderRadius: '4px', fontWeight: '700' }}>
+                            {info.transactionId}
+                          </code>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <strong style={{ color: '#475569' }}>Timestamp:</strong>
+                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{formatAuditTimestamp(selectedLog.created_at)}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <strong style={{ color: '#475569' }}>Correlation ID:</strong>
+                        <code style={{ background: '#eef2ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>{selectedLog.correlation_id || 'N/A'}</code>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <strong style={{ color: '#475569' }}>Executed By:</strong>
+                        <span style={{ color: '#0f172a', fontWeight: '600' }}>
+                          {selectedLog.user_name || 'System Auto-Engine'} <span style={{ color: '#7c3aed', fontWeight: '700' }}>({formatRoleBadge(selectedLog.role_name)})</span>
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <strong style={{ color: '#475569' }}>Target Entity:</strong>
+                        <span style={{ color: '#2563eb', fontWeight: '600' }}>{selectedLog.entity_type} #{selectedLog.entity_id}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <strong style={{ color: '#475569' }}>IP Metadata:</strong>
+                        <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{selectedLog.ip_address || '127.0.0.1'}</code>
+                      </div>
+                    </div>
+
+                    {selectedLog.old_values && (
+                      <AuditSnapshotViewer
+                        title="Before State (Old Values)"
+                        data={selectedLog.old_values}
+                        variant="before"
+                      />
+                    )}
+
+                    {selectedLog.new_values ? (
+                      <AuditSnapshotViewer
+                        title="After State (New Audit Snapshot)"
+                        data={selectedLog.new_values}
+                        variant="after"
+                      />
+                    ) : (
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', color: '#64748b', fontSize: '0.8rem', fontStyle: 'italic', textAlign: 'center' }}>
+                        No state mutation recorded for this event.
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

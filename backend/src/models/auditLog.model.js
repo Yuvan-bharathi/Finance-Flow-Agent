@@ -98,10 +98,42 @@ export const findAllAuditLogs = async (queryParams = {}) => {
 
   // 2. Paginated Data Query
   const dataQuery = `
-    SELECT al.*, u.name AS user_name, u.email AS user_email, r.name AS role_name
+    SELECT al.*, 
+           u.name AS user_name, u.email AS user_email, r.name AS role_name,
+           COALESCE(
+             JSON_UNQUOTE(JSON_EXTRACT(al.new_values, '$.case_id')),
+             JSON_UNQUOTE(JSON_EXTRACT(al.old_values, '$.case_id')),
+             rc_direct.id,
+             rc_alloc.id
+           ) AS case_id,
+           COALESCE(
+             JSON_UNQUOTE(JSON_EXTRACT(al.new_values, '$.company_name')),
+             c_alloc.company_name,
+             p_alloc.sender_name,
+             p_case.sender_name
+           ) AS company_name,
+           COALESCE(
+             JSON_UNQUOTE(JSON_EXTRACT(al.new_values, '$.transaction_id')),
+             p_alloc.transaction_id,
+             p_case.transaction_id
+           ) AS transaction_id,
+           COALESCE(
+             JSON_UNQUOTE(JSON_EXTRACT(al.new_values, '$.total_payment_amount')),
+             JSON_UNQUOTE(JSON_EXTRACT(al.new_values, '$.payment_amount')),
+             p_alloc.amount,
+             p_case.amount
+           ) AS total_received_amount
     FROM audit_logs al
     LEFT JOIN users u ON al.user_id = u.id
     LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN payment_allocations pa_alloc ON (al.entity_type = 'payment_allocations' AND al.entity_id = pa_alloc.id)
+    LEFT JOIN payments p_alloc ON pa_alloc.payment_id = p_alloc.id
+    LEFT JOIN reconciliation_cases rc_alloc ON p_alloc.id = rc_alloc.payment_id
+    LEFT JOIN repayment_schedules rs_alloc ON pa_alloc.repayment_schedule_id = rs_alloc.id
+    LEFT JOIN loans l_alloc ON rs_alloc.loan_id = l_alloc.id
+    LEFT JOIN companies c_alloc ON l_alloc.company_id = c_alloc.id
+    LEFT JOIN reconciliation_cases rc_direct ON (al.entity_type = 'reconciliation_cases' AND al.entity_id = rc_direct.id)
+    LEFT JOIN payments p_case ON rc_direct.payment_id = p_case.id
     ${whereSql}
     ORDER BY al.${sortBy} ${order}
     LIMIT ? OFFSET ?;
