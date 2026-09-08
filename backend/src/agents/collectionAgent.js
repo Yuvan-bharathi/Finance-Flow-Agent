@@ -6,6 +6,7 @@ import { createAgentRun, updateAgentRun } from '../models/agentRun.model.js';
 import { logStep } from '../models/agentExecutionLog.model.js';
 import { acquireAgentLock, releaseAgentLock } from '../utils/agentLock.js';
 import { emitSocketEvent } from '../config/socket.js';
+import { sendEscalationNoticeEmail } from '../utils/emailService.js';
 
 /**
  * Agent 3: Automated Collection Follow-Up Agent
@@ -187,14 +188,40 @@ Output JSON format:
       duration_ms: durationMs
     });
 
-    // Save drafted collection notice into notification_alerts for human review/dispatch in Notification Center
+    // 2. Automatically dispatch the drafted collection email to the borrower's registered contact email
+    const senderFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'nyuvanbharathi@gmail.com';
+    let emailDeliveryResult = null;
+    try {
+      console.log(`[Collection Agent] 🚀 Auto-dispatching collection notice to ${finalDraft.recipient_email} (${company.company_name})...`);
+      emailDeliveryResult = await sendEscalationNoticeEmail({
+        recipientEmail: finalDraft.recipient_email,
+        fromEmail: senderFrom,
+        companyName: company.company_name,
+        subject: finalDraft.subject,
+        body: finalDraft.email_body,
+        priority: urgencyLevel,
+        alertId: null
+      });
+      console.log(`[Collection Agent] ✅ Email dispatch result:`, emailDeliveryResult?.success ? 'DELIVERED' : 'FAILED');
+    } catch (mailErr) {
+      console.warn('[Collection Agent] Email dispatch error:', mailErr.message);
+      emailDeliveryResult = { success: false, error: mailErr.message };
+    }
+
+    const isDelivered = emailDeliveryResult && emailDeliveryResult.success === true;
+    finalDraft.email_dispatched = isDelivered;
+    finalDraft.dispatched_to = finalDraft.recipient_email;
+    finalDraft.dispatched_at = new Date().toISOString();
+    finalDraft.email_delivery = emailDeliveryResult;
+
+    // Save drafted collection notice into notification_alerts with approval status
     try {
       const [alertInsert] = await pool.execute(`
         INSERT INTO notification_alerts (
           agent_run_id, company_id, severity, overdue_days, outstanding_amount,
           title, message, ai_reasoning, recommended_recipient, recommended_action,
-          escalation_level, notification_status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+          escalation_level, notification_status, approved_by, approved_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         runId,
         company.id,
@@ -205,20 +232,48 @@ Output JSON format:
         finalDraft.email_body,
         finalDraft.email_body,
         `${finalDraft.recipient_name} <${finalDraft.recipient_email}>`,
-        `Dispatch formal ${urgencyLevel.replace(/_/g, ' ')} notice to borrower contact.`,
-        'Borrower Contact'
+        `Automated collection notice dispatched to ${finalDraft.recipient_email}.`,
+        'Borrower Contact',
+        isDelivered ? 'approved' : 'pending',
+        triggeredBy || 1
       ]);
       finalDraft.alert_id = alertInsert.insertId;
     } catch (alertErr) {
       console.warn('[Collection Agent] Warning: Failed to insert into notification_alerts:', alertErr.message);
     }
 
-    // Emit real-time WebSocket event
+    // Record action in audit_logs
+    try {
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address)
+        VALUES (?, 'AUTO_DISPATCH_COLLECTION_NOTICE', 'company', ?, ?, '127.0.0.1');
+      `, [triggeredBy || null, company.id, JSON.stringify({
+        company_name: company.company_name,
+        recipient_email: finalDraft.recipient_email,
+        subject: finalDraft.subject,
+        total_overdue: totalOverdue,
+        urgency_level: urgencyLevel,
+        email_delivery: emailDeliveryResult
+      })]);
+    } catch (auditErr) {
+      console.warn('[Collection Agent] Audit log insert warning:', auditErr.message);
+    }
+
+    // Emit real-time WebSocket events
     emitSocketEvent('COLLECTION_DRAFTED', {
       company_id: company.id,
       company_name: company.company_name,
       urgency: urgencyLevel,
       subject: finalDraft.subject
+    });
+    emitSocketEvent('COLLECTION_EMAIL_DISPATCHED', {
+      company_id: company.id,
+      company_name: company.company_name,
+      recipient_email: finalDraft.recipient_email,
+      urgency: urgencyLevel,
+      subject: finalDraft.subject,
+      dispatched_at: finalDraft.dispatched_at,
+      email_dispatched: isDelivered
     });
     emitSocketEvent('escalation_alert_created', {
       company_id: company.id,

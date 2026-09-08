@@ -28,6 +28,10 @@ interface StepOutputPayload {
   overdue_amount?: number;
   recipient_name?: string;
   recipient_email?: string;
+  dispatched_to?: string;
+  dispatched_at?: string;
+  email_dispatched?: boolean;
+  email_delivery?: { success?: boolean; error?: string; mode?: string; messageId?: string };
   subject?: string;
   email_subject?: string;
   email_body?: string;
@@ -108,6 +112,8 @@ export const formatAgentName = (rawName: string): string => {
     AccountingLedgerAgent: 'Accounting Ledger & ERP Sync Agent',
     ComplianceAuditAgent: 'Compliance & Audit Trail Agent',
     MultiChannelNotificationAgent: 'Multi-Channel Notification Agent',
+    PortfolioAnalyticsAgent: 'Portfolio Analytics Agent',
+    NotificationEscalationAgent: 'Notification Escalation Agent',
   };
   if (knownNames[rawName]) return knownNames[rawName];
 
@@ -183,8 +189,13 @@ const StepBusinessView = ({ step }: StepBusinessViewProps) => {
 
   // 2. AGENT 3: AUTOMATED COLLECTION FOLLOW-UP
   if (step.agent_name === 'AutomatedCollectionFollowUpAgent') {
-    const urgency = output.urgency_level || 'POLITE_REMINDER';
+    const urgency = String(output.urgency_level || 'POLITE_REMINDER');
     const isHighUrgency = urgency === 'FINAL_DEMAND' || urgency === 'URGENT_WARNING';
+    const emailDispatched = Boolean(output.email_dispatched);
+    const recipientEmail = String(output.dispatched_to || output.recipient_email || 'finance@abctech.com');
+    const emailError = output.email_delivery && typeof output.email_delivery === 'object' && 'error' in output.email_delivery
+      ? String(output.email_delivery.error)
+      : '';
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -215,15 +226,65 @@ const StepBusinessView = ({ step }: StepBusinessViewProps) => {
           </div>
         </div>
 
+        {/* Email Dispatch Confirmation Banner */}
+        {emailDispatched ? (
+          <div style={{
+            background: '#ecfdf5',
+            border: '1.5px solid #a7f3d0',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '10px', height: '10px', borderRadius: '50%',
+                background: '#10b981', boxShadow: '0 0 0 3px #d1fae5'
+              }} />
+              <div>
+                <span style={{ fontSize: '0.825rem', fontWeight: '800', color: '#065f46', display: 'block' }}>
+                  ✉️ Notice Dispatched to {recipientEmail}
+                </span>
+                <span style={{ fontSize: '0.725rem', color: '#047857' }}>
+                  Automated SMTP/API delivery triggered during pipeline execution
+                </span>
+              </div>
+            </div>
+            {output.dispatched_at && (
+              <span style={{
+                fontSize: '0.72rem', color: '#047857', fontWeight: '700',
+                background: '#d1fae5', padding: '3px 8px', borderRadius: '6px'
+              }}>
+                {new Date(String(output.dispatched_at)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+          </div>
+        ) : emailError ? (
+          <div style={{
+            background: '#fffbeb',
+            border: '1.5px solid #fde68a',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#92400e' }}>
+              ⚠️ Notice drafted &amp; logged in Notification Center (Email status: {emailError})
+            </span>
+          </div>
+        ) : null}
+
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem' }}>
             <span style={{ fontWeight: '700', color: '#64748b', width: '75px' }}>Recipient:</span>
-            <span style={{ fontWeight: '700', color: '#0f172a' }}>{output.recipient_name || 'Borrower Representative'}</span>
-            {output.recipient_email && <span style={{ color: '#64748b', fontSize: '0.775rem' }}>&lt;{output.recipient_email}&gt;</span>}
+            <span style={{ fontWeight: '700', color: '#0f172a' }}>{String(output.recipient_name || 'Borrower Representative')}</span>
+            {recipientEmail && <span style={{ color: '#64748b', fontSize: '0.775rem' }}>&lt;{recipientEmail}&gt;</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem' }}>
             <span style={{ fontWeight: '700', color: '#64748b', width: '75px' }}>Subject:</span>
-            <span style={{ fontWeight: '700', color: '#334155' }}>{output.subject || output.email_subject || 'Payment Follow-Up Notice'}</span>
+            <span style={{ fontWeight: '700', color: '#334155' }}>{String(output.subject || output.email_subject || 'Payment Follow-Up Notice')}</span>
           </div>
         </div>
 
@@ -473,7 +534,245 @@ const StepBusinessView = ({ step }: StepBusinessViewProps) => {
     );
   }
 
-  // 6. DEFAULT BUSINESS SUMMARY
+  // 6. AGENT 5: PORTFOLIO ANALYTICS AGENT
+  if (step.agent_name === 'PortfolioAnalyticsAgent' || step.agent_name === 'agent_5_portfolio') {
+    const healthGrade = String(output.health_grade || 'GOOD').toUpperCase();
+    const healthScore = output.health_score !== undefined ? Number(output.health_score) : 75;
+    const isCritical = healthGrade === 'CRITICAL' || healthGrade === 'POOR';
+    const isGood = healthGrade === 'EXCELLENT' || healthGrade === 'GOOD';
+    const collectionEfficiency = Number(output.collection_efficiency || 0);
+    const delinquencyRate = Number(output.delinquency_rate || 0);
+    const totalOverdue = Number(output.total_overdue_amount || 0);
+    const portfolioValue = Number(output.total_portfolio_value || 0);
+    const activeLoans = Number(output.active_loan_count || 0);
+    const recommendations = Array.isArray(output.ai_recommendations) ? (output.ai_recommendations as string[]) : [];
+    const interpretation = (output.ai_interpretation as string) || (output.reasoning_summary as string) || (output.summary as string) || 'Portfolio analytics calculated across active loan book.';
+
+    const gradeBg = isCritical ? '#fef2f2' : isGood ? '#f0fdf4' : '#fffbeb';
+    const gradeBorder = isCritical ? '#fecaca' : isGood ? '#86efac' : '#fde68a';
+    const gradeText = isCritical ? '#991b1b' : isGood ? '#166534' : '#92400e';
+    const gradeBadgeBg = isCritical ? '#fee2e2' : isGood ? '#dcfce7' : '#fef3c7';
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* Health Grade Header Banner */}
+        <div style={{
+          background: gradeBg,
+          border: `1.5px solid ${gradeBorder}`,
+          borderRadius: '14px',
+          padding: '16px 18px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <div>
+            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: gradeText, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Portfolio Health Assessment (Agent 5)
+            </div>
+            <div style={{ fontSize: '1.2rem', fontWeight: '900', color: gradeText, marginTop: '2px' }}>
+              {healthGrade} HEALTH GRADE
+            </div>
+          </div>
+          <div style={{
+            background: gradeBadgeBg,
+            color: gradeText,
+            border: `1px solid ${gradeBorder}`,
+            padding: '6px 14px', borderRadius: '20px',
+            fontSize: '0.85rem', fontWeight: '900',
+          }}>
+            Score: {healthScore}/100
+          </div>
+        </div>
+
+        {/* 4-Card Portfolio Metrics Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 14px' }}>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase' }}>
+              Collection Efficiency
+            </span>
+            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: collectionEfficiency >= 80 ? '#059669' : '#dc2626', marginTop: '2px' }}>
+              {collectionEfficiency.toFixed(1)}%
+            </div>
+          </div>
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 14px' }}>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase' }}>
+              Delinquency Rate
+            </span>
+            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: delinquencyRate > 15 ? '#dc2626' : '#059669', marginTop: '2px' }}>
+              {delinquencyRate.toFixed(1)}%
+            </div>
+          </div>
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 14px' }}>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase' }}>
+              Total Overdue Amount
+            </span>
+            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0f172a', marginTop: '2px' }}>
+              ₹{totalOverdue.toLocaleString('en-IN')}
+            </div>
+          </div>
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 14px' }}>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase' }}>
+              Active Loans / Exposure
+            </span>
+            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#4f46e5', marginTop: '2px' }}>
+              {activeLoans} Loans {portfolioValue > 0 ? `(₹${(portfolioValue / 10000000).toFixed(2)} Cr)` : ''}
+            </div>
+          </div>
+        </div>
+
+        {/* AI Interpretation */}
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '14px 16px' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e40af', textTransform: 'uppercase', marginBottom: '6px' }}>
+            Executive AI Interpretation
+          </div>
+          <div style={{ fontSize: '0.825rem', color: '#1e293b', lineHeight: '1.6' }}>
+            {interpretation}
+          </div>
+        </div>
+
+        {/* Strategic Recommendations */}
+        {recommendations.length > 0 && (
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
+              AI Strategic Recommendations
+            </div>
+            <ul style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.8rem', color: '#334155', lineHeight: '1.5' }}>
+              {recommendations.map((rec, idx) => (
+                <li key={idx} style={{ color: '#1e293b' }}>{rec}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 7. AGENT 6: NOTIFICATION & ESCALATION AGENT
+  if (
+    step.agent_name === 'NotificationEscalationAgent' ||
+    step.agent_name === 'MultiChannelNotificationAgent' ||
+    step.agent_name === 'agent_6_notification'
+  ) {
+    const rawAlerts = Array.isArray(output.alerts) ? (output.alerts as Array<Record<string, unknown>>) : [];
+    const totalAlerts = rawAlerts.length || Number(output.dispatched_count || output.alert_count || 0);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* Escalation Summary Banner */}
+        <div style={{
+          background: totalAlerts > 0 ? '#fff7ed' : '#f0fdf4',
+          border: `1.5px solid ${totalAlerts > 0 ? '#fed7aa' : '#86efac'}`,
+          borderRadius: '14px',
+          padding: '16px 18px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <div>
+            <div style={{ fontSize: '0.72rem', fontWeight: '800', color: totalAlerts > 0 ? '#9a3412' : '#166534', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Notification &amp; Escalation Agent (Agent 6)
+            </div>
+            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: totalAlerts > 0 ? '#c2410c' : '#15803d', marginTop: '2px' }}>
+              {totalAlerts > 0 ? `${totalAlerts} Escalation Alert${totalAlerts > 1 ? 's' : ''} Generated` : 'All Accounts Compliant'}
+            </div>
+          </div>
+          <div style={{
+            background: totalAlerts > 0 ? '#ffedd5' : '#dcfce7',
+            color: totalAlerts > 0 ? '#9a3412' : '#166534',
+            border: `1px solid ${totalAlerts > 0 ? '#fed7aa' : '#86efac'}`,
+            padding: '6px 14px', borderRadius: '20px',
+            fontSize: '0.85rem', fontWeight: '900',
+          }}>
+            {totalAlerts > 0 ? 'Action Required' : 'Healthy'}
+          </div>
+        </div>
+
+        {/* Escalation Alert Cards */}
+        {rawAlerts.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
+              Generated Escalation Alerts
+            </div>
+            {rawAlerts.map((alert, idx) => {
+              const compName = String(alert.company_name || `Company #${alert.company_id || idx + 1}`);
+              const amt = Number(alert.outstanding_amount || 0);
+              const overdueDays = alert.overdue_days !== undefined ? Number(alert.overdue_days) : null;
+              const severity = String(alert.severity || 'HIGH').toUpperCase();
+              const recAction = String(alert.recommended_action || alert.ai_reasoning || 'Review overdue installment and contact borrower.');
+              const recipient = String(alert.recommended_recipient || 'Finance Manager');
+
+              const isCritical = severity === 'CRITICAL' || severity === 'HIGH';
+
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#0f172a' }}>
+                        {compName}
+                      </div>
+                      {overdueDays !== null && (
+                        <span style={{ fontSize: '0.725rem', color: '#dc2626', fontWeight: '700' }}>
+                          ⚠️ {overdueDays} Days Past Due
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a' }}>
+                        ₹{amt.toLocaleString('en-IN')}
+                      </div>
+                      <span style={{
+                        display: 'inline-block',
+                        background: isCritical ? '#fee2e2' : '#fef3c7',
+                        color: isCritical ? '#991b1b' : '#92400e',
+                        border: `1px solid ${isCritical ? '#fca5a5' : '#fde68a'}`,
+                        fontSize: '0.68rem',
+                        fontWeight: '800',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        marginTop: '2px',
+                      }}>
+                        {severity}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 10px', fontSize: '0.78rem' }}>
+                    <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase' }}>
+                      Recommended Action (Target: {recipient})
+                    </div>
+                    <div style={{ color: '#334155', fontWeight: '600', marginTop: '2px' }}>
+                      {recAction}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', fontSize: '0.825rem', color: '#334155', lineHeight: '1.6' }}>
+            {output.summary || output.message || 'Escalation analysis complete. All accounts monitored successfully.'}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 8. DEFAULT BUSINESS SUMMARY
   return (
     <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a' }}>

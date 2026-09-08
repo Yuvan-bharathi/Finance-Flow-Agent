@@ -186,7 +186,8 @@ Output ONLY valid JSON:
         messages,
         tools: portfolioToolsDeclaration,
         tool_choice: 'auto',
-        temperature: 0.1
+        temperature: 0.1,
+        max_tokens: 600
       });
 
       groqCalled = true;
@@ -214,7 +215,8 @@ Output ONLY valid JSON:
         response = await groq.chat.completions.create({
           model: GROQ_MODEL,
           messages,
-          temperature: 0.1
+          temperature: 0.1,
+          max_tokens: 600
         });
       }
 
@@ -226,8 +228,9 @@ Output ONLY valid JSON:
       }
 
       // Parse the JSON response from Groq's final message
-      const content   = response.choices[0]?.message?.content || '';
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const rawContent = response.choices[0]?.message?.content || '';
+      const cleanContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         analysisResult = {
