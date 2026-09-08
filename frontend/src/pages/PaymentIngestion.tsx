@@ -343,7 +343,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
     }
   };
 
-  const handleSimulateBankDeposit = async () => {
+  /* const handleSimulateBankDeposit = async () => {
     if (isViewer) {
       setErrorMsg('⛔ Access Restricted: Viewer role is read-only and cannot simulate bank statement feeds.');
       return;
@@ -375,7 +375,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
     } finally {
       setSubmitting(false);
     }
-  };
+  }; */
 
   const formatDateTime = (dateStr?: string, createdAtStr?: string) => {
     const raw = createdAtStr || dateStr;
@@ -429,7 +429,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
           </div>
         )}
 
-        <form onSubmit={handleIngest} className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+        <form onSubmit={handleIngest} className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', alignItems: 'flex-end' }}>
           <div>
             <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Bank Transaction ID *</label>
             <input
@@ -487,7 +487,7 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
             />
           </div>
 
-          <div>
+          <div style={{ gridColumn: 'span 2' }}>
             <label style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Bank Narration / Reference</label>
             <input
               type="text"
@@ -498,44 +498,27 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
             />
           </div>
 
-          <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-            <button
-              type="button"
-              onClick={() => void handleSimulateBankDeposit()}
-              style={{
-                background: '#ffffff',
-                border: '1px solid #cbd5e1',
-                color: '#475569',
-                padding: '10px 18px',
-                borderRadius: '10px',
-                fontSize: '0.85rem',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <span>🏦 Simulate Dummy Bank Webhook Deposit</span>
-            </button>
-
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
             <button
               type="submit"
               disabled={submitting}
               style={{
+                width: '100%',
+                height: '42px',
                 background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
                 color: '#ffffff',
                 border: 'none',
-                padding: '10px 24px',
+                padding: '0 18px',
                 borderRadius: '10px',
                 fontSize: '0.85rem',
                 fontWeight: '700',
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '8px',
                 boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+                whiteSpace: 'nowrap',
               }}
             >
               <Plus size={16} />
@@ -693,10 +676,10 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
 
         {/* Table */}
         <div className="table-responsive-wrapper" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
-          <table className="responsive-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+          <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '2px solid #cbd5e1' }}>
-                <th style={{ width: '40px', padding: '16px 20px', textAlign: 'center' }}>
+                <th style={{ width: '36px', padding: '14px 12px', textAlign: 'center' }}>
                   <input
                     type="checkbox"
                     checked={cases.length > 0 && selectedCaseIds.length === cases.length}
@@ -704,13 +687,13 @@ export const PaymentIngestion = ({ onAskAI }: PaymentIngestionProps) => {
                     style={{ cursor: 'pointer', accentColor: '#4f46e5', width: '16px', height: '16px' }}
                   />
                 </th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Case &amp; Txn ID</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Sender &amp; Account</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Deposit Amount</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Received Date &amp; Time</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Case Status</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Anomaly Detection</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
+                <th style={{ padding: '14px 14px', fontWeight: '700' }}>Case &amp; Txn ID</th>
+                <th style={{ padding: '14px 14px', fontWeight: '700' }}>Sender &amp; Account</th>
+                <th style={{ padding: '14px 14px', fontWeight: '700' }}>Deposit Amount</th>
+                <th style={{ padding: '14px 14px', fontWeight: '700' }}>Received Date &amp; Time</th>
+                <th style={{ padding: '14px 14px', fontWeight: '700' }}>Case Status</th>
+                <th style={{ padding: '14px 14px', fontWeight: '700' }}>Anomaly Detection</th>
+                <th style={{ padding: '14px 14px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>

@@ -78,8 +78,9 @@ interface CreatedUserResponse {
  */
 export const Settings = () => {
   const { user } = useAuth();
-  const [activeSection, setActiveSection] = useState<'ai' | 'rules' | 'notifications' | 'profile' | 'preferences' | 'audit'>('ai');
+  const [activeSection, setActiveSection] = useState<'ai' | 'rules' | 'notifications' | 'profile' | 'audit'>('ai');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [, setSettingsLoading] = useState(true);
   const [testingGroq, setTestingGroq] = useState(false);
   const [groqStatus, setGroqStatus] = useState<{ success: boolean; message: string } | null>(null);
@@ -126,9 +127,9 @@ export const Settings = () => {
   });
   const [emailAlerts, setEmailAlerts] = useState(true);
 
-  // SECTION 5: PREFERENCES STATE
-  const [theme, setTheme] = useState('light');
-  const [currency, setCurrency] = useState('INR');
+  // SECTION 5: PREFERENCES STATE (Commented)
+  // const [theme, setTheme] = useState('light');
+  // const [currency, setCurrency] = useState('INR');
 
   // TOKEN USAGE
   const [tokenStats, setTokenStats] = useState<TokenStats>({
@@ -180,13 +181,15 @@ export const Settings = () => {
       return;
     }
     try {
+      setSaving(true);
       await saveSettings([
         { key: 'confidence_threshold', value: String(preCheckThreshold), scope: 'system' },
         { key: 'agent_1_enabled', value: String(autoPaymentAnalysis), scope: 'system' },
+        { key: 'ai_recommendations', value: String(aiRecommendations), scope: 'system' },
         { key: 'notification_email', value: String(emailAlerts), scope: 'user' },
       ]);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2500);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: unknown) {
       console.error('[Settings] Save failed:', (err as Error).message);
       const status = (err as { response?: { status?: number; data?: { message?: string } } })?.response?.status;
@@ -195,6 +198,8 @@ export const Settings = () => {
           detail: { status: status || 403, message: (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Access denied: Unable to save settings.' },
         }));
       }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -302,7 +307,7 @@ export const Settings = () => {
             { id: 'rules' as const, label: '🛡️ Risk & Matching Rules' },
             { id: 'notifications' as const, label: '🔔 Notifications & Alerts' },
             { id: 'profile' as const, label: '👤 Profile & Team Users' },
-            { id: 'preferences' as const, label: '🎨 Preferences' },
+            // { id: 'preferences' as const, label: '🎨 Preferences' },
             { id: 'audit' as const, label: '📋 Audit & System Health' },
           ].map(tab => {
             const isActive = activeSection === tab.id;
@@ -330,12 +335,32 @@ export const Settings = () => {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {saveSuccess && (
-            <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '0.825rem', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <CheckCircle2 size={16} /> Settings Saved
             </span>
           )}
-          <button onClick={() => void handleSaveSettings()} className="btn-primary" style={{ padding: '9px 18px', borderRadius: '10px' }}>
-            Save Changes
+          <button
+            onClick={() => void handleSaveSettings()}
+            disabled={saving}
+            className="btn-primary"
+            style={{
+              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+              color: '#ffffff',
+              border: 'none',
+              padding: '9px 20px',
+              borderRadius: '10px',
+              fontSize: '0.85rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {saving && <RefreshCw size={14} className="animate-spin" />}
+            <span>{saving ? 'Saving...' : 'Save Changes'}</span>
           </button>
         </div>
       </div>
@@ -897,8 +922,8 @@ export const Settings = () => {
         </div>
       )}
 
-      {/* SECTION 5: PREFERENCES */}
-      {activeSection === 'preferences' && (
+      {/* SECTION 5: PREFERENCES (Commented as requested) */}
+      {/* activeSection === 'preferences' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px' }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0f172a', marginBottom: '16px' }}>
@@ -922,7 +947,7 @@ export const Settings = () => {
             </div>
           </div>
         </div>
-      )}
+      ) */}
 
       {/* SECTION 6: AUDIT & SYSTEM HEALTH */}
       {activeSection === 'audit' && (

@@ -39,6 +39,7 @@ export const loginUser = async (email, password) => {
     name: user.name,
     email: user.email,
     role_id: user.role_id,
+    role: user.role_name,
     role_name: user.role_name
   };
 
@@ -50,6 +51,7 @@ export const loginUser = async (email, password) => {
       name: user.name,
       email: user.email,
       role_id: user.role_id,
+      role: user.role_name,
       role_name: user.role_name
     },
     token

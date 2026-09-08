@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import {
   X,
@@ -15,6 +15,8 @@ import {
   Building2,
   Hash,
   Layers,
+  Filter,
+  ChevronDown,
 } from 'lucide-react';
 
 export interface AuditLogItem {
@@ -64,6 +66,11 @@ const formatRoleBadge = (roleName?: string) => {
     viewer: 'Viewer',
   };
   return map[roleName.toLowerCase()] || roleName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
+const formatCleanUserName = (name?: string) => {
+  if (!name) return 'System Auto-Engine';
+  return name.replace(/\s*\([^)]*\)/g, '').trim();
 };
 
 const humanizeKey = (key: string): string => {
@@ -472,9 +479,30 @@ export const AuditLogs = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
+  const [showEntityDropdown, setShowEntityDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: 20, totalRecords: 0, totalPages: 1 });
   const [casesMap, setCasesMap] = useState<Record<string, { id: number; companyName: string; amount: number }>>({});
+
+  const entityOptions = [
+    { value: '', label: 'All Entity Types' },
+    { value: 'payment_allocations', label: 'Payment Allocations' },
+    { value: 'ai_recommendations', label: 'AI Recommendations' },
+    { value: 'payments', label: 'Payments' },
+    { value: 'reconciliation_cases', label: 'Reconciliation Cases' },
+    { value: 'assistant_actions', label: 'Assistant Actions' },
+  ];
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowEntityDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     api.get('/reconciliations/cases', { params: { _nocache: Date.now() } })
@@ -606,26 +634,94 @@ export const AuditLogs = () => {
             />
           </div>
 
-          <select
-            value={entityFilter}
-            onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}
-            style={{
-              padding: '9px 12px',
-              border: '1px solid #cbd5e1',
-              borderRadius: '10px',
-              fontSize: '0.825rem',
-              outline: 'none',
-              background: '#ffffff',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="">All Entity Types</option>
-            <option value="payment_allocations">Payment Allocations</option>
-            <option value="ai_recommendations">AI Recommendations</option>
-            <option value="payments">Payments</option>
-            <option value="reconciliation_cases">Reconciliation Cases</option>
-            <option value="assistant_actions">Assistant Actions</option>
-          </select>
+          {/* Sleek Custom Styled Dropdown Matching UI Design System */}
+          <div ref={dropdownRef} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowEntityDropdown(!showEntityDropdown)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#ffffff',
+                border: showEntityDropdown ? '1px solid #6366f1' : '1px solid #cbd5e1',
+                borderRadius: '10px',
+                padding: '0 14px',
+                fontSize: '0.825rem',
+                fontWeight: '600',
+                color: entityFilter ? '#4f46e5' : '#334155',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                height: '38px',
+                boxShadow: showEntityDropdown ? '0 0 0 3px rgba(99, 102, 241, 0.12)' : 'none',
+              }}
+            >
+              <Filter size={14} color={entityFilter ? '#4f46e5' : '#64748b'} />
+              <span>{entityOptions.find(o => o.value === entityFilter)?.label || 'All Entity Types'}</span>
+              <ChevronDown
+                size={14}
+                color="#64748b"
+                style={{
+                  transform: showEntityDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                }}
+              />
+            </button>
+
+            {showEntityDropdown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.04)',
+                  padding: '6px',
+                  zIndex: 50,
+                  minWidth: '210px',
+                  animation: 'fadeIn 0.15s ease',
+                }}
+              >
+                {entityOptions.map(option => {
+                  const isSelected = entityFilter === option.value;
+                  return (
+                    <div
+                      key={option.value}
+                      onClick={() => {
+                        setEntityFilter(option.value);
+                        setShowEntityDropdown(false);
+                        setPage(1);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: isSelected ? '700' : '500',
+                        color: isSelected ? '#4f46e5' : '#334155',
+                        background: isSelected ? '#eef2ff' : 'transparent',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <span>{option.label}</span>
+                      {isSelected && <Check size={14} color="#4f46e5" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <button
             type="submit"
@@ -634,10 +730,15 @@ export const AuditLogs = () => {
               color: '#ffffff',
               border: 'none',
               borderRadius: '10px',
-              padding: '9px 16px',
+              padding: '0 18px',
+              height: '38px',
               fontSize: '0.825rem',
               fontWeight: '700',
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.15s ease',
             }}
           >
             Filter
@@ -651,11 +752,11 @@ export const AuditLogs = () => {
           <table className="responsive-table" style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ background: '#f8fafc', color: '#64748b', fontSize: '0.725rem', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Timestamp &amp; Correlation ID</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', width: '180px', whiteSpace: 'nowrap' }}>Timestamp &amp; Correlation ID</th>
                 <th style={{ padding: '16px 20px', fontWeight: '700' }}>Action &amp; Entity</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>User &amp; Role</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700' }}>Audit Snapshot Payload</th>
-                <th style={{ padding: '16px 20px', fontWeight: '700', textAlign: 'right' }}>Actions</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', whiteSpace: 'nowrap', minWidth: '160px' }}>User &amp; Role</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', width: '220px', whiteSpace: 'nowrap' }}>Audit Snapshot Payload</th>
+                <th style={{ padding: '16px 20px', fontWeight: '700', width: '100px', textAlign: 'right', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -745,12 +846,18 @@ export const AuditLogs = () => {
                     })()}
                   </td>
 
-                  <td style={{ padding: '16px 20px' }}>
-                    <div style={{ color: '#0f172a', fontWeight: '600' }}>{log.user_name || 'System Auto-Engine'}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: '700', textTransform: 'uppercase' }}>{formatRoleBadge(log.role_name)}</div>
+                  {/* User & Role - Single Line Guaranteed */}
+                  <td style={{ padding: '16px 20px', whiteSpace: 'nowrap' }}>
+                    <div style={{ color: '#0f172a', fontWeight: '700', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                      {formatCleanUserName(log.user_name)}
+                    </div>
+                    <div style={{ fontSize: '0.725rem', color: '#7c3aed', fontWeight: '800', textTransform: 'uppercase', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                      {formatRoleBadge(log.role_name)}
+                    </div>
                   </td>
 
-                  <td style={{ padding: '16px 20px' }}>
+                  {/* Audit Snapshot Payload - Reduced and Compacted */}
+                  <td style={{ padding: '16px 20px', width: '220px', maxWidth: '220px' }}>
                     <pre style={{
                       background: '#f8fafc',
                       border: '1px solid #e2e8f0',
@@ -758,7 +865,7 @@ export const AuditLogs = () => {
                       borderRadius: '6px',
                       fontSize: '0.725rem',
                       color: '#059669',
-                      maxWidth: '320px',
+                      maxWidth: '190px',
                       overflowX: 'hidden',
                       whiteSpace: 'nowrap',
                       textOverflow: 'ellipsis',
@@ -1027,7 +1134,7 @@ export const AuditLogs = () => {
                       <div>
                         <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '600', display: 'block' }}>Executed By</span>
                         <span style={{ color: '#0f172a', fontWeight: '700' }}>
-                          {selectedLog.user_name || 'System Auto-Engine'}{' '}
+                          {formatCleanUserName(selectedLog.user_name)}{' '}
                           <span style={{ color: '#7c3aed', fontSize: '0.7rem', fontWeight: '800' }}>({formatRoleBadge(selectedLog.role_name)})</span>
                         </span>
                       </div>

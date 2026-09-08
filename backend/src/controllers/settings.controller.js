@@ -152,7 +152,7 @@ export const getUserSettings = async (req, res) => {
 export const updateUserSettings = async (req, res) => {
   try {
     const userId   = req.user.id;
-    const userRole = req.user.role;
+    const userRole = String(req.user.role_name || req.user.role || '').toLowerCase();
 
     // req.body.settings is an array of { key, value, scope } objects
     const { settings } = req.body;
@@ -166,7 +166,7 @@ export const updateUserSettings = async (req, res) => {
 
     // Permission gate: system settings require admin or super_admin role
     const hasSystemSettings = settings.some(s => s.scope === 'system');
-    if (hasSystemSettings && !['admin', 'super_admin', 'owner'].includes(userRole)) {
+    if (hasSystemSettings && !['admin', 'super_admin', 'owner', 'manager'].includes(userRole)) {
       return res.status(403).json({
         success: false,
         message: 'System settings can only be modified by Admin or Super Admin users.'
@@ -285,7 +285,7 @@ export const getAiTokenUsage = async (req, res) => {
 export const setActiveAiModel = async (req, res) => {
   try {
     const { model } = req.body;
-    const userRole = req.user.role;
+    const userRole = String(req.user.role_name || req.user.role || '').toLowerCase();
 
     if (!['admin', 'super_admin', 'owner'].includes(userRole)) {
       return res.status(403).json({

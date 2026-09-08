@@ -96,6 +96,21 @@ div[style*="border-radius: 16px"]:hover {
   box-shadow: var(--app-card-shadow-hover) !important;
 }
 
+/* Animated Shimmer Bar for Aging Buckets & Status Meters */
+@keyframes statusShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.shimmer-status-bar {
+  background-size: 200% 100% !important;
+  animation: statusShimmer 2.4s infinite linear !important;
+}
+
 /* Glassmorphism Card Utility */
 .glass-card {
   background: var(--bg-card);
@@ -412,7 +427,7 @@ aside {
 
 .dashboard-main-area {
   flex: 1;
-  padding: 24px 32px 48px;
+  padding: 20px 20px 40px;
   overflow-y: auto;
   min-height: 0;
   width: 100%;

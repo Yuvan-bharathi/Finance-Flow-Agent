@@ -120,7 +120,7 @@ export const Header = ({ activeTab, searchQuery = '', setSearchQuery, onToggleMo
 
   return (
     <header className="dashboard-header header-content" style={{
-      background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '18px 32px',
+      background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '16px 20px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       position: 'sticky', top: 0, zIndex: 30, boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
     }}>

@@ -56,7 +56,11 @@ export const authenticate = async (req, res, next) => {
     const decodedPayload = verifyToken(token);
     
     // Attach decoded user info to req.user for subsequent controllers/middlewares
-    req.user = decodedPayload;
+    req.user = {
+      ...decodedPayload,
+      role: decodedPayload.role || decodedPayload.role_name,
+      role_name: decodedPayload.role_name || decodedPayload.role,
+    };
 
     return next();
   } catch (error) {

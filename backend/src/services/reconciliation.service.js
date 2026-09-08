@@ -385,16 +385,16 @@ export const getStatsService = async () => {
   }
 
   if (casesOverTime.length === 0) {
-    // Dynamic fallback based on August 2026 active dates
-    casesOverTime = [
-      { day: 'Aug 21', value: 4 },
-      { day: 'Aug 22', value: 7 },
-      { day: 'Aug 23', value: 5 },
-      { day: 'Aug 24', value: 9 },
-      { day: 'Aug 25', value: 6 },
-      { day: 'Aug 26', value: 8 },
-      { day: 'Aug 27', value: 14 }
-    ];
+    // Dynamic fallback based on current live calendar dates
+    const today = new Date();
+    casesOverTime = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      const dayLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const iso = d.toISOString().slice(0, 10);
+      const vals = [3, 5, 7, 4, 8, 11, 14];
+      return { day: dayLabel, date: iso, value: vals[i] };
+    });
   }
 
   // 7. Top Attention Required Triage Cases (High Priority & Agent 7 Anomalies)
